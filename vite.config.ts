@@ -5,5 +5,6 @@ import tailwindcss from '@tailwindcss/vite';
 // Both plugins are required: Tailwind v4 only compiles through its Vite
 // plugin — removing tailwindcss() leaves the app silently unstyled.
 export default defineConfig({
+  base: '/AuraVibe/',
   plugins: [react(), tailwindcss()],
 });
