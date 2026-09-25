@@ -4,11 +4,12 @@
 :root { font-family: 'Vazirmatn', sans-serif; color: #37192C; background: #fffaf0; }
 * { box-sizing: border-box; }
 html { direction: rtl; scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; background: #fffaf0; }
+body { margin: 0; min-width: 320px; background: #fffaf0; font-family: 'Vazirmatn', system-ui, sans-serif; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 a { text-decoration: none; color: inherit; }
-.brand-font { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; }
+.brand-font { font-family: 'Plus Jakarta Sans', Georgia, 'Times New Roman', serif; font-weight: 800; }
+.font-en { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
 .label { font-size: .68rem; font-weight: 800; letter-spacing: .13em; color: #8b627e; }
 .icon-button { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 999px; transition: background .2s; }
 .icon-button:hover { background: rgba(55,25,44,.07); }
