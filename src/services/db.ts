@@ -45,6 +45,9 @@ export type Banner = {
   title: string;
   subtitle: string;
   image: string;
+  targetCategory?: string;
+  ctaText?: string;
+  link?: string;
   cropData?: CropData;
   active: boolean;
   displayOrder: number;
@@ -201,6 +204,10 @@ export type SupportTicket = {
 export type Article = {
   id: number;
   title: string;
+  subtitle?: string;
+  fullArticleTitle?: string;
+  articleLink?: string;
+  displayOrder?: number;
   slug: string;
   digest: string;
   content: string;
@@ -294,91 +301,134 @@ export type AppNotification = {
 
 // --- INITIAL SEED DATA ---
 
+import { generateProducts } from '../data';
+
 const SEED_PRODUCTS: Product[] = [
-  {
-    id: 101,
-    productCode: 'AUR-101',
-    name: 'گردنبند مروارید آورا کد ۱۰۱',
-    category: 'گردنبند',
-    price: 380000,
-    oldPrice: 450000,
-    stock: 15,
-    images: [necklaceImage, jewelryImage],
-    mainImageIndex: 0,
-    badge: 'تخفیف ویژه',
-    colors: ['#37192C', '#FFF3C5'],
-    description: 'گردنبند مروارید پرورش یافته با زنجیر استیل رنگ ثابت ضد حساسیت و قفل استیل مقاوم آورا استایل.',
-    status: 'active',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 102,
-    productCode: 'AUR-102',
-    name: 'اسکرانچی ابریشمی مدل پاپیون',
-    category: 'اسکرانچی',
-    price: 120000,
-    oldPrice: 150000,
-    stock: 40,
-    images: [satinImage],
-    mainImageIndex: 0,
-    badge: 'جدید',
-    colors: ['#37192C', '#FFF3C5', '#D2B4DE'],
-    description: 'اسکرانچی ابریشمی لطیف بدون آسیب به موها، مناسب استایل‌های پاستیلی و شیک روزمره.',
-    status: 'active',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 103,
-    productCode: 'AUR-103',
-    name: 'ساعت زنانه آورا مدل رزگلد',
-    category: 'ساعت',
-    price: 690000,
-    oldPrice: 820000,
-    stock: 8,
-    images: [watchImage],
-    mainImageIndex: 0,
-    badge: 'پرفروش',
-    colors: ['#37192C', '#FFF3C5'],
-    description: 'ساعت مچی ظریف زنانه با صفحه مینیمال و بند استیل ضدزنگ لوکس همراه جعبه هدیه وینا.',
-    status: 'active',
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 104,
-    productCode: 'AUR-104',
-    name: 'انگشتر جواهری مدل شکوفه',
-    category: 'انگشتر',
-    price: 240000,
-    stock: 22,
-    images: [jewelryImage],
-    mainImageIndex: 0,
-    colors: ['#FFF3C5'],
-    description: 'انگشتر استیل فری‌سایز با نگین‌های اتریشی درخشان، کاملاً ضدحساسیت و آبکاری طلا.',
-    status: 'active',
-    updatedAt: new Date().toISOString()
-  }
+  ...categoryList.flatMap((cat, idx) =>
+    generateProducts(10, cat.name, cat.name, 120000 + idx * 15000, idx % 3 === 0)
+  )
 ];
 
 const SEED_BANNERS: Banner[] = [
   {
     id: 1,
-    internalName: 'کمپین زمستانه آورا',
-    eyebrow: 'دست‌ساز، برای تو',
-    title: 'لطافتِ کوچکِ هر روز',
-    subtitle: 'اکسسوری‌هایی که با رنگ و جزئیاتشان، حال خوب می‌سازند.',
-    image: satinImage,
+    internalName: 'بنر دسته‌بندی ساعت',
+    eyebrow: 'AURA TIMEPIECES',
+    title: 'کالکشن تخصصی ساعت',
+    subtitle: 'ساعت‌های ظریف زنانه با بند استیل لوکس و طراحی مینیمال.',
+    image: watchImage,
+    targetCategory: 'ساعت',
+    ctaText: 'دیدن کالکشن',
     active: true,
     displayOrder: 1
   },
   {
     id: 2,
-    internalName: 'کالکشن جدید مروارید',
-    eyebrow: 'NEW DROP',
+    internalName: 'بنر دسته‌بندی گردنبند',
+    eyebrow: 'PEARL COLLECTION',
     title: 'درخشش آرام مروارید',
-    subtitle: 'مجموعه‌ای ظریف برای قرارهای خاطره‌انگیز تو.',
-    image: jewelryImage,
+    subtitle: 'گردنبندهای مروارید و استیل رنگ ثابت ضدحساسیت.',
+    image: necklaceImage,
+    targetCategory: 'گردنبند',
+    ctaText: 'دیدن کالکشن',
     active: true,
     displayOrder: 2
+  },
+  {
+    id: 3,
+    internalName: 'بنر دسته‌بندی اسکرانچی',
+    eyebrow: 'SATIN & SILK',
+    title: 'لطافت ابریشم و ساتن',
+    subtitle: 'اسکرانچی‌های ابریشمی بدون آسیب به موها در رنگ‌های پاستیلی.',
+    image: satinImage,
+    targetCategory: 'اسکرانچی',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 3
+  },
+  {
+    id: 4,
+    internalName: 'بنر دسته‌بندی دستبند',
+    eyebrow: 'AURA BRACELETS',
+    title: 'دستبندهای ظریف آورا',
+    subtitle: 'دستبندهای جواهری و زنجیری شیک برای استایل روزمره.',
+    image: jewelryImage,
+    targetCategory: 'دستبند',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 4
+  },
+  {
+    id: 5,
+    internalName: 'بنر دسته‌بندی گوشواره',
+    eyebrow: 'EARRINGS DROP',
+    title: 'گوشواره‌های میخی و آویز',
+    subtitle: 'مجموعه‌ای خاص از گوشواره‌های استیل رنگ ثابت درخشان.',
+    image: jewelryImage,
+    targetCategory: 'گوشواره',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 5
+  },
+  {
+    id: 6,
+    internalName: 'بنر دسته‌بندی انگشتر',
+    eyebrow: 'RINGS COLLECTION',
+    title: 'انگشترهای فری‌سایز نگین‌دار',
+    subtitle: 'انگشترهای جواهری فری‌سایز با آبکاری طلا.',
+    image: jewelryImage,
+    targetCategory: 'انگشتر',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 6
+  },
+  {
+    id: 7,
+    internalName: 'بنر دسته‌بندی نیم ست',
+    eyebrow: 'GIFT SETS',
+    title: 'نیم‌ست‌های هدیه آورا',
+    subtitle: 'ست‌های کامل زیورآلات ظریف با بسته‌بندی لوکس هدیه.',
+    image: necklaceImage,
+    targetCategory: 'نیم ست',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 7
+  },
+  {
+    id: 8,
+    internalName: 'بنر دسته‌بندی تل',
+    eyebrow: 'HEADBANDS',
+    title: 'تل‌های مخمل و پارچه‌ای',
+    subtitle: 'تل‌های سر شیک و پینترستی برای استایل‌های دانشگاهی و مهمانی.',
+    image: satinImage,
+    targetCategory: 'تل',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 8
+  },
+  {
+    id: 9,
+    internalName: 'بنر دسته‌بندی کلیپس',
+    eyebrow: 'HAIR CLIPS',
+    title: 'کلیپس‌های فلزی و مرواریدی',
+    subtitle: 'کلیپس‌های محکم و مقاوم با گیرندگی بالا.',
+    image: jewelryImage,
+    targetCategory: 'کلیپس',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 9
+  },
+  {
+    id: 10,
+    internalName: 'بنر دسته‌بندی زیورآلات مرواریدی',
+    eyebrow: 'CLASSIC PEARL',
+    title: 'زیورآلات کلاسیک مروارید',
+    subtitle: 'زیورآلات مرواریدی با طراحی‌های کلاسیک و اولد مانی.',
+    image: necklaceImage,
+    targetCategory: 'زیورآلات مرواریدی',
+    ctaText: 'دیدن کالکشن',
+    active: true,
+    displayOrder: 10
   }
 ];
 
@@ -580,9 +630,13 @@ const SEED_TICKETS: SupportTicket[] = [
 const SEED_ARTICLES: Article[] = [
   {
     id: 1,
-    title: 'استایل لایت آکادمیا چیست؟',
+    title: 'استایل لایت آکادمیا',
+    subtitle: 'ترند تر و تمیز فصل جدید',
+    fullArticleTitle: 'استایل لایت آکادمیا چیست؟ راهنمای کامل لباس و اکسسوری در فصل جدید با رنگ‌های ملایم و کرمی.',
+    articleLink: '/journal/light-academia',
+    displayOrder: 1,
     slug: 'light-academia-style-guide',
-    digest: 'استایل لایت آکادمیا چیست؟ راهنمای کامل لباس و اکسسوری در فصل جدید با رنگ‌های ملایم و کرمی.',
+    digest: 'راهنمای لباس و اکسسوری پاستیلی با رنگ‌های کرمی و وانیلی.',
     content: 'استایل لایت آکادمیا یکی از محبوب‌ترین ترندهای مد و اکسسوری در سال‌های اخیر است که تمرکز آن بر رنگ‌های کرم، وانیلی، قهوه‌ای روشن و زیورآلات ظریف مروارید و استیل است...',
     tag: 'ترند فصل',
     category: 'راهنمای استایل',
@@ -597,6 +651,46 @@ const SEED_ARTICLES: Article[] = [
       metaDescription: 'راهنمای کامل استایل لایت آکادمیا و انتخاب زیورآلات کرم وانیلی و مروارید.',
       focusKeyword: 'لایت آکادمیا'
     }
+  },
+  {
+    id: 2,
+    title: 'شناخت تناژ پوست',
+    subtitle: 'راز درخشش بیشتر در استایل',
+    fullArticleTitle: 'چطور بفهمیم چه رنگ زیورآلاتی بیشتر بهمون میاد؟ راهنمای کامل انتخاب اکسسوری بر اساس تناژ پوست',
+    articleLink: '/journal/skin-tone',
+    displayOrder: 2,
+    slug: 'skin-tone-guide',
+    digest: 'راهنمای کامل انتخاب رنگ مناسب استایل و اکسسوری بر اساس تناژ پوست.',
+    content: 'برای انتخاب زیورآلاتی که به بهترین شکل روی پوست شما بنشیند، ابتدا باید زیرپوست خود را بشناسید...',
+    tag: 'راهنمای استایل',
+    category: 'آموزش اکسسوری',
+    author: 'تیم مد وینا و آورا',
+    keywords: ['رنگ پوست', 'اکسسوری'],
+    image: jewelryImage,
+    status: 'published',
+    createdAt: '2024-05-22T00:00:00Z',
+    publishedAt: '2024-05-22T00:00:00Z',
+    seo: {}
+  },
+  {
+    id: 3,
+    title: 'استایل اولد مانی',
+    subtitle: 'کلاسیک، شیک و ماندگار',
+    fullArticleTitle: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و آورا استایل',
+    articleLink: '/journal/old-money',
+    displayOrder: 3,
+    slug: 'old-money-guide',
+    digest: 'راهنمای کامل ساعت و اکسسوری اولد مانی برای استایل‌های اصیل و مینیمال.',
+    content: 'استایل اولد مانی بر کیفیت بی‌نظیر، رنگ‌های خنثی و ساعت و زیورآلات ظریف تاکید دارد...',
+    tag: 'اکسسوری کلاسیک',
+    category: 'کالکشن کلاسیک',
+    author: 'تیم مد وینا و آورا',
+    keywords: ['اولد مانی', 'ساعت زنانه'],
+    image: watchImage,
+    status: 'published',
+    createdAt: '2024-05-25T00:00:00Z',
+    publishedAt: '2024-05-25T00:00:00Z',
+    seo: {}
   }
 ];
 
