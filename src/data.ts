@@ -26,6 +26,7 @@ export const necklaceImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.
 export const watchImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23FFF3C5"/><circle cx="150" cy="150" r="75" stroke="%2337192C" stroke-width="10" fill="none"/><line x1="150" y1="150" x2="150" y2="105" stroke="%2337192C" stroke-width="8"/><line x1="150" y1="150" x2="185" y2="150" stroke="%2337192C" stroke-width="8"/></svg>';
 
 export const categoryList = [
+  { name: 'ساعت', image: watchImage },
   { name: 'تل', image: satinImage },
   { name: 'کش', image: satinImage },
   { name: 'اسکرانچی', image: satinImage },
@@ -44,17 +45,24 @@ export const categoryList = [
   { name: 'نیم ست', image: necklaceImage },
 ];
 
-export const generateProducts = (count: number, prefix: string, category: string, basePrice: number, isDiscounted = false): Product[] => {
+export const generateProducts = (count: number, prefix: string, category: string, basePrice: number, isDiscounted = false): any[] => {
   return Array.from({ length: count }, (_, i) => ({
     id: Math.floor(Math.random() * 899999) + 100000 + i,
+    productCode: `AUR-${Math.floor(100 + Math.random() * 899)}-${i + 1}`,
     name: `${prefix} مدل آورا کد ${i + 1}`,
     category,
     price: basePrice + i * 18000,
     oldPrice: isDiscounted || i % 2 === 0 ? basePrice + i * 18000 + 55000 : undefined,
-    image: category === 'ساعت' ? watchImage : (category === 'گردنبند' || category === 'نیم ست' ? necklaceImage : (i % 2 === 0 ? satinImage : jewelryImage)),
-    badge: isDiscounted ? 'تخفیف ویژه' : (i % 3 === 0 ? 'جدید' : undefined),
-    colors: ['#37192C', '#FFF3C5', '#D2B4DE', '#FADBD8'],
-    description: `محصول ${prefix} طراحی شده با بهترین متریال ضدحساسیت، رنگ‌بندی جذاب پاستیلی و بسته‌بندی لوکس آورا استایل.`
+    stock: 15 - (i % 5),
+    images: [
+      category === 'ساعت' ? watchImage : (category === 'گردنبند' || category === 'نیم ست' ? necklaceImage : (i % 2 === 0 ? satinImage : jewelryImage))
+    ],
+    mainImageIndex: 0,
+    badge: isDiscounted ? 'تخفیف ویژه' : (i % 3 === 0 ? 'جدید' : (i % 4 === 0 ? 'پرفروش' : undefined)),
+    colors: i % 2 === 0 ? ['#37192C', '#FFF3C5'] : ['#D2B4DE', '#FADBD8', '#37192C'],
+    description: `محصول ${prefix} طراحی شده با بهترین متریال ضدحساسیت، رنگ‌بندی جذاب پاستیلی و بسته‌بندی لوکس آورا استایل.`,
+    status: 'active',
+    updatedAt: new Date().toISOString()
   }));
 };
 
