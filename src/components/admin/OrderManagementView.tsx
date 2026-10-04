@@ -3,16 +3,9 @@ import {
   Search,
   Eye,
   Truck,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  X,
-  FileText,
-  UserCheck,
-  Send,
   MapPin,
-  Calendar,
-  DollarSign
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { Order, OrderStatus, ShippingMethodKey, db, AdminUser } from '../../services/db';
 
@@ -25,14 +18,16 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  // Custom Dropdown Open States
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+  const [formStatusOpen, setFormStatusOpen] = useState(false);
+  const [formShippingOpen, setFormShippingOpen] = useState(false);
+
   // Selected Order for Modal Details
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [newStatus, setNewStatus] = useState<OrderStatus>('جدید');
   const [statusNote, setStatusNote] = useState('');
   const [shippingMethodKey, setShippingMethodKey] = useState<ShippingMethodKey>('POST');
-
-  // Product Modal inside Order
-  const [modalProduct, setModalProduct] = useState<any | null>(null);
 
   const refreshList = () => {
     setOrders(db.getOrders());
@@ -77,7 +72,6 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
     switch (status) {
       case 'جدید':
         return 'bg-amber-100 text-amber-800 border-amber-300';
-      case 'در حال پردازش':
       case 'تأیید شده':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'در حال آماده‌سازی':
@@ -97,6 +91,20 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
     }
   };
 
+  const allStatuses: OrderStatus[] = [
+    'جدید',
+    'در حال بررسی',
+    'تأیید شده',
+    'در حال آماده‌سازی',
+    'آماده ارسال',
+    'تحویل به شرکت حمل',
+    'ارسال شده',
+    'تحویل داده شده',
+    'لغو شده',
+    'مرجوع شده',
+    'ناموفق / مشکل در ارسال'
+  ];
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -110,7 +118,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
         </span>
       </div>
 
-      {/* Search & Filter */}
+      {/* Search & Custom Filter */}
       <div className="rounded-2xl bg-white p-4 border border-[#37192c]/10 space-y-3 shadow-sm">
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="flex flex-1 items-center gap-2 rounded-xl bg-[#fffaf0] border border-[#37192c]/10 px-3.5 py-2.5 w-full">
@@ -124,18 +132,44 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
             />
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-[#37192c]/20 bg-[#fffaf0] px-4 py-2.5 text-xs font-bold text-[#37192C] outline-none w-full sm:w-auto"
-          >
-            <option value="all">همه وضعیت‌ها</option>
-            <option value="جدید">جدید</option>
-            <option value="در حال آماده‌سازی">در حال آماده‌سازی</option>
-            <option value="ارسال شده">ارسال شده</option>
-            <option value="تحویل داده شده">تحویل داده شده</option>
-            <option value="لغو شده">لغو شده</option>
-          </select>
+          {/* Custom Status Dropdown */}
+          <div className="relative w-full sm:w-auto">
+            <button
+              onClick={() => setStatusFilterOpen(!statusFilterOpen)}
+              className="flex items-center justify-between gap-2 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] px-4 py-2.5 text-xs font-bold text-[#37192C] w-full sm:w-48"
+            >
+              <span>{statusFilter === 'all' ? 'همه وضعیت‌ها' : statusFilter}</span>
+              <ChevronDown size={16} />
+            </button>
+            {statusFilterOpen && (
+              <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-60 overflow-y-auto space-y-1">
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setStatusFilterOpen(false);
+                  }}
+                  className="w-full text-right rounded-xl px-3 py-2 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0]"
+                >
+                  همه وضعیت‌ها
+                </button>
+                {allStatuses.map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      setStatusFilter(st);
+                      setStatusFilterOpen(false);
+                    }}
+                    className={
+                      'w-full text-right rounded-xl px-3 py-2 text-xs font-bold transition ' +
+                      (statusFilter === st ? 'bg-[#37192C] text-[#FFF3C5]' : 'text-[#37192C] hover:bg-[#fffaf0]')
+                    }
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -238,40 +272,18 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#37192c]/5">
-                    {selectedOrder.items.map((item, idx) => {
-                      const matchedProduct = db.getProductById(item.productId);
-                      return (
-                        <tr
-                          key={idx}
-                          onClick={() => setModalProduct(matchedProduct || {
-                            id: item.productId,
-                            productCode: item.productCode,
-                            name: item.productName,
-                            category: 'اکسسوری',
-                            price: item.finalPrice,
-                            oldPrice: item.originalPrice !== item.finalPrice ? item.originalPrice : undefined,
-                            stock: 10,
-                            images: [item.productImage],
-                            mainImageIndex: 0,
-                            badge: 'ثبت شده در سفارش',
-                            colors: ['#37192C'],
-                            description: 'اطلاعات کامل این محصول بر اساس فاکتور خرید کاربر.',
-                            status: 'active',
-                            updatedAt: new Date().toISOString()
-                          })}
-                          className="hover:bg-[#fffaf0] cursor-pointer transition"
-                        >
-                          <td className="p-3 flex items-center gap-2 font-bold text-[#37192C]">
-                            <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
-                            <span className="hover:underline text-xs">{item.productName}</span>
-                          </td>
-                          <td className="p-3 font-mono font-bold text-[#8b627e]">{item.productCode}</td>
-                          <td className="p-3 font-bold text-[#37192C]">{item.finalPrice.toLocaleString('fa-IR')} تومان</td>
-                          <td className="p-3 font-bold">{item.quantity}</td>
-                          <td className="p-3 font-black text-[#37192C]">{item.lineTotal.toLocaleString('fa-IR')} تومان</td>
-                        </tr>
-                      );
-                    })}
+                    {selectedOrder.items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-[#fffaf0] transition">
+                        <td className="p-3 flex items-center gap-2 font-bold text-[#37192C]">
+                          <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
+                          <span className="text-xs">{item.productName}</span>
+                        </td>
+                        <td className="p-3 font-mono font-bold text-[#8b627e]">{item.productCode}</td>
+                        <td className="p-3 font-bold text-[#37192C]">{item.finalPrice.toLocaleString('fa-IR')} تومان</td>
+                        <td className="p-3 font-bold">{item.quantity}</td>
+                        <td className="p-3 font-black text-[#37192C]">{item.lineTotal.toLocaleString('fa-IR')} تومان</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -295,42 +307,80 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
               <h4 className="font-black text-[#37192C]">تغییر وضعیت سفارش و روش ارسال:</h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-[#37192C]">وضعیت جدید سفارش</label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
-                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 font-bold outline-none"
+                {/* Custom Order Status Selector */}
+                <div className="relative">
+                  <label className="font-bold text-[#37192C] block mb-1">وضعیت جدید سفارش</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormStatusOpen(!formStatusOpen)}
+                    className="w-full flex items-center justify-between rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 font-bold text-[#37192C]"
                   >
-                    {[
-                      'جدید',
-                      'در حال بررسی',
-                      'تأیید شده',
-                      'در حال آماده‌سازی',
-                      'آماده ارسال',
-                      'تحویل به شرکت حمل',
-                      'ارسال شده',
-                      'تحویل داده شده',
-                      'لغو شده',
-                      'مرجوع شده',
-                      'ناموفق / مشکل در ارسال'
-                    ].map((st) => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
-                  </select>
+                    <span>{newStatus}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {formStatusOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-52 overflow-y-auto space-y-1">
+                      {allStatuses.map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => {
+                            setNewStatus(st);
+                            setFormStatusOpen(false);
+                          }}
+                          className={
+                            'w-full text-right rounded-xl px-3 py-2 text-xs font-bold transition ' +
+                            (newStatus === st ? 'bg-[#37192C] text-[#FFF3C5]' : 'text-[#37192C] hover:bg-[#fffaf0]')
+                          }
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="font-bold text-[#37192C]">روش ارسال (هزینه پس‌کرایه)</label>
-                  <select
-                    value={shippingMethodKey}
-                    onChange={(e) => setShippingMethodKey(e.target.value as ShippingMethodKey)}
-                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 font-bold outline-none"
+                {/* Custom Shipping Method Selector */}
+                <div className="relative">
+                  <label className="font-bold text-[#37192C] block mb-1">روش ارسال (هزینه پس‌کرایه)</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormShippingOpen(!formShippingOpen)}
+                    className="w-full flex items-center justify-between rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 font-bold text-[#37192C]"
                   >
-                    <option value="POST">پست پیشتاز (سراسر کشور)</option>
-                    <option value="TIPAX">تیپاکس (سراسر کشور)</option>
-                    <option value="AURA_EXPRESS">پیک اختصاصی آورا (فقط تهران)</option>
-                  </select>
+                    <span>
+                      {shippingMethodKey === 'POST'
+                        ? 'پست پیشتاز'
+                        : shippingMethodKey === 'TIPAX'
+                        ? 'تیپاکس'
+                        : 'پیک اختصاصی آورا'}
+                    </span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {formShippingOpen && (
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl space-y-1">
+                      {[
+                        { key: 'POST', label: 'پست پیشتاز (سراسر کشور)' },
+                        { key: 'TIPAX', label: 'تیپاکس (سراسر کشور)' },
+                        { key: 'AURA_EXPRESS', label: 'پیک اختصاصی آورا (تهران)' }
+                      ].map((m) => (
+                        <button
+                          key={m.key}
+                          type="button"
+                          onClick={() => {
+                            setShippingMethodKey(m.key as ShippingMethodKey);
+                            setFormShippingOpen(false);
+                          }}
+                          className={
+                            'w-full text-right rounded-xl px-3 py-2 text-xs font-bold transition ' +
+                            (shippingMethodKey === m.key ? 'bg-[#37192C] text-[#FFF3C5]' : 'text-[#37192C] hover:bg-[#fffaf0]')
+                          }
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -341,7 +391,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                   placeholder="مثال: مرسوله تحویل مامور پست گردید."
                   value={statusNote}
                   onChange={(e) => setStatusNote(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2 outline-none"
+                  className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2 outline-none font-semibold"
                 />
               </div>
 
@@ -364,7 +414,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                       <span>{event.status}</span>
                       <span className="text-[10px] text-[#8b627e]">({event.date} - {event.time})</span>
                     </div>
-                    {event.note && <p className="text-[11px] text-[#37192C]/70 ps-4">{event.note}</p>}
+                    {event.note && <p className="text-[11px] text-[#37192C]/70 ps-4 font-semibold">{event.note}</p>}
                   </div>
                 ))}
               </div>

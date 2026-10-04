@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Box,
@@ -46,8 +46,19 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, chi
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const [unreadSupportCount, setUnreadSupportCount] = useState<number>(() =>
+    db.getUnreadSupportConversationsCount()
+  );
+
+  useEffect(() => {
+    const unsub = db.subscribe(() => {
+      setUnreadSupportCount(db.getUnreadSupportConversationsCount());
+    });
+    return () => unsub();
+  }, []);
+
   const notifications = db.getNotifications('admin');
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
   const navItems = [
     { id: 'dashboard', label: 'داشبورد اصلی', icon: <LayoutDashboard size={18} />, permission: null },
@@ -62,9 +73,9 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, chi
       icon: (
         <div className="relative flex items-center">
           <MessageSquare size={18} />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -end-2 grid size-4 place-items-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
-              {unreadCount}
+          {unreadSupportCount > 0 && (
+            <span className="absolute -top-1.5 -end-2.5 grid size-4.5 place-items-center rounded-full bg-rose-500 text-[10px] font-black text-white px-1 shadow-sm">
+              {unreadSupportCount}
             </span>
           )}
         </div>
@@ -181,9 +192,9 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, chi
             <div className="relative">
               <button className="grid size-10 place-items-center rounded-full bg-[#fffaf0] border border-[#37192c]/10 text-[#37192C]">
                 <Bell size={18} />
-                {unreadCount > 0 && (
+                {unreadNotifCount > 0 && (
                   <span className="absolute -top-1 -end-1 grid size-4 place-items-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
-                    {unreadCount}
+                    {unreadNotifCount}
                   </span>
                 )}
               </button>

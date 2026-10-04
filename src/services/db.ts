@@ -29,6 +29,7 @@ export type Product = {
   stock: number;
   images: string[];
   mainImageIndex: number;
+  videoUrl?: string;
   cropData?: CropData;
   badge?: string;
   colors: string[];
@@ -173,7 +174,7 @@ export type AdminUser = {
   lastLogin: string;
 };
 
-export type TicketStatus = 'Open' | 'In Progress' | 'Waiting for Customer' | 'Resolved' | 'Closed';
+export type TicketStatus = 'New' | 'Open' | 'Closed' | 'In Progress' | 'Waiting for Customer' | 'Resolved';
 export type TicketPriority = 'Low' | 'Normal' | 'High' | 'Urgent';
 
 export type TicketMessage = {
@@ -181,9 +182,13 @@ export type TicketMessage = {
   sender: 'customer' | 'admin' | 'system';
   senderName: string;
   message: string;
+  type?: 'text' | 'image' | 'video' | 'audio';
+  mediaUrl?: string;
   attachments?: string[];
   createdAt: string;
   isInternalNote?: boolean;
+  readByAdmin?: boolean;
+  readByUser?: boolean;
 };
 
 export type SupportTicket = {
@@ -192,11 +197,16 @@ export type SupportTicket = {
   userId?: number;
   customerName: string;
   customerPhone: string;
+  customerAvatar?: string;
   subject: string;
   category: 'مشکل سفارش' | 'مشکل پرداخت' | 'پیگیری ارسال' | 'مرجوعی' | 'حساب کاربری' | 'سوال درباره محصول' | 'سایر';
   status: TicketStatus;
   priority: TicketPriority;
   assignedAdminId?: number;
+  isPinned?: boolean;
+  isBlocked?: boolean;
+  unreadAdminCount?: number;
+  unreadUserCount?: number;
   messages: TicketMessage[];
   createdAt: string;
   updatedAt: string;
@@ -211,7 +221,7 @@ export type Article = {
   displayOrder?: number;
   slug: string;
   digest: string;
-  content: string;
+  content: string; // Rich body content with markdown/image block nodes
   tag: string;
   category: string;
   author: string;
@@ -278,7 +288,7 @@ export type AuditLog = {
   id: string;
   adminId: number;
   adminName: string;
-  action: string; // e.g. "Product Edited"
+  action: string;
   module: 'Products' | 'Orders' | 'Banners' | 'Users' | 'Admins' | 'Content' | 'Settings' | 'Security';
   target: string;
   timestamp: string;
@@ -299,6 +309,18 @@ export type AppNotification = {
   read: boolean;
   createdAt: string;
 };
+
+// --- HELPER UTILS ---
+
+export function getJalaliDateString(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '۱۴۰۳/۰۶/۰۱';
+    return d.toLocaleDateString('fa-IR-u-nu-latn'); // e.g. 1403/6/15
+  } catch {
+    return '۱۴۰۳/۰۶/۰۱';
+  }
+}
 
 // --- INITIAL SEED DATA ---
 
@@ -456,13 +478,13 @@ const SEED_ORDERS: Order[] = [
         productImage: necklaceImage,
         originalPrice: 450000,
         finalPrice: 380000,
-        quantity: 1,
-        lineTotal: 380000
+        quantity: 2,
+        lineTotal: 760000
       }
     ],
-    subtotal: 450000,
-    discount: 70000,
-    totalAmount: 380000,
+    subtotal: 900000,
+    discount: 140000,
+    totalAmount: 760000,
     shippingMethod: {
       key: 'POST',
       title: 'پست پیشتاز',
@@ -478,8 +500,8 @@ const SEED_ORDERS: Order[] = [
       { status: 'ارسال شده', date: '۱۴۰۳/۰۶/۱۶', time: '۰۹:۱۵', note: 'تحویل به پست پیشتاز' },
       { status: 'تحویل داده شده', date: '۱۴۰۳/۰۶/۱۸', time: '۱۴:۲۰', note: 'مرسوله با موفقیت تحویل داده شد' }
     ],
-    createdAt: '2024-09-05T10:30:00Z',
-    updatedAt: '2024-09-08T14:20:00Z'
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
   },
   {
     id: 'ORD-9412',
@@ -521,8 +543,8 @@ const SEED_ORDERS: Order[] = [
       { status: 'جدید', date: '۱۴۰۳/۰۶/۲۰', time: '۱۶:۴۵', note: 'سفارش ثبت گردید' },
       { status: 'در حال آماده‌سازی', date: '۱۴۰۳/۰۶/۲۱', time: '۰۸:۳۰', note: 'بسته‌بندی در انبار آورا' }
     ],
-    createdAt: '2024-09-10T16:45:00Z',
-    updatedAt: '2024-09-11T08:30:00Z'
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
 
@@ -605,26 +627,34 @@ const SEED_TICKETS: SupportTicket[] = [
     customerPhone: '۰۹۱۲۹۸۷۶۵۴۳',
     subject: 'پیگیری ارسال سفارش ORD-9821',
     category: 'پیگیری ارسال',
-    status: 'Resolved',
+    status: 'Open',
     priority: 'Normal',
+    unreadAdminCount: 1,
+    unreadUserCount: 0,
     messages: [
       {
         id: 'msg-1',
         sender: 'customer',
         senderName: 'مریم احمدی',
         message: 'سلام، کد رهگیری پستی من ارسال نشده است.',
-        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۰۰'
+        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۰۰',
+        type: 'text',
+        readByAdmin: false,
+        readByUser: true
       },
       {
         id: 'msg-2',
         sender: 'admin',
         senderName: 'پشتیبان آورا',
         message: 'سلام مریم عزیز، کد رهگیری پستی مرسوله شما 24567891011121314 می‌باشد.',
-        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۳۰'
+        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۳۰',
+        type: 'text',
+        readByAdmin: true,
+        readByUser: true
       }
     ],
-    createdAt: '2024-09-06T10:00:00Z',
-    updatedAt: '2024-09-06T10:30:00Z'
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   }
 ];
 
@@ -638,15 +668,19 @@ const SEED_ARTICLES: Article[] = [
     displayOrder: 1,
     slug: 'light-academia-style-guide',
     digest: 'راهنمای لباس و اکسسوری پاستیلی با رنگ‌های کرمی و وانیلی.',
-    content: 'استایل لایت آکادمیا یکی از محبوب‌ترین ترندهای مد و اکسسوری در سال‌های اخیر است که تمرکز آن بر رنگ‌های کرم، وانیلی، قهوه‌ای روشن و زیورآلات ظریف مروارید و استیل است...',
+    content: `استایل لایت آکادمیا یکی از محبوب‌ترین ترندهای مد و اکسسوری در سال‌های اخیر است که تمرکز آن بر رنگ‌های کرم، وانیلی، قهوه‌ای روشن و زیورآلات ظریف مروارید و استیل است.
+
+![تصویر اکسسوری های لایت آکادمیا](${satinImage})
+
+این استایل با پارچه‌های ابریشمی و ساتن ترکیب فوق‌العاده‌ای ایجاد می‌کند و حس شیک و در عین حال راحتی را به شما می‌بخشد.`,
     tag: 'ترند فصل',
     category: 'راهنمای استایل',
     author: 'تیم مد وینا و آورا',
     keywords: ['لایت آکادمیا', 'اکسسوری کرم', 'مروارید'],
     image: satinImage,
     status: 'published',
-    createdAt: '2024-05-20T00:00:00Z',
-    publishedAt: '2024-05-20T00:00:00Z',
+    createdAt: '2024-05-20T10:00:00.000Z',
+    publishedAt: '2024-05-20T10:00:00.000Z',
     seo: {
       seoTitle: 'استایل لایت آکادمیا چیست؟ | آورا وایب',
       metaDescription: 'راهنمای کامل استایل لایت آکادمیا و انتخاب زیورآلات کرم وانیلی و مروارید.',
@@ -662,15 +696,19 @@ const SEED_ARTICLES: Article[] = [
     displayOrder: 2,
     slug: 'skin-tone-guide',
     digest: 'راهنمای کامل انتخاب رنگ مناسب استایل و اکسسوری بر اساس تناژ پوست.',
-    content: 'برای انتخاب زیورآلاتی که به بهترین شکل روی پوست شما بنشیند، ابتدا باید زیرپوست خود را بشناسید...',
+    content: `برای انتخاب زیورآلاتی که به بهترین شکل روی پوست شما بنشیند، ابتدا باید زیرپوست خود را بشناسید.
+
+![شناخت تناژ پوست](${jewelryImage})
+
+زیورآلات طلایی و برنجی برای پوست‌های گرم و زیورآلات نقره‌ای و مروارید سفید برای پوست‌های سرد ایده‌آل هستند.`,
     tag: 'راهنمای استایل',
     category: 'آموزش اکسسوری',
     author: 'تیم مد وینا و آورا',
     keywords: ['رنگ پوست', 'اکسسوری'],
     image: jewelryImage,
     status: 'published',
-    createdAt: '2024-05-22T00:00:00Z',
-    publishedAt: '2024-05-22T00:00:00Z',
+    createdAt: '2024-05-22T12:00:00.000Z',
+    publishedAt: '2024-05-22T12:00:00.000Z',
     seo: {}
   },
   {
@@ -682,15 +720,19 @@ const SEED_ARTICLES: Article[] = [
     displayOrder: 3,
     slug: 'old-money-guide',
     digest: 'راهنمای کامل ساعت و اکسسوری اولد مانی برای استایل‌های اصیل و مینیمال.',
-    content: 'استایل اولد مانی بر کیفیت بی‌نظیر، رنگ‌های خنثی و ساعت و زیورآلات ظریف تاکید دارد...',
+    content: `استایل اولد مانی بر کیفیت بی‌نظیر، رنگ‌های خنثی و ساعت و زیورآلات ظریف تاکید دارد.
+
+![ساعت زنانه اولد مانی](${watchImage})
+
+ساعت‌های بند چرمی و استیل ظریف با صفحه‌های کوچک نقش کلیدی در تکمیل این استایل دارند.`,
     tag: 'اکسسوری کلاسیک',
     category: 'کالکشن کلاسیک',
     author: 'تیم مد وینا و آورا',
     keywords: ['اولد مانی', 'ساعت زنانه'],
     image: watchImage,
     status: 'published',
-    createdAt: '2024-05-25T00:00:00Z',
-    publishedAt: '2024-05-25T00:00:00Z',
+    createdAt: '2024-05-25T14:00:00.000Z',
+    publishedAt: '2024-05-25T14:00:00.000Z',
     seo: {}
   }
 ];
@@ -863,6 +905,7 @@ class DatabaseService {
         stock: prodData.stock ?? 10,
         images: prodData.images && prodData.images.length ? prodData.images : [satinImage],
         mainImageIndex: prodData.mainImageIndex || 0,
+        videoUrl: prodData.videoUrl,
         colors: prodData.colors || ['#37192C', '#FFF3C5'],
         description: prodData.description || 'توضیحات محصول آورا وایب.',
         status: prodData.status || 'active',
@@ -980,9 +1023,17 @@ class DatabaseService {
     }
   }
 
-  // --- ORDERS ---
+  // --- ORDERS & SALES ANALYTICS ---
   public getOrders(): Order[] {
     return this.get<Order[]>('aura_orders');
+  }
+
+  /**
+   * Helper to filter only valid orders (excluding canceled, returned, or failed orders)
+   */
+  public getValidOrders(): Order[] {
+    const invalidStatuses: OrderStatus[] = ['لغو شده', 'مرجوع شده', 'ناموفق / مشکل در ارسال'];
+    return this.getOrders().filter((o) => !invalidStatuses.includes(o.orderStatus));
   }
 
   public getOrderById(id: string): Order | undefined {
@@ -1257,18 +1308,30 @@ class DatabaseService {
     return saved;
   }
 
-  // --- SUPPORT TICKETS ---
+  // --- SUPPORT TICKETS / REAL CHAT ---
   public getTickets(): SupportTicket[] {
     return this.get<SupportTicket[]>('aura_tickets');
+  }
+
+  /**
+   * Unread conversations count for Admin sidebar badge:
+   * Number of conversations with unread admin messages and not closed
+   */
+  public getUnreadSupportConversationsCount(): number {
+    const tickets = this.getTickets();
+    return tickets.filter((t) => (t.unreadAdminCount ?? 0) > 0 && t.status !== 'Closed').length;
   }
 
   public createTicket(payload: {
     userId?: number;
     customerName: string;
     customerPhone: string;
+    customerAvatar?: string;
     subject: string;
     category: SupportTicket['category'];
     initialMessage: string;
+    mediaUrl?: string;
+    mediaType?: 'text' | 'image' | 'video' | 'audio';
   }): SupportTicket {
     const tickets = this.getTickets();
     const ticketNum = `TCK-${Math.floor(1000 + Math.random() * 8999)}`;
@@ -1280,17 +1343,24 @@ class DatabaseService {
       userId: payload.userId,
       customerName: payload.customerName,
       customerPhone: payload.customerPhone,
+      customerAvatar: payload.customerAvatar,
       subject: payload.subject,
       category: payload.category,
-      status: 'Open',
+      status: 'New',
       priority: 'Normal',
+      unreadAdminCount: 1,
+      unreadUserCount: 0,
       messages: [
         {
           id: `msg-${Date.now()}`,
           sender: 'customer',
           senderName: payload.customerName,
           message: payload.initialMessage,
-          createdAt: `${now.toLocaleDateString('fa-IR')} ${now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}`
+          type: payload.mediaType || 'text',
+          mediaUrl: payload.mediaUrl,
+          createdAt: `${now.toLocaleDateString('fa-IR')} ${now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}`,
+          readByAdmin: false,
+          readByUser: true
         }
       ],
       createdAt: now.toISOString(),
@@ -1308,7 +1378,9 @@ class DatabaseService {
     sender: 'customer' | 'admin',
     senderName: string,
     isInternalNote = false,
-    newStatus?: TicketStatus
+    newStatus?: TicketStatus,
+    mediaType: 'text' | 'image' | 'video' | 'audio' = 'text',
+    mediaUrl?: string
   ) {
     const tickets = this.getTickets();
     const idx = tickets.findIndex((t) => t.id === ticketId);
@@ -1322,20 +1394,76 @@ class DatabaseService {
       sender,
       senderName,
       message,
+      type: mediaType,
+      mediaUrl,
       isInternalNote,
-      createdAt: `${now.toLocaleDateString('fa-IR')} ${now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}`
+      createdAt: `${now.toLocaleDateString('fa-IR')} ${now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}`,
+      readByAdmin: sender === 'admin',
+      readByUser: sender === 'customer'
     });
 
     if (newStatus) {
       ticket.status = newStatus;
     } else if (sender === 'admin' && !isInternalNote) {
-      ticket.status = 'Waiting for Customer';
+      ticket.status = 'Open';
+      ticket.unreadUserCount = (ticket.unreadUserCount || 0) + 1;
     } else if (sender === 'customer') {
-      ticket.status = 'In Progress';
+      ticket.status = 'New';
+      ticket.unreadAdminCount = (ticket.unreadAdminCount || 0) + 1;
     }
 
     ticket.updatedAt = now.toISOString();
     tickets[idx] = ticket;
+    this.set('aura_tickets', tickets);
+  }
+
+  public markTicketAsReadByAdmin(ticketId: string) {
+    const tickets = this.getTickets();
+    const idx = tickets.findIndex((t) => t.id === ticketId);
+    if (idx === -1) return;
+
+    const ticket = tickets[idx];
+    ticket.unreadAdminCount = 0;
+    ticket.messages.forEach((m) => {
+      if (m.sender === 'customer') m.readByAdmin = true;
+    });
+    tickets[idx] = ticket;
+    this.set('aura_tickets', tickets);
+  }
+
+  public markTicketAsReadByUser(ticketId: string) {
+    const tickets = this.getTickets();
+    const idx = tickets.findIndex((t) => t.id === ticketId);
+    if (idx === -1) return;
+
+    const ticket = tickets[idx];
+    ticket.unreadUserCount = 0;
+    ticket.messages.forEach((m) => {
+      if (m.sender === 'admin') m.readByUser = true;
+    });
+    tickets[idx] = ticket;
+    this.set('aura_tickets', tickets);
+  }
+
+  public updateTicketState(
+    ticketId: string,
+    updates: Partial<Pick<SupportTicket, 'status' | 'isPinned' | 'isBlocked'>>
+  ) {
+    const tickets = this.getTickets();
+    const idx = tickets.findIndex((t) => t.id === ticketId);
+    if (idx === -1) return;
+
+    tickets[idx] = { ...tickets[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.set('aura_tickets', tickets);
+  }
+
+  public deleteMessageFromTicket(ticketId: string, messageId: string) {
+    const tickets = this.getTickets();
+    const idx = tickets.findIndex((t) => t.id === ticketId);
+    if (idx === -1) return;
+
+    tickets[idx].messages = tickets[idx].messages.filter((m) => m.id !== messageId);
+    tickets[idx].updatedAt = new Date().toISOString();
     this.set('aura_tickets', tickets);
   }
 
@@ -1347,6 +1475,8 @@ class DatabaseService {
   public saveArticle(articleData: Partial<Article>, adminUser: { id: number; name: string }): Article {
     const articles = this.getArticles();
     let saved: Article;
+    const nowIso = new Date().toISOString();
+
     if (articleData.id) {
       const idx = articles.findIndex((a) => a.id === articleData.id);
       saved = { ...articles[idx], ...articleData } as Article;
@@ -1363,6 +1493,8 @@ class DatabaseService {
       saved = {
         id: Date.now(),
         title: articleData.title || 'عنوان مقاله جدید',
+        subtitle: articleData.subtitle,
+        fullArticleTitle: articleData.fullArticleTitle,
         slug: articleData.slug || `article-${Date.now()}`,
         digest: articleData.digest || 'چکیده مقاله...',
         content: articleData.content || 'متن کامل مقاله...',
@@ -1372,8 +1504,8 @@ class DatabaseService {
         keywords: articleData.keywords || [],
         image: articleData.image || satinImage,
         status: articleData.status || 'published',
-        createdAt: new Date().toISOString(),
-        publishedAt: new Date().toISOString(),
+        createdAt: nowIso,
+        publishedAt: nowIso,
         seo: articleData.seo || {}
       };
       articles.unshift(saved);
