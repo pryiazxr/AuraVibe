@@ -18,16 +18,18 @@ type TicketManagementViewProps = {
   currentAdmin: AdminUser;
 };
 
+import { Mic, Paperclip, Image as ImageIconCheck } from 'lucide-react';
+
 export function TicketManagementView({ currentAdmin }: TicketManagementViewProps) {
   const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Selected Ticket Modal State
+  // Selected Ticket State for Chat UI
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [replyText, setReplyText] = useState('');
-  const [isInternalNote, setIsInternalNote] = useState(false);
-  const [updatedStatus, setUpdatedStatus] = useState<TicketStatus>('Open');
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [recordingVoice, setRecordingVoice] = useState(false);
 
   const refreshList = () => {
     setTickets(db.getTickets());
@@ -35,26 +37,63 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
 
   const openTicket = (ticket: SupportTicket) => {
     setSelectedTicket(ticket);
-    setUpdatedStatus(ticket.status);
     setReplyText('');
-    setIsInternalNote(false);
+    setAttachmentUrl(null);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAttachmentUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSendReply = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTicket || !replyText) return;
+    if (!selectedTicket || (!replyText && !attachmentUrl)) return;
+
+    let finalMessage = replyText;
+    if (attachmentUrl) {
+      finalMessage += `\n[پیوست تصویر: ${attachmentUrl}]`;
+    }
 
     db.replyTicket(
       selectedTicket.id,
-      replyText,
+      finalMessage,
       'admin',
-      `${currentAdmin.firstName} ${currentAdmin.lastName} (${currentAdmin.role})`,
-      isInternalNote,
-      updatedStatus
+      `${currentAdmin.firstName} ${currentAdmin.lastName}`,
+      false,
+      'Waiting for Customer'
     );
 
     refreshList();
-    setSelectedTicket(null);
+    setReplyText('');
+    setAttachmentUrl(null);
+    const updated = db.getTickets().find((t) => t.id === selectedTicket.id);
+    if (updated) setSelectedTicket(updated);
+  };
+
+  const handleSendVoiceSample = () => {
+    if (!selectedTicket) return;
+    setRecordingVoice(true);
+    setTimeout(() => {
+      setRecordingVoice(false);
+      db.replyTicket(
+        selectedTicket.id,
+        '🎤 [پیام صوتی ضبط شده پشتیبان]',
+        'admin',
+        `${currentAdmin.firstName} ${currentAdmin.lastName}`,
+        false,
+        'Waiting for Customer'
+      );
+      refreshList();
+      const updated = db.getTickets().find((t) => t.id === selectedTicket.id);
+      if (updated) setSelectedTicket(updated);
+    }, 1500);
   };
 
   const filteredTickets = useMemo(() => {
@@ -104,11 +143,11 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl bg-white p-5 border border-[#37192c]/10 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-[#37192C]">مدیریت تیکت‌ها و درخواست‌های پشتیبانی (Support Tickets)</h2>
-          <p className="text-xs text-[#8b627e]">پاسخگویی آنلاین به مشتریان، یادداشت‌های داخلی ادمین و تغییر اولویت تیکت‌ها</p>
+          <h2 className="text-lg font-black text-[#37192C]">پشتیبانی چت آنلاین (Aura Support Chat)</h2>
+          <p className="text-xs text-[#8b627e]">گفتگوی زنده، ارسال متن، تصویر و وویس به کاربران سایت</p>
         </div>
         <span className="rounded-full bg-[#FFF3C5] px-4 py-1.5 text-xs font-bold text-[#37192C]">
-          تعداد تیکت‌ها: {filteredTickets.length}
+          تعداد گفتگوها: {filteredTickets.length}
         </span>
       </div>
 
@@ -192,98 +231,91 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
         </div>
       </div>
 
-      {/* Ticket Details & Reply Modal */}
+      {/* Chat UI Modal */}
       {selectedTicket && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setSelectedTicket(null)}
-              className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="border-b border-[#37192c]/10 pb-3">
-              <span className="font-mono text-xs font-bold text-[#8b627e]">{selectedTicket.ticketNumber}</span>
-              <h3 className="text-lg font-black text-[#37192C] mt-1">{selectedTicket.subject}</h3>
-              <p className="text-xs text-[#37192C]/70 mt-1">
-                مشتری: <strong>{selectedTicket.customerName}</strong> ({selectedTicket.customerPhone}) | دسته: {selectedTicket.category}
-              </p>
+          <div className="w-full max-w-xl rounded-[2.5rem] bg-[#fffaf0] p-6 shadow-2xl relative flex flex-col h-[85vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-3">
+              <div>
+                <h3 className="text-base font-black text-[#37192C]">گفتگو با {selectedTicket.customerName}</h3>
+                <p className="text-xs text-[#8b627e] font-bold">{selectedTicket.subject} ({selectedTicket.customerPhone})</p>
+              </div>
+              <button
+                onClick={() => setSelectedTicket(null)}
+                className="grid size-9 place-items-center rounded-full bg-white text-[#37192C]"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            {/* Conversation History */}
-            <div className="space-y-3 max-h-64 overflow-y-auto p-3 rounded-2xl bg-[#fffaf0] border border-[#37192c]/10">
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-3 my-3 space-y-3">
               {selectedTicket.messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={
-                    'p-3 rounded-xl text-xs space-y-1 ' +
-                    (msg.isInternalNote
-                      ? 'bg-amber-100 border border-amber-300 text-amber-900 ms-8'
-                      : msg.sender === 'admin'
-                      ? 'bg-[#37192C] text-[#FFF3C5] ms-8'
-                      : 'bg-white border border-[#37192c]/10 text-[#37192C] me-8')
+                    'max-w-[80%] p-3.5 rounded-2xl text-xs space-y-1 shadow-xs ' +
+                    (msg.sender === 'admin'
+                      ? 'bg-[#37192C] text-[#FFF3C5] ms-auto rounded-tr-none text-right'
+                      : 'bg-white text-[#37192C] me-auto rounded-tl-none text-right border border-[#37192c]/10')
                   }
                 >
-                  <div className="flex items-center justify-between font-bold text-[11px]">
-                    <span>
-                      {msg.isInternalNote ? '🔒 یادداشت داخلی ادمین: ' : ''}
-                      {msg.senderName}
-                    </span>
-                    <span className="text-[10px] opacity-75">{msg.createdAt}</span>
+                  <div className="flex items-center justify-between text-[10px] font-bold opacity-80 mb-1">
+                    <span>{msg.senderName}</span>
+                    <span>{msg.createdAt}</span>
                   </div>
-                  <p className="leading-6">{msg.message}</p>
+                  <p className="leading-6 font-semibold whitespace-pre-line">{msg.message}</p>
                 </div>
               ))}
             </div>
 
-            {/* Reply Form */}
-            <form onSubmit={handleSendReply} className="space-y-3 text-xs pt-2">
-              <div className="flex items-center justify-between">
-                <label className="font-bold text-[#37192C]">متن پاسخ یا یادداشت ادمین:</label>
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-800">
-                  <input
-                    type="checkbox"
-                    checked={isInternalNote}
-                    onChange={(e) => setIsInternalNote(e.target.checked)}
-                    className="accent-amber-600 size-4"
-                  />
-                  <span>یادداشت مخفی/داخلی برای ادمین‌ها (مشتری نمی‌بیند)</span>
-                </label>
-              </div>
-
-              <textarea
-                rows={3}
-                required
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="متن پاسخ رسمی یا راهنمایی به خریدار را وارد کنید..."
-                className="w-full rounded-xl border border-[#37192c]/20 bg-white p-3 outline-none"
-              />
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="font-bold text-[#37192C]">وضعیت جدید تیکت:</span>
-                  <select
-                    value={updatedStatus}
-                    onChange={(e) => setUpdatedStatus(e.target.value as TicketStatus)}
-                    className="rounded-xl border border-[#37192c]/20 bg-white px-3 py-2 font-bold outline-none"
-                  >
-                    <option value="Open">باز (Open)</option>
-                    <option value="In Progress">در حال بررسی (In Progress)</option>
-                    <option value="Waiting for Customer">در انتظار پاسخ مشتری</option>
-                    <option value="Resolved">حل شده (Resolved)</option>
-                    <option value="Closed">بسته شده (Closed)</option>
-                  </select>
-                </div>
-
+            {/* Attachment preview */}
+            {attachmentUrl && (
+              <div className="relative mb-2 w-20 h-20 rounded-xl overflow-hidden border border-[#37192c]/20">
+                <img src={attachmentUrl} alt="پیوست" className="size-full object-cover" />
                 <button
-                  type="submit"
-                  className="flex items-center justify-center gap-2 rounded-full bg-[#37192C] px-6 py-3 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition w-full sm:w-auto"
+                  type="button"
+                  onClick={() => setAttachmentUrl(null)}
+                  className="absolute top-1 right-1 bg-rose-600 text-white rounded-full p-0.5"
                 >
-                  <Send size={16} /> ثبت و ارسال پاسخ
+                  <X size={12} />
                 </button>
               </div>
+            )}
+
+            {/* Chat Input Bar */}
+            <form onSubmit={handleSendReply} className="flex items-center gap-2 pt-2 border-t border-[#37192c]/10">
+              <label className="grid size-10 place-items-center rounded-xl bg-white border border-[#37192c]/10 text-[#37192C] cursor-pointer hover:bg-[#FFF3C5]">
+                <Paperclip size={18} />
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+              </label>
+
+              <button
+                type="button"
+                onClick={handleSendVoiceSample}
+                className={`grid size-10 place-items-center rounded-xl text-[#37192C] transition ${
+                  recordingVoice ? 'bg-rose-500 text-white animate-pulse' : 'bg-white border border-[#37192c]/10 hover:bg-[#FFF3C5]'
+                }`}
+                title="ارسال وویس صوتی"
+              >
+                <Mic size={18} />
+              </button>
+
+              <input
+                type="text"
+                placeholder="پیام خود را بنویسید..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                className="flex-1 bg-white border border-[#37192c]/10 rounded-xl px-4 py-2.5 text-xs font-bold outline-none text-[#37192C]"
+              />
+
+              <button
+                type="submit"
+                className="grid size-10 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md"
+              >
+                <Send size={18} />
+              </button>
             </form>
           </div>
         </div>

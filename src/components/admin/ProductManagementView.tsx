@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { categoryList, satinImage, jewelryImage, necklaceImage, watchImage } from '../../data';
 import { Product, db, CropData, AdminUser } from '../../services/db';
-import { ImageCropper } from '../ImageCropper';
 
 type ProductManagementViewProps = {
   currentAdmin: AdminUser;
@@ -46,10 +45,6 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const [pImages, setPImages] = useState<string[]>([]);
   const [mainImgIdx, setMainImgIdx] = useState(0);
 
-  // Crop Editor Modal
-  const [cropperOpen, setCropperOpen] = useState(false);
-  const [cropTargetIndex, setCropTargetIndex] = useState<number>(0);
-  const [activeCropData, setActiveCropData] = useState<CropData | undefined>();
 
   const refreshList = () => {
     setProducts(db.getProducts());
@@ -134,17 +129,19 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
     if (mainImgIdx >= updated.length) setMainImgIdx(0);
   };
 
-  const handleStartCrop = (index: number) => {
-    setCropTargetIndex(index);
-    setCropperOpen(true);
-  };
-
-  const handleCropComplete = (croppedUrl: string, cropData: CropData) => {
-    const updated = [...pImages];
-    updated[cropTargetIndex] = croppedUrl;
-    setPImages(updated);
-    setActiveCropData(cropData);
-    setCropperOpen(false);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            setPImages((prev) => [...prev, reader.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
   };
 
   // Filtered dataset
@@ -367,27 +364,34 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                 </div>
                 <div>
                   <label className="font-bold text-[#37192C]">برچسب (Badge)</label>
-                  <input
-                    type="text"
+                  <select
                     value={pBadge}
                     onChange={(e) => setPBadge(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none"
-                    placeholder="جدید / تخفیف ویژه / پرفروش"
-                  />
+                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none font-bold"
+                  >
+                    <option value="">بدون برچسب</option>
+                    <option value="تخفیف ویژه">تخفیف ویژه</option>
+                    <option value="جدیدترین‌ها">جدیدترین‌ها</option>
+                    <option value="پرفروش‌ترین‌ها">پرفروش‌ترین‌ها</option>
+                    <option value="ساعت">ساعت</option>
+                  </select>
                 </div>
               </div>
 
               {/* Gallery Images Management */}
               <div className="rounded-2xl border border-[#37192c]/10 bg-[#fffaf0] p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#37192C]">گالری تصاویر محصول (چندتصویری + برش و تصویر اصلی)</span>
-                  <button
-                    type="button"
-                    onClick={handleAddSampleImage}
-                    className="rounded-full bg-[#37192C] px-3 py-1 text-[11px] font-bold text-[#FFF3C5]"
-                  >
-                    + افزودن تصویر نمونه
-                  </button>
+                  <span className="font-bold text-[#37192C]">تصاویر محصول (انتخاب مستقیم از گالری/فایل)</span>
+                  <label className="rounded-full bg-[#37192C] px-3 py-1.5 text-[11px] font-bold text-[#FFF3C5] cursor-pointer hover:bg-[#5a2548] transition">
+                    + انتخاب تصویر از گالری
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
@@ -402,14 +406,6 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                           className={'rounded px-2 py-0.5 font-bold ' + (mainImgIdx === idx ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700')}
                         >
                           {mainImgIdx === idx ? 'اصلی' : 'انتخاب به عنوان اصلی'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStartCrop(idx)}
-                          className="grid size-6 place-items-center rounded bg-[#FFF3C5] text-[#37192C]"
-                          title="کراپ تصویر"
-                        >
-                          <Crop size={12} />
                         </button>
                         {pImages.length > 1 && (
                           <button
@@ -448,15 +444,6 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
         </div>
       )}
 
-      {/* Cropper Modal */}
-      {cropperOpen && (
-        <ImageCropper
-          imageUrl={pImages[cropTargetIndex]}
-          initialCropData={activeCropData}
-          onCropComplete={handleCropComplete}
-          onCancel={() => setCropperOpen(false)}
-        />
-      )}
     </div>
   );
 }

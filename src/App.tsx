@@ -86,6 +86,7 @@ import { BannerManagementView } from './components/admin/BannerManagementView';
 import { OrderManagementView } from './components/admin/OrderManagementView';
 import { UserManagementView } from './components/admin/UserManagementView';
 import { TicketManagementView } from './components/admin/TicketManagementView';
+import { MagazineManagementView } from './components/admin/MagazineManagementView';
 import { AnalyticsView } from './components/admin/AnalyticsView';
 import { SEOManagementView } from './components/admin/SEOManagementView';
 import { SettingsView } from './components/admin/SettingsView';
@@ -102,7 +103,7 @@ function App() {
   const [bannerIndex, setBannerIndex] = useState(0);
   const [supportOpen, setSupportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [accountView, setAccountView] = useState<{ tab: 'profile' | 'cart' | 'fav' | 'orders' | 'tickets' } | null>(null);
+  const [accountTab, setAccountTab] = useState<'profile' | 'orders' | 'fav' | 'cart'>('profile');
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Real-time Database Subscription States
@@ -115,7 +116,7 @@ function App() {
   // Active View State
   const [activeView, setActiveView] = useState<string>('home');
   const [adminTab, setAdminTab] = useState<
-    'dashboard' | 'products' | 'banners' | 'orders' | 'users' | 'support' | 'analytics' | 'seo' | 'settings' | 'audit'
+    'dashboard' | 'products' | 'banners' | 'orders' | 'users' | 'support' | 'magazine' | 'analytics' | 'seo' | 'settings' | 'audit'
   >('dashboard');
 
   // Logged-in Customer & Current Admin User
@@ -203,11 +204,26 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Section collections dynamically sliced from real db
-  const productsNewest = useMemo(() => products.filter((p) => p.badge === 'جدید' || p.status === 'active'), [products]);
-  const productsBestSellers = useMemo(() => products.filter((p) => p.badge === 'پرفروش' || p.stock < 10), [products]);
-  const productsSpecial = useMemo(() => products.filter((p) => p.oldPrice && p.oldPrice > p.price), [products]);
-  const productsWatches = useMemo(() => products.filter((p) => p.category === 'ساعت'), [products]);
+  // Section collections dynamically sliced from real db based on badges and categories
+  const productsNewest = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'جدیدترین‌ها' || p.badge === 'جدید');
+    return matched.length >= 10 ? matched : products.slice(0, 10);
+  }, [products]);
+
+  const productsBestSellers = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'پرفروش‌ترین‌ها' || p.badge === 'پرفروش');
+    return matched.length >= 10 ? matched : products.slice(10, 20);
+  }, [products]);
+
+  const productsSpecial = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'تخفیف ویژه' || (p.oldPrice && p.oldPrice > p.price));
+    return matched.length >= 10 ? matched : products.filter((p) => p.oldPrice && p.oldPrice > p.price).concat(products).slice(0, 10);
+  }, [products]);
+
+  const productsWatches = useMemo(() => {
+    const matched = products.filter((p) => p.category === 'ساعت' || p.badge === 'ساعت');
+    return matched.length >= 10 ? matched : products.filter((p) => p.category === 'ساعت');
+  }, [products]);
 
   return (
     <main className="pb-nav min-h-screen overflow-x-hidden bg-[#fffaf0] text-[#37192C] font-vazir">
@@ -234,6 +250,7 @@ function App() {
           {adminTab === 'orders' && <OrderManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
+          {adminTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'analytics' && <AnalyticsView />}
           {adminTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
@@ -283,7 +300,10 @@ function App() {
                 <button
                   className="icon-button relative"
                   aria-label="سبد خرید"
-                  onClick={() => setAccountView({ tab: 'cart' })}
+                  onClick={() => {
+                    setAccountTab('cart');
+                    setActiveView('account');
+                  }}
                 >
                   <ShoppingBag size={20} />
                   {cart.length > 0 && (
@@ -297,7 +317,23 @@ function App() {
           </header>
 
           {/* MAIN STOREFRONT VIEWS */}
-          {activeView === 'home' ? (
+          {activeView === 'account' ? (
+            <ProfilePageView
+              tab={accountTab}
+              setTab={setAccountTab}
+              cart={cart}
+              setCart={setCart}
+              total={cartTotal}
+              wishlist={wishlist}
+              user={currentUser}
+              setUser={setCurrentUser}
+              orders={orders}
+              openCheckout={() => setCheckoutModal(true)}
+              openOrderDetails={(order: Order) => setSelectedOrderDetails(order)}
+              openProduct={setSelectedProduct}
+              openHome={() => handleNavClick('home')}
+            />
+          ) : activeView === 'home' ? (
             <>
               {/* Category Story Circles */}
               <section className="mx-auto w-full max-w-7xl px-4 pt-7 sm:px-6 lg:px-8">
@@ -323,88 +359,13 @@ function App() {
 
               {/* Banner Carousel */}
               {banners.length > 0 && (
-                <section className="relative mt-10 overflow-hidden">
-                  <div className="banner-shell" style={{ transform: `translateX(-${(bannerIndex % banners.length) * 100}%)` }}>
-                    {banners.map((banner) => (
-                      <article className="relative w-full shrink-0 overflow-hidden" key={banner.id}>
-                        <img src={banner.image} alt="کالکشن AuraVibe" className="absolute inset-0 size-full object-cover opacity-45" />
-                        <div className="banner-overlay" />
-                        <div className="relative mx-auto flex min-h-[520px] w-full max-w-7xl flex-col justify-end px-5 pb-16 sm:min-h-[620px] sm:px-8 lg:px-12">
-                          <p className="label text-[#FFF3C5]">{banner.eyebrow}</p>
-                          <h2 className="mt-3 max-w-lg text-4xl font-black leading-tight text-white sm:text-6xl">{banner.title}</h2>
-                          <p className="mt-4 max-w-md text-base leading-8 text-white/85">{banner.subtitle}</p>
-                          <button
-                            onClick={() => handleNavClick(banner.targetCategory || 'جدیدترین‌ها')}
-                            className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[#FFF3C5] px-5 py-3 text-sm font-bold text-[#37192C] transition hover:scale-105"
-                          >
-                            {banner.ctaText || 'دیدن کالکشن'} <ArrowLeft size={17} />
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                  <button onClick={() => setBannerIndex((bannerIndex + banners.length - 1) % banners.length)} className="carousel-arrow start-4" aria-label="بنر قبل">
-                    <ChevronRight />
-                  </button>
-                  <button onClick={() => setBannerIndex((bannerIndex + 1) % banners.length)} className="carousel-arrow end-4" aria-label="بنر بعد">
-                    <ChevronLeft />
-                  </button>
-                  <div className="absolute bottom-6 start-1/2 flex -translate-x-1/2 gap-2">
-                    {banners.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setBannerIndex(index)}
-                        className={'h-2.5 rounded-full transition-all ' + (index === (bannerIndex % banners.length) ? 'w-7 bg-[#FFF3C5]' : 'w-2.5 bg-white/60')}
-                        aria-label={`بنر ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <BannerCarousel
+                  banners={banners}
+                  bannerIndex={bannerIndex}
+                  setBannerIndex={setBannerIndex}
+                  onNavClick={handleNavClick}
+                />
               )}
-
-              {/* Category Banners Section (10 Banners for 10 Categories) */}
-              <section className="mx-auto mt-14 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="mb-6">
-                  <p className="label">کالکشن‌های آورا وایب</p>
-                  <h2 className="mt-1 text-2xl font-black sm:text-3xl text-[#37192C]">دسته‌بندی‌های ویژه</h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {categoryList.slice(0, 10).map((cat) => {
-                    const matchedBanner = banners.find(b => b.targetCategory === cat.name);
-                    const bannerImage = matchedBanner?.image || cat.image;
-                    const bannerTitle = matchedBanner?.title || `کالکشن ${cat.name}`;
-                    const bannerSubtitle = matchedBanner?.subtitle || `جدیدترین مدل‌های ${cat.name} آورا استایل`;
-                    return (
-                      <div
-                        key={cat.name}
-                        className="group relative overflow-hidden rounded-[2rem] bg-[#37192C] p-6 text-[#FFF3C5] shadow-md border border-[#FFF3C5]/15 flex flex-col justify-between min-h-[200px]"
-                      >
-                        <img
-                          src={bannerImage}
-                          alt={cat.name}
-                          className="absolute inset-0 size-full object-cover opacity-35 group-hover:scale-105 transition duration-500"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#37192C] via-[#37192C]/60 to-transparent pointer-events-none" />
-                        <div className="relative z-10">
-                          <span className="text-[10px] font-extrabold text-[#FFF3C5]/80 uppercase tracking-wider bg-[#37192C]/60 px-2.5 py-1 rounded-full border border-[#FFF3C5]/20">
-                            {cat.name}
-                          </span>
-                          <h3 className="mt-3 text-xl font-black text-white">{bannerTitle}</h3>
-                          <p className="mt-1.5 text-xs text-white/80 line-clamp-2 leading-5">{bannerSubtitle}</p>
-                        </div>
-                        <div className="relative z-10 mt-4">
-                          <button
-                            onClick={() => handleNavClick(cat.name)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF3C5] px-4 py-2 text-xs font-bold text-[#37192C] hover:bg-white transition shadow-xs"
-                          >
-                            دیدن کالکشن <ArrowLeft size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
 
               {/* Collections Grid */}
               <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -501,23 +462,6 @@ function App() {
           {menuOpen && <SectionMenu sections={menuSections} close={() => setMenuOpen(false)} go={handleNavClick} />}
           {searchOpen && <SearchModal close={() => setSearchOpen(false)} openProduct={setSelectedProduct} products={products} />}
 
-          {accountView && (
-            <AccountView
-              tab={accountView.tab}
-              setTab={(tab: string) => setAccountView({ tab: tab as any })}
-              close={() => setAccountView(null)}
-              cart={cart}
-              setCart={setCart}
-              total={cartTotal}
-              wishlist={wishlist}
-              user={currentUser}
-              setUser={setCurrentUser}
-              orders={orders}
-              openCheckout={() => setCheckoutModal(true)}
-              openOrderDetails={(order: Order) => setSelectedOrderDetails(order)}
-              openProduct={setSelectedProduct}
-            />
-          )}
 
           {checkoutModal && (
             <CheckoutInvoiceModal
@@ -579,7 +523,14 @@ function App() {
             <button className="bottom-nav-item" onClick={() => handleNavClick('admin')} aria-label="مدیریت">
               <LayoutDashboard size={22} />
             </button>
-            <button className="bottom-nav-item" onClick={() => setAccountView({ tab: 'profile' })} aria-label="حساب کاربری">
+            <button
+              className="bottom-nav-item"
+              onClick={() => {
+                setAccountTab('profile');
+                setActiveView('account');
+              }}
+              aria-label="حساب کاربری"
+            >
               <UserRound size={22} />
             </button>
           </nav>
@@ -592,6 +543,106 @@ function App() {
 // ----------------------------------------------------------------------
 // AUXILIARY COMPONENTS
 // ----------------------------------------------------------------------
+
+function BannerCarousel({
+  banners,
+  bannerIndex,
+  setBannerIndex,
+  onNavClick
+}: {
+  banners: Banner[];
+  bannerIndex: number;
+  setBannerIndex: React.Dispatch<React.SetStateAction<number>>;
+  onNavClick: (cat: string) => void;
+}) {
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const minSwipeDistance = 50;
+
+  useEffect(() => {
+    if (banners.length === 0) return;
+    const timer = setInterval(() => {
+      setBannerIndex((prev) => (prev + 1) % banners.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [banners.length, setBannerIndex]);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    if (isLeftSwipe) {
+      setBannerIndex((prev) => (prev + 1) % banners.length);
+    } else if (isRightSwipe) {
+      setBannerIndex((prev) => (prev + banners.length - 1) % banners.length);
+    }
+  };
+
+  return (
+    <section className="relative mt-10 overflow-hidden select-none">
+      <div
+        className="banner-shell"
+        style={{ transform: `translateX(-${(bannerIndex % banners.length) * 100}%)` }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {banners.map((banner) => (
+          <article className="relative w-full shrink-0 overflow-hidden" key={banner.id}>
+            <img src={banner.image} alt={banner.title} className="absolute inset-0 size-full object-cover opacity-45" />
+            <div className="banner-overlay" />
+            <div className="relative mx-auto flex min-h-[520px] w-full max-w-7xl flex-col justify-end px-5 pb-16 sm:min-h-[620px] sm:px-8 lg:px-12">
+              <p className="label text-[#FFF3C5]">{banner.eyebrow}</p>
+              <h2 className="mt-3 max-w-lg text-4xl font-black leading-tight text-white sm:text-6xl">{banner.title}</h2>
+              <p className="mt-4 max-w-md text-base leading-8 text-white/85">{banner.subtitle}</p>
+              <button
+                onClick={() => onNavClick(banner.targetCategory || 'جدیدترین‌ها')}
+                className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[#FFF3C5] px-5 py-3 text-sm font-bold text-[#37192C] transition hover:scale-105"
+              >
+                {banner.ctaText || 'دیدن کالکشن'} <ArrowLeft size={17} />
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+      <button
+        onClick={() => setBannerIndex((bannerIndex + banners.length - 1) % banners.length)}
+        className="carousel-arrow start-4"
+        aria-label="بنر قبل"
+      >
+        <ChevronRight />
+      </button>
+      <button
+        onClick={() => setBannerIndex((bannerIndex + 1) % banners.length)}
+        className="carousel-arrow end-4"
+        aria-label="بنر بعد"
+      >
+        <ChevronLeft />
+      </button>
+      <div className="absolute bottom-6 start-1/2 flex -translate-x-1/2 gap-2">
+        {banners.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setBannerIndex(index)}
+            className={'h-2.5 rounded-full transition-all ' + (index === (bannerIndex % banners.length) ? 'w-7 bg-[#FFF3C5]' : 'w-2.5 bg-white/60')}
+            aria-label={`بنر ${index + 1}`}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function Intro() {
   return (
@@ -782,54 +833,63 @@ function FaqSection() {
   );
 }
 
+function ArticleCard({ art, onClick }: { art: Article; onClick?: () => void }) {
+  const pDate = new Date(art.publishedAt || art.createdAt).toLocaleDateString('fa-IR');
+
+  return (
+    <div className="space-y-2">
+      {/* Horizontal Rectangular Article Card */}
+      <div
+        onClick={onClick}
+        className="group relative overflow-hidden rounded-2xl h-44 sm:h-52 border border-[#37192c]/10 shadow-xs flex items-center justify-between bg-[#37192C] cursor-pointer transition hover:shadow-md"
+      >
+        {/* Article Background Image under Gradient */}
+        <img
+          src={art.image}
+          alt={art.title}
+          className="absolute inset-0 size-full object-cover group-hover:scale-105 transition duration-500"
+        />
+
+        {/* Gradient Overlay: #37192C starting darker on LEFT, fading toward RIGHT */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#37192C] via-[#37192C]/80 to-transparent pointer-events-none" />
+
+        {/* White Content Panel on RIGHT side: Sharp right corners, rounded left corners */}
+        <div className="z-10 mr-0 ml-auto bg-white/95 backdrop-blur-md text-[#37192C] p-5 sm:p-7 rounded-l-2xl rounded-r-none h-full max-w-[68%] sm:max-w-[55%] flex flex-col justify-center shadow-md">
+          <h3 className="text-base sm:text-xl font-black text-[#37192C] leading-snug">
+            {art.title}
+          </h3>
+          <p className="mt-2 text-xs sm:text-sm font-light text-[#37192C]/85 leading-relaxed truncate">
+            {art.subtitle || art.digest}
+          </p>
+          <span className="mt-3 text-[10px] font-bold text-[#8b627e] block">{pDate}</span>
+        </div>
+      </div>
+
+      {/* Full Article Title Below Card */}
+      <div className="px-2 pt-1">
+        <h4
+          onClick={onClick}
+          className="text-xs sm:text-sm font-bold text-[#37192C] leading-6 hover:text-[#8b627e] transition cursor-pointer"
+        >
+          {art.fullArticleTitle || art.title}
+        </h4>
+      </div>
+    </div>
+  );
+}
+
 function JournalSection({ articles, onViewMore }: { articles: Article[]; onViewMore: () => void }) {
-  const displayArticles = articles.slice(0, 3);
+  const displayArticles = articles.filter((a) => a.status === 'published').slice(0, 3);
 
   return (
     <div className="rounded-[2.5rem] bg-[#fffdf7] border border-[#37192c]/10 p-6 sm:p-10">
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل وینا</h2>
+        <h2 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل آورا</h2>
       </div>
 
       <div className="space-y-8 max-w-4xl mx-auto">
         {displayArticles.map((art) => (
-          <div key={art.id} className="space-y-2">
-            {/* Horizontal Rectangular Article Card */}
-            <div
-              onClick={onViewMore}
-              className="group relative overflow-hidden rounded-2xl h-44 sm:h-52 border border-[#37192c]/10 shadow-xs flex items-center justify-between bg-[#37192C] cursor-pointer transition hover:shadow-md"
-            >
-              {/* Article Background Image */}
-              <img
-                src={art.image}
-                alt={art.title}
-                className="absolute inset-0 size-full object-cover group-hover:scale-105 transition duration-500"
-              />
-
-              {/* Gradient Overlay: #37192C starting on LEFT, fading toward RIGHT */}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#37192C] via-[#37192C]/80 to-transparent pointer-events-none" />
-
-              {/* White Box on RIGHT side */}
-              <div className="z-10 mr-0 ml-auto bg-white/95 backdrop-blur-md text-[#37192C] p-5 sm:p-7 rounded-l-2xl rounded-r-none h-full max-w-[68%] sm:max-w-[55%] flex flex-col justify-center shadow-md">
-                <h3 className="text-base sm:text-xl font-black text-[#37192C] leading-snug">
-                  {art.title}
-                </h3>
-                <p className="mt-2 text-xs sm:text-sm font-light text-[#37192C]/85 leading-relaxed truncate">
-                  {art.subtitle || art.digest}
-                </p>
-              </div>
-            </div>
-
-            {/* Full Article Title Below Card */}
-            <div className="px-2 pt-1">
-              <h4
-                onClick={onViewMore}
-                className="text-xs sm:text-sm font-bold text-[#37192C] leading-6 hover:text-[#8b627e] transition cursor-pointer"
-              >
-                {art.fullArticleTitle || art.title}
-              </h4>
-            </div>
-          </div>
+          <ArticleCard key={art.id} art={art} onClick={onViewMore} />
         ))}
       </div>
 
@@ -847,25 +907,54 @@ function JournalSection({ articles, onViewMore }: { articles: Article[]; onViewM
 }
 
 function JournalPageView({ articles, openHome }: { articles: Article[]; openHome: () => void }) {
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const activeArticles = articles.filter((a) => a.status === 'published');
+
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4">
+    <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
+      <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
         <div>
-          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1">
+          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
             <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل آورا</h1>
         </div>
       </div>
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {articles.map((art) => (
-          <article key={art.id} className="rounded-2xl border border-[#37192c]/10 bg-white overflow-hidden shadow-xs p-5">
-            <img src={art.image} alt={art.title} className="h-48 w-full object-cover rounded-xl" />
-            <h2 className="mt-3 text-lg font-black text-[#37192C]">{art.title}</h2>
-            <p className="mt-2 text-xs text-[#37192C]/75 leading-6">{art.digest}</p>
-          </article>
+
+      {/* Vertical natural scroll listing of active articles */}
+      <div className="space-y-8 max-w-4xl mx-auto">
+        {activeArticles.map((art) => (
+          <ArticleCard key={art.id} art={art} onClick={() => setSelectedArticle(art)} />
         ))}
       </div>
+
+      {/* Article Detail Modal */}
+      {selectedArticle && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setSelectedArticle(null)}
+              className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
+            >
+              <X size={18} />
+            </button>
+
+            <img src={selectedArticle.image} alt={selectedArticle.title} className="w-full h-64 object-cover rounded-2xl" />
+
+            <div>
+              <span className="text-xs font-bold text-[#8b627e]">
+                {new Date(selectedArticle.publishedAt || selectedArticle.createdAt).toLocaleDateString('fa-IR')}
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-[#37192C] mt-1">{selectedArticle.title}</h2>
+              {selectedArticle.subtitle && <p className="text-sm font-bold text-[#8b627e] mt-1">{selectedArticle.subtitle}</p>}
+            </div>
+
+            <div className="text-xs sm:text-sm leading-8 text-[#37192C] pt-3 border-t border-[#37192c]/10 whitespace-pre-line font-semibold">
+              {selectedArticle.content}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1421,8 +1510,29 @@ function SearchModal({ close, openProduct, products }: any) {
   );
 }
 
-function AccountView({ tab, setTab, close, cart, setCart, total, wishlist, user, setUser, orders, openCheckout, openOrderDetails, openProduct }: any) {
+import { IRAN_PROVINCES_AND_CITIES } from './data';
+
+function ProfilePageView({
+  tab,
+  setTab,
+  cart,
+  setCart,
+  total,
+  wishlist,
+  user,
+  setUser,
+  orders,
+  openCheckout,
+  openOrderDetails,
+  openProduct,
+  openHome
+}: any) {
   const [editing, setEditing] = useState(false);
+  const [provinceSearch, setProvinceSearch] = useState('');
+  const [citySearch, setCitySearch] = useState('');
+  const [provinceDropdownOpen, setProvinceDropdownOpen] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -1431,249 +1541,441 @@ function AccountView({ tab, setTab, close, cart, setCart, total, wishlist, user,
     province: user?.province || '',
     city: user?.city || '',
     address: user?.address || '',
-    postalCode: user?.postalCode || ''
+    postalCode: user?.postalCode || '',
+    avatar: user?.avatar || ''
   });
+
+  const [postalError, setPostalError] = useState('');
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        setFormData((prev) => ({ ...prev, avatar: result }));
+        if (setUser) {
+          setUser((prev: User) => {
+            const updated = { ...prev, avatar: result };
+            db.saveUser(updated, { id: 1, name: 'کاربر' });
+            return updated;
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.postalCode && !/^\d{10}$/.test(formData.postalCode)) {
+      setPostalError('کد پستی باید ۱۰ رقم عدد باشد');
+      return;
+    }
+    setPostalError('');
+
     if (setUser) {
-      setUser((prev: User) => ({ ...prev, ...formData }));
+      setUser((prev: User) => {
+        const updated = { ...prev, ...formData };
+        db.saveUser(updated, { id: 1, name: 'کاربر' });
+        return updated;
+      });
     }
     setEditing(false);
   };
 
-  return (
-    <div className="modal-backdrop p-3" onClick={close}>
-      <div className="w-full max-w-lg rounded-[2.5rem] bg-[#fffaf0] p-6 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
-        <button onClick={close} className="absolute end-5 top-5 grid size-8 place-items-center rounded-full bg-white text-[#37192C] hover:bg-[#FFF3C5] transition">
-          <X size={16} />
-        </button>
+  const selectedProvinceData = IRAN_PROVINCES_AND_CITIES.find((p) => p.province === formData.province);
 
-        {/* Tab Headers */}
-        <div className="flex border-b border-[#37192c]/10 text-center mb-5 gap-1 pb-1 overflow-x-auto">
-          <button
-            onClick={() => setTab('profile')}
-            className={'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition min-w-[80px] ' + (tab === 'profile' ? 'bg-[#37192C] text-[#FFF3C5]' : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50')}
-          >
-            پروفایل
+  const filteredProvinces = IRAN_PROVINCES_AND_CITIES.filter((p) =>
+    p.province.includes(provinceSearch)
+  );
+
+  const filteredCities = (selectedProvinceData?.cities || []).filter((c) =>
+    c.includes(citySearch)
+  );
+
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
+      {/* Header Breadcrumb */}
+      <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
+        <div>
+          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+            <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
           </button>
-          <button
-            onClick={() => setTab('orders')}
-            className={'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition min-w-[80px] ' + (tab === 'orders' ? 'bg-[#37192C] text-[#FFF3C5]' : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50')}
-          >
-            سفارشات ({orders.length})
-          </button>
-          <button
-            onClick={() => setTab('fav')}
-            className={'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition min-w-[80px] ' + (tab === 'fav' ? 'bg-[#37192C] text-[#FFF3C5]' : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50')}
-          >
-            علاقمندی‌ها ({wishlist?.length || 0})
-          </button>
-          <button
-            onClick={() => setTab('cart')}
-            className={'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition min-w-[80px] ' + (tab === 'cart' ? 'bg-[#37192C] text-[#FFF3C5]' : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50')}
-          >
-            سبد خرید ({cart.length})
-          </button>
+          <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">حساب کاربری</h1>
+        </div>
+      </div>
+
+      {/* Profile Header (Instagram inspired) */}
+      <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs mb-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-right">
+        <div className="relative group shrink-0">
+          <div className="size-24 sm:size-28 rounded-full overflow-hidden border-4 border-[#FFF3C5] bg-[#37192C] grid place-items-center text-[#FFF3C5] font-black text-3xl shadow-md">
+            {formData.avatar ? (
+              <img src={formData.avatar} alt="پروفایل" className="size-full object-cover" />
+            ) : (
+              user?.firstName ? user.firstName[0] : 'U'
+            )}
+          </div>
+          <label className="absolute bottom-0 end-0 grid size-8 place-items-center rounded-full bg-[#37192C] text-[#FFF3C5] cursor-pointer hover:scale-110 transition shadow-md">
+            <Camera size={16} />
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          </label>
         </div>
 
-        {/* Profile Tab */}
-        {tab === 'profile' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <div className="grid size-12 place-items-center rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-lg">
-                  {user?.firstName ? user.firstName[0] : 'U'}
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-[#37192C]">{user?.firstName} {user?.lastName}</h3>
-                  <p className="text-xs text-[#8b627e]">{user?.phone}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setEditing(!editing)}
-                className="flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-3 py-1.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition"
-              >
-                <Edit size={14} /> {editing ? 'انصراف' : 'ویرایش'}
-              </button>
-            </div>
+        <div className="flex-1">
+          <h2 className="text-xl sm:text-2xl font-black text-[#37192C]">
+            {user?.firstName} {user?.lastName}
+          </h2>
+          <p className="mt-1 text-xs font-bold text-[#8b627e]">{user?.phone}</p>
+          <p className="mt-1 text-xs text-[#37192C]/70">
+            {user?.province && user?.city ? `استان ${user.province}، شهر ${user.city}` : 'آدرس پروپایل تکمیل نشده'}
+          </p>
+        </div>
 
-            {editing ? (
-              <form onSubmit={handleSaveProfile} className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block font-bold mb-1">نام</label>
-                    <input
-                      type="text"
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                      className="w-full p-2 rounded-xl border bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold mb-1">نام خانوادگی</label>
-                    <input
-                      type="text"
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                      className="w-full p-2 rounded-xl border bg-white"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block font-bold mb-1">ایمیل</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full p-2 rounded-xl border bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold mb-1">تلفن</label>
-                    <input
-                      type="text"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full p-2 rounded-xl border bg-white"
-                    />
-                  </div>
-                </div>
+        <button
+          onClick={() => setEditing(!editing)}
+          className="flex items-center gap-1.5 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs"
+        >
+          <Edit size={16} /> {editing ? 'انصراف' : 'ویرایش اطلاعات'}
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-[#37192c]/10 text-center mb-8 gap-2 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setTab('profile')}
+          className={
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            (tab === 'profile'
+              ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
+              : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
+          }
+        >
+          پروفایل
+        </button>
+        <button
+          onClick={() => setTab('orders')}
+          className={
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            (tab === 'orders'
+              ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
+              : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
+          }
+        >
+          سفارشات ({orders.length})
+        </button>
+        <button
+          onClick={() => setTab('fav')}
+          className={
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            (tab === 'fav'
+              ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
+              : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
+          }
+        >
+          علاقمندی ({wishlist?.length || 0})
+        </button>
+        <button
+          onClick={() => setTab('cart')}
+          className={
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            (tab === 'cart'
+              ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
+              : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
+          }
+        >
+          سبد خرید ({cart.length})
+        </button>
+      </div>
+
+      {/* Tab 1: Profile Tab */}
+      {tab === 'profile' && (
+        <div className="transition-all duration-300">
+          {editing ? (
+            <form onSubmit={handleSaveProfile} className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs space-y-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold mb-1">آدرس تحویل</label>
-                  <textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full p-2 rounded-xl border bg-white h-20"
+                  <label className="block font-bold mb-1.5 text-[#37192C]">نام</label>
+                  <input
+                    type="text"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none"
                   />
                 </div>
-                <button type="submit" className="w-full py-2.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold">
-                  ذخیره تغییرات
-                </button>
-              </form>
-            ) : (
-              <div className="space-y-2.5 text-xs">
-                <div className="bg-white p-3 rounded-2xl border flex justify-between">
-                  <span className="text-[#8b627e] font-bold">نام و خانوادگی:</span>
-                  <span className="font-bold">{user?.firstName} {user?.lastName}</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border flex justify-between">
-                  <span className="text-[#8b627e] font-bold">شماره همراه:</span>
-                  <span className="font-bold">{user?.phone}</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border flex justify-between">
-                  <span className="text-[#8b627e] font-bold">ایمیل:</span>
-                  <span className="font-bold">{user?.email || 'ثبت نشده'}</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border">
-                  <span className="text-[#8b627e] font-bold block mb-1">آدرس ارسال:</span>
-                  <span className="font-bold leading-6">{user?.address || 'آدرسی ثبت نشده است'}</span>
+                <div>
+                  <label className="block font-bold mb-1.5 text-[#37192C]">نام خانوادگی</label>
+                  <input
+                    type="text"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none"
+                  />
                 </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Cart Tab */}
-        {tab === 'cart' && (
-          <div>
-            {cart.length === 0 ? (
-              <div className="py-8 text-center text-xs font-bold text-[#8b627e]">
-                سبد خرید شما خالی است.
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold mb-1.5 text-[#37192C]">شماره همراه</label>
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1.5 text-[#37192C]">ایمیل</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none"
+                  />
+                </div>
               </div>
-            ) : (
-              <>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {cart.map((item: Product, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-2xl border text-xs font-bold">
-                      <div className="flex items-center gap-3">
-                        <img src={item.images[0]} alt={item.name} className="size-10 rounded-lg object-cover" />
-                        <span>{item.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[#37192C]">{money(item.price)} تومان</span>
-                        <button
-                          onClick={() => setCart((prev: Product[]) => prev.filter((_, i) => i !== idx))}
-                          className="text-rose-500 hover:bg-rose-50 p-1 rounded-full"
-                          title="حذف"
+
+              {/* Geographic Dropdowns: Province and City */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Searchable Province Dropdown */}
+                <div className="relative">
+                  <label className="block font-bold mb-1.5 text-[#37192C]">استان</label>
+                  <div
+                    onClick={() => setProvinceDropdownOpen(!provinceDropdownOpen)}
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold cursor-pointer flex justify-between items-center"
+                  >
+                    <span>{formData.province || 'انتخاب استان...'}</span>
+                    <ChevronDown size={16} />
+                  </div>
+                  {provinceDropdownOpen && (
+                    <div className="absolute z-30 mt-1 w-full bg-white border rounded-xl shadow-xl p-2 max-h-56 overflow-y-auto">
+                      <input
+                        type="text"
+                        placeholder="جستجوی استان..."
+                        value={provinceSearch}
+                        onChange={(e) => setProvinceSearch(e.target.value)}
+                        className="w-full p-2 border-b text-xs outline-none mb-1 font-bold"
+                      />
+                      {filteredProvinces.map((p) => (
+                        <div
+                          key={p.province}
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, province: p.province, city: '' }));
+                            setProvinceDropdownOpen(false);
+                            setProvinceSearch('');
+                          }}
+                          className="p-2 hover:bg-[#FFF3C5] rounded-lg cursor-pointer font-bold"
                         >
-                          <Trash2 size={15} />
-                        </button>
+                          {p.province}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Searchable City Dropdown */}
+                <div className="relative">
+                  <label className="block font-bold mb-1.5 text-[#37192C]">شهرستان</label>
+                  <div
+                    onClick={() => {
+                      if (formData.province) setCityDropdownOpen(!cityDropdownOpen);
+                    }}
+                    className={`w-full p-3 rounded-xl border font-semibold flex justify-between items-center ${
+                      formData.province ? 'bg-[#fffaf0] cursor-pointer' : 'bg-gray-100 cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <span>{formData.city || (formData.province ? 'انتخاب شهرستان...' : 'ابتدا استان را انتخاب کنید')}</span>
+                    <ChevronDown size={16} />
+                  </div>
+                  {cityDropdownOpen && formData.province && (
+                    <div className="absolute z-30 mt-1 w-full bg-white border rounded-xl shadow-xl p-2 max-h-56 overflow-y-auto">
+                      <input
+                        type="text"
+                        placeholder="جستجوی شهرستان..."
+                        value={citySearch}
+                        onChange={(e) => setCitySearch(e.target.value)}
+                        className="w-full p-2 border-b text-xs outline-none mb-1 font-bold"
+                      />
+                      {filteredCities.map((c) => (
+                        <div
+                          key={c}
+                          onClick={() => {
+                            setFormData((prev) => ({ ...prev, city: c }));
+                            setCityDropdownOpen(false);
+                            setCitySearch('');
+                          }}
+                          className="p-2 hover:bg-[#FFF3C5] rounded-lg cursor-pointer font-bold"
+                        >
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Address & Postal Code */}
+              <div>
+                <label className="block font-bold mb-1.5 text-[#37192C]">آدرس تکمیلی</label>
+                <textarea
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="خیابان، پلاک، واحد..."
+                  className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none h-20"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1.5 text-[#37192C]">کد پستی (۱۰ رقمی)</label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={formData.postalCode}
+                  onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
+                  placeholder="مثال: ۱۹۸۷۶۵۴۳۲۱"
+                  className="w-full p-3 rounded-xl border bg-[#fffaf0] font-semibold outline-none"
+                />
+                {postalError && <p className="mt-1 text-xs font-bold text-rose-600">{postalError}</p>}
+              </div>
+
+              <button type="submit" className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-sm shadow-md hover:bg-[#5a2548] transition">
+                ذخیره اطلاعات و آدرس در سیستم
+              </button>
+            </form>
+          ) : (
+            <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-[#fffaf0] p-4 rounded-2xl border border-[#37192c]/5">
+                  <span className="text-[#8b627e] font-bold block mb-1">نام و خانوادگی:</span>
+                  <span className="font-bold text-sm text-[#37192C]">{user?.firstName} {user?.lastName}</span>
+                </div>
+                <div className="bg-[#fffaf0] p-4 rounded-2xl border border-[#37192c]/5">
+                  <span className="text-[#8b627e] font-bold block mb-1">شماره همراه:</span>
+                  <span className="font-bold text-sm text-[#37192C]">{user?.phone}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-[#fffaf0] p-4 rounded-2xl border border-[#37192c]/5">
+                  <span className="text-[#8b627e] font-bold block mb-1">استان / شهرستان:</span>
+                  <span className="font-bold text-sm text-[#37192C]">
+                    {user?.province && user?.city ? `${user.province} - ${user.city}` : 'ثبت نشده'}
+                  </span>
+                </div>
+                <div className="bg-[#fffaf0] p-4 rounded-2xl border border-[#37192c]/5">
+                  <span className="text-[#8b627e] font-bold block mb-1">کد پستی:</span>
+                  <span className="font-bold text-sm text-[#37192C]">{user?.postalCode || 'ثبت نشده'}</span>
+                </div>
+              </div>
+
+              <div className="bg-[#fffaf0] p-4 rounded-2xl border border-[#37192c]/5">
+                <span className="text-[#8b627e] font-bold block mb-1">آدرس تکمیلی:</span>
+                <span className="font-bold text-sm text-[#37192C] leading-6">{user?.address || 'آدرسی ثبت نشده است'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: Orders Tab */}
+      {tab === 'orders' && (
+        <div className="space-y-4">
+          {orders.length === 0 ? (
+            <div className="rounded-[2.5rem] bg-white p-12 text-center border border-[#37192c]/10 text-xs font-bold text-[#8b627e]">
+              هنوز هیچ سفارشی ثبت نکرده‌اید.
+            </div>
+          ) : (
+            orders.map((o: Order) => (
+              <div
+                key={o.id}
+                onClick={() => openOrderDetails(o)}
+                className="p-5 bg-white rounded-2xl border border-[#37192c]/10 text-xs cursor-pointer hover:border-[#37192C]/40 transition shadow-xs flex flex-col sm:flex-row justify-between sm:items-center gap-3"
+              >
+                <div>
+                  <div className="font-black text-sm text-[#37192C] flex items-center gap-2">
+                    <span>شماره سفارش: {o.orderNumber}</span>
+                  </div>
+                  <div className="mt-2 text-xs text-[#8b627e] space-y-1">
+                    <div>مبلغ: {money(o.totalAmount)} تومان</div>
+                    <div>روش ارسال: {o.shippingMethod.title}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full font-bold">
+                    {o.orderStatus}
+                  </span>
+                  <ArrowLeft size={16} className="text-[#8b627e]" />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Tab 3: Favorites Tab */}
+      {tab === 'fav' && (
+        <div>
+          {(!wishlist || wishlist.length === 0) ? (
+            <div className="rounded-[2.5rem] bg-white p-12 text-center border border-[#37192c]/10 text-xs font-bold text-[#8b627e]">
+              هیچ محصولی در لیست علاقمندی‌ها وجود ندارد.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {wishlist.map((item: Product) => (
+                <ProductCard key={item.id} product={item} open={openProduct} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 4: Cart Tab */}
+      {tab === 'cart' && (
+        <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs">
+          {cart.length === 0 ? (
+            <div className="py-12 text-center text-xs font-bold text-[#8b627e]">
+              سبد خرید شما خالی است.
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {cart.map((item: Product, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-4 bg-[#fffaf0] rounded-2xl border border-[#37192c]/10 text-xs font-bold">
+                    <div className="flex items-center gap-3">
+                      <img src={item.images[0]} alt={item.name} className="size-14 rounded-xl object-cover" />
+                      <div>
+                        <span className="block text-sm text-[#37192C]">{item.name}</span>
+                        <span className="text-xs text-[#8b627e]">{item.category}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-4 pt-3 border-t flex justify-between items-center text-xs font-black">
-                  <span>مبلغ قابل پرداخت:</span>
-                  <span className="text-base text-[#37192C]">{money(total)} تومان</span>
-                </div>
-                <button onClick={() => { close(); openCheckout(); }} className="mt-4 w-full rounded-full bg-[#37192C] py-3.5 text-xs font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition">
-                  تکمیل سفارش و پرداخت
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Favorites Tab */}
-        {tab === 'fav' && (
-          <div>
-            {(!wishlist || wishlist.length === 0) ? (
-              <div className="py-8 text-center text-xs font-bold text-[#8b627e]">
-                هیچ محصولی در لیست علاقمندی‌ها وجود ندارد.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {wishlist.map((item: Product) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-2xl border text-xs font-bold">
-                    <button
-                      onClick={() => { close(); openProduct(item); }}
-                      className="flex items-center gap-3 text-right hover:opacity-80 transition"
-                    >
-                      <img src={item.images[0]} alt={item.name} className="size-10 rounded-lg object-cover" />
-                      <div>
-                        <div className="truncate max-w-[150px]">{item.name}</div>
-                        <div className="text-[11px] text-[#8b627e]">{money(item.price)} تومان</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { close(); openProduct(item); }}
-                      className="px-3 py-1.5 rounded-full bg-[#FFF3C5] text-[#37192C] text-[11px] font-bold"
-                    >
-                      مشاهده
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-black text-[#37192C]">{money(item.price)} تومان</span>
+                      <button
+                        onClick={() => setCart((prev: Product[]) => prev.filter((_, i) => i !== idx))}
+                        className="text-rose-500 hover:bg-rose-50 p-2 rounded-full transition"
+                        title="حذف"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Orders Tab */}
-        {tab === 'orders' && (
-          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-            {orders.length === 0 ? (
-              <div className="py-8 text-center text-xs font-bold text-[#8b627e]">
-                هنوز هیچ سفارشی ثبت نکرده‌اید.
+              <div className="mt-6 pt-4 border-t flex justify-between items-center text-sm font-black">
+                <span>مبلغ قابل پرداخت:</span>
+                <span className="text-lg text-[#37192C]">{money(total)} تومان</span>
               </div>
-            ) : (
-              orders.map((o: Order) => (
-                <div key={o.id} onClick={() => openOrderDetails(o)} className="p-4 bg-white rounded-2xl border text-xs cursor-pointer hover:border-[#37192C]/40 transition">
-                  <div className="flex justify-between font-bold">
-                    <span>شماره سفارش: {o.orderNumber}</span>
-                    <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{o.orderStatus}</span>
-                  </div>
-                  <div className="mt-2 flex justify-between items-center text-[11px] text-[#8b627e]">
-                    <span>مبلغ: {money(o.totalAmount)} تومان</span>
-                    <span>روش ارسال: {o.shippingMethod.title}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
+              <button
+                onClick={openCheckout}
+                className="mt-6 w-full rounded-full bg-[#37192C] py-4 text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md"
+              >
+                تکمیل سفارش و پرداخت فاکتور
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
