@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Power, Image as ImageIcon, X, Paperclip } from 'lucide-react';
-import { Article, db, AdminUser } from '../../services/db';
+import { Plus, Edit, Trash2, Power, Image as ImageIcon, X, Paperclip, Lock, Eye } from 'lucide-react';
+import { Article, db, AdminUser, getJalaliDateString } from '../../services/db';
 import { satinImage } from '../../data';
 
 type MagazineManagementViewProps = {
@@ -20,6 +20,10 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
   const [aBody, setABody] = useState('');
   const [aBanner, setABanner] = useState(satinImage);
   const [aActive, setAActive] = useState(true);
+  const [aDateJalali, setADateJalali] = useState('');
+
+  // Inline images state for rich block editor
+  const [inlineImages, setInlineImages] = useState<string[]>([]);
 
   const refreshList = () => {
     setArticles(db.getArticles());
@@ -33,6 +37,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       setABody(art.content);
       setABanner(art.image);
       setAActive(art.status === 'published');
+      setADateJalali(getJalaliDateString(art.createdAt || art.publishedAt));
     } else {
       setEditingArticle(null);
       setATitle('');
@@ -40,7 +45,9 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       setABody('');
       setABanner(satinImage);
       setAActive(true);
+      setADateJalali(getJalaliDateString(new Date().toISOString()));
     }
+    setInlineImages([]);
     setModalOpen(true);
   };
 
@@ -61,8 +68,11 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       const reader = new FileReader();
       reader.onload = () => {
         if (reader.result) {
-          const imgTag = `\n![تصویر](${reader.result})\n`;
-          setABody((prev) => prev + imgTag);
+          const imgUrl = reader.result as string;
+          setInlineImages((prev) => [...prev, imgUrl]);
+          // Append clean image node marker instead of raw Base64 string in text
+          const cleanMarker = `\n\n[تصویر ${inlineImages.length + 1}]\n\n`;
+          setABody((prev) => prev + cleanMarker);
         }
       };
       reader.readAsDataURL(file);
@@ -73,12 +83,20 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
     e.preventDefault();
     if (!aTitle) return;
 
+    // Process inline images into clean markdown rendering
+    let finalContent = aBody;
+    inlineImages.forEach((imgUrl, idx) => {
+      const marker = `[تصویر ${idx + 1}]`;
+      const markdownImg = `\n![تصویر](${imgUrl})\n`;
+      finalContent = finalContent.replace(marker, markdownImg);
+    });
+
     db.saveArticle(
       {
         id: editingArticle ? editingArticle.id : undefined,
         title: aTitle,
         subtitle: aSubtitle,
-        content: aBody,
+        content: finalContent,
         digest: aSubtitle || aBody.slice(0, 80),
         image: aBanner,
         status: aActive ? 'published' : 'draft',
@@ -112,7 +130,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl bg-white p-5 border border-[#37192c]/10 shadow-sm">
         <div>
           <h2 className="text-lg font-black text-[#37192C]">مدیریت مجله آورا (Magazine CMS)</h2>
-          <p className="text-xs text-[#8b627e]">ایجاد و ویرایش مقالات، آپلود بنر، ثبت خودکار تاریخ شمسی و ادیتور متن</p>
+          <p className="text-xs text-[#8b627e]">ایجاد و ویرایش مقالات، ثبت خودکار تاریخ شمسی قفل‌شده و ادیتور تصویر پیشرفته</p>
         </div>
         <button
           onClick={() => openForm(null)}
@@ -124,7 +142,8 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {articles.map((art) => {
-          const pDate = new Date(art.publishedAt || art.createdAt).toLocaleDateString('fa-IR');
+          const pDate = getJalaliDateString(art.publishedAt || art.createdAt);
+
           return (
             <div key={art.id} className="rounded-2xl border border-[#37192c]/10 bg-white p-5 space-y-3 shadow-sm">
               <div className="relative h-40 w-full overflow-hidden rounded-xl bg-[#37192C]">
@@ -191,6 +210,22 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
                   value={aTitle}
                   onChange={(e) => setATitle(e.target.value)}
                   className="mt-1 w-full rounded-xl border p-3 font-bold outline-none"
+                  placeholder="عنوان مقاله را وارد کنید..."
+                />
+              </div>
+
+              {/* Locked Read-Only Jalali Date Field directly below Title */}
+              <div>
+                <label className="font-bold text-[#37192C] flex items-center gap-1">
+                  <span>تاریخ (ثبت خودکار سیستم)</span>
+                  <Lock size={12} className="text-gray-400" />
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  value={aDateJalali}
+                  className="mt-1 w-full rounded-xl border border-gray-200 bg-gray-100 p-3 font-bold text-gray-500 cursor-not-allowed outline-none select-none"
                 />
               </div>
 
@@ -206,7 +241,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
 
               <div className="rounded-2xl border bg-[#fffaf0] p-4 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-[#37192C]">تصویر بنر مقاله (از گالری)</span>
+                  <span className="font-bold text-[#37192C]">تصویر بنر اصلی مقاله (از گالری)</span>
                   <label className="rounded-full bg-[#37192C] px-3.5 py-1.5 text-[11px] font-bold text-[#FFF3C5] cursor-pointer">
                     + انتخاب بنر
                     <input type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
@@ -215,22 +250,41 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
                 <img src={aBanner} alt="بنر" className="h-32 w-full object-cover rounded-xl border" />
               </div>
 
+              {/* Rich Body Editor */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="font-bold text-[#37192C]">متن کامل مقاله (Note Editor)</label>
-                  <label className="flex items-center gap-1 cursor-pointer text-xs font-bold text-[#8b627e] hover:text-[#37192C]">
+                  <label className="font-bold text-[#37192C]">متن کامل مقاله (Article Body)</label>
+                  <label className="flex items-center gap-1 cursor-pointer text-xs font-bold text-[#8b627e] hover:text-[#37192C] bg-[#FFF3C5] px-2.5 py-1 rounded-full">
                     <Paperclip size={14} /> + افزودن تصویر داخل متن
                     <input type="file" accept="image/*" className="hidden" onChange={handleInlineImageUpload} />
                   </label>
                 </div>
+
                 <textarea
                   rows={8}
                   required
                   value={aBody}
                   onChange={(e) => setABody(e.target.value)}
                   className="w-full rounded-xl border p-3 font-semibold outline-none leading-7"
-                  placeholder="متن مقاله را اینجا تایپ کنید..."
+                  placeholder="متن مقاله را اینجا تایپ کنید. با دکمه افزودن تصویر، تصاویر واقعی وسط متن قرار می‌گیرند..."
                 />
+
+                {/* Inline Image Thumbnails Preview */}
+                {inlineImages.length > 0 && (
+                  <div className="mt-2 p-3 bg-[#fffaf0] rounded-xl border space-y-2">
+                    <span className="font-bold text-[#37192C]">تصاویر اضافه شده به متن:</span>
+                    <div className="flex gap-2 overflow-x-auto">
+                      {inlineImages.map((img, idx) => (
+                        <div key={idx} className="relative size-16 shrink-0 rounded-lg overflow-hidden border">
+                          <img src={img} alt={`تصویر ${idx + 1}`} className="size-full object-cover" />
+                          <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center font-bold">
+                            تصویر {idx + 1}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -250,7 +304,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
                 type="submit"
                 className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition"
               >
-                ذخیره مقاله
+                ذخیره مقاله و به‌روزرسانی
               </button>
             </form>
           </div>

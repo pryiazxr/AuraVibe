@@ -949,8 +949,22 @@ function JournalPageView({ articles, openHome }: { articles: Article[]; openHome
               {selectedArticle.subtitle && <p className="text-sm font-bold text-[#8b627e] mt-1">{selectedArticle.subtitle}</p>}
             </div>
 
-            <div className="text-xs sm:text-sm leading-8 text-[#37192C] pt-3 border-t border-[#37192c]/10 whitespace-pre-line font-semibold">
-              {selectedArticle.content}
+            <div className="text-xs sm:text-sm leading-8 text-[#37192C] pt-3 border-t border-[#37192c]/10 font-semibold space-y-4">
+              {selectedArticle.content.split('\n\n').map((paragraph, idx) => {
+                const imgMatch = paragraph.match(/!\[.*?\]\((.*?)\)/);
+                if (imgMatch && imgMatch[1]) {
+                  return (
+                    <div key={idx} className="my-4 overflow-hidden rounded-2xl border shadow-xs">
+                      <img src={imgMatch[1]} alt="تصویر مقاله" className="w-full max-h-96 object-cover" />
+                    </div>
+                  );
+                }
+                return (
+                  <p key={idx} className="whitespace-pre-line">
+                    {paragraph}
+                  </p>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1391,26 +1405,140 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
 }
 
 function ProductModal({ product, close, add, toggleWish, isWished, allProducts, openProduct }: any) {
+  const [activeImgIdx, setActiveImgIdx] = useState(product.mainImageIndex || 0);
+  const [showVideo, setShowVideo] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+
+  const images = product.images && product.images.length > 0 ? product.images : [satinImage];
+
+  const handleShare = () => {
+    const productUrl = `${window.location.origin}${window.location.pathname}?product=${product.id}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(productUrl);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2500);
+    } else {
+      alert(`لینک محصول: ${productUrl}`);
+    }
+  };
+
   return (
-    <div className="modal-backdrop p-3">
-      <div className="product-modal max-h-[92vh] overflow-y-auto">
-        <button className="absolute end-5 top-5 z-10 grid size-10 place-items-center rounded-full bg-white/80 shadow-xs" onClick={close}>
+    <div className="modal-backdrop p-3" onClick={close}>
+      <div className="product-modal max-h-[92vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="absolute end-5 top-5 z-20 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C]"
+          onClick={close}
+        >
           <X size={20} />
         </button>
+
         <div className="grid md:grid-cols-2">
-          <div className="min-h-[300px] bg-[#f3e7cd] flex items-center justify-center p-4">
-            <img src={product.images[0]} alt={product.name} className="max-h-[500px] w-full object-contain rounded-2xl" />
+          {/* Media Player Column */}
+          <div className="min-h-[320px] bg-[#f3e7cd] flex flex-col items-center justify-center p-4 relative rounded-t-[2rem] md:rounded-s-[2rem] md:rounded-te-none">
+            {showVideo && product.videoUrl ? (
+              <div className="w-full max-h-[450px] overflow-hidden rounded-2xl bg-black">
+                <video src={product.videoUrl} controls autoPlay className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <img
+                src={images[activeImgIdx] || images[0]}
+                alt={product.name}
+                className="max-h-[420px] w-full object-contain rounded-2xl transition duration-300"
+              />
+            )}
+
+            {/* Thumbnail Gallery Row */}
+            <div className="mt-4 flex items-center justify-center gap-2 overflow-x-auto w-full">
+              {images.map((img: string, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setActiveImgIdx(idx);
+                    setShowVideo(false);
+                  }}
+                  className={`size-12 rounded-xl overflow-hidden border-2 transition ${
+                    !showVideo && activeImgIdx === idx ? 'border-[#37192C] scale-105' : 'border-white/60 opacity-70'
+                  }`}
+                >
+                  <img src={img} alt={`بخش ${idx + 1}`} className="size-full object-cover" />
+                </button>
+              ))}
+
+              {product.videoUrl && (
+                <button
+                  onClick={() => setShowVideo(true)}
+                  className={`px-3 py-2 rounded-xl border-2 font-bold text-xs flex items-center gap-1 transition ${
+                    showVideo ? 'bg-[#37192C] text-[#FFF3C5] border-[#37192C]' : 'bg-white text-[#37192C] border-white'
+                  }`}
+                >
+                  🎥 ویدیو
+                </button>
+              )}
+            </div>
           </div>
-          <div className="p-6 sm:p-8 flex flex-col justify-between">
-            <div>
-              <span className="label">{product.category}</span>
-              <h2 className="mt-2 text-2xl font-black text-[#37192C]">{product.name}</h2>
-              <div className="mt-2 font-mono text-xs font-bold text-[#8b627e]">Product Code: {product.productCode}</div>
-              <p className="mt-4 text-xs leading-7 text-[#37192C]/80">{product.description}</p>
-              <div className="mt-6 text-2xl font-black text-[#37192C]">{money(product.price)} تومان</div>
-              <button onClick={() => add(product)} className="mt-6 w-full rounded-full bg-[#37192C] py-3.5 text-xs font-bold text-[#FFF3C5]">
-                افزودن به سبد خرید
-              </button>
+
+          {/* Product Details Column */}
+          <div className="p-6 sm:p-8 flex flex-col justify-between space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="label bg-[#FFF3C5] text-[#37192C] px-3 py-1 rounded-full text-xs font-black">
+                  {product.category}
+                </span>
+
+                {product.badge && (
+                  <span className="bg-[#37192C] text-[#FFF3C5] px-3 py-1 rounded-full text-xs font-black">
+                    {product.badge}
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-black text-[#37192C] leading-snug">{product.name}</h2>
+              <div className="font-mono text-xs font-bold text-[#8b627e]">Product Code: {product.productCode}</div>
+
+              <p className="text-xs leading-7 text-[#37192C]/80 font-semibold pt-2 border-t border-[#37192c]/10">
+                {product.description}
+              </p>
+
+              <div className="pt-2 flex items-baseline gap-3">
+                <span className="text-2xl font-black text-[#37192C]">{money(product.price)} تومان</span>
+                {product.oldPrice && <del className="text-sm font-bold text-[#37192C]/40">{money(product.oldPrice)}</del>}
+              </div>
+            </div>
+
+            {/* Action Buttons: Add to Cart, Wishlist, Share */}
+            <div className="space-y-3 pt-4 border-t border-[#37192c]/10">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => add(product)}
+                  className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2"
+                >
+                  <ShoppingBag size={18} /> افزودن به سبد خرید
+                </button>
+
+                <button
+                  onClick={() => toggleWish(product)}
+                  className={`grid size-12 place-items-center rounded-full border transition shrink-0 ${
+                    isWished ? 'bg-rose-500 text-white border-rose-500' : 'bg-white border-[#37192c]/20 text-[#37192C] hover:bg-[#FFF3C5]'
+                  }`}
+                  title="افزودن به علاقمندی"
+                >
+                  <Heart size={20} fill={isWished ? 'currentColor' : 'none'} />
+                </button>
+
+                <button
+                  onClick={handleShare}
+                  className="grid size-12 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] hover:bg-[#ffe79a] transition shrink-0"
+                  title="اشتراک‌گذاری"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+
+              {copiedShare && (
+                <div className="text-center text-xs font-bold text-emerald-700 bg-emerald-50 py-1.5 rounded-xl border border-emerald-200">
+                  لینک اختصاصی محصول در حافظه کپی شد!
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1420,15 +1548,162 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
 }
 
 function SupportModal({ close }: { close: () => void }) {
+  const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
+  const [inputText, setInputText] = useState('');
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'text' | 'image' | 'video' | 'audio'>('text');
+
+  useEffect(() => {
+    const unsub = db.subscribe(() => {
+      setTickets(db.getTickets());
+    });
+    return () => unsub();
+  }, []);
+
+  // Find or create default user ticket
+  const userTicket = tickets[0] || null;
+
+  useEffect(() => {
+    if (userTicket) {
+      db.markTicketAsReadByUser(userTicket.id);
+    }
+  }, [userTicket?.id, userTicket?.messages?.length]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      const isVideo = file.type.startsWith('video/');
+      const isAudio = file.type.startsWith('audio/');
+      reader.onload = () => {
+        if (reader.result) {
+          setMediaUrl(reader.result as string);
+          if (isVideo) setMediaType('video');
+          else if (isAudio) setMediaType('audio');
+          else setMediaType('image');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() && !mediaUrl) return;
+
+    if (!userTicket) {
+      db.createTicket({
+        customerName: 'مریم احمدی',
+        customerPhone: '۰۹۱۲۹۸۷۶۵۴۳',
+        subject: 'سوال از پشتیبانی آنلاین',
+        category: 'سوال درباره محصول',
+        initialMessage: inputText.trim() || '[تصویر/پیوست]',
+        mediaUrl: mediaUrl || undefined,
+        mediaType: mediaType
+      });
+    } else {
+      db.replyTicket(
+        userTicket.id,
+        inputText.trim() || (mediaType === 'image' ? '[تصویر]' : mediaType === 'video' ? '[ویدیو]' : '[وویس]'),
+        'customer',
+        'مریم احمدی',
+        false,
+        'New',
+        mediaType,
+        mediaUrl || undefined
+      );
+    }
+
+    setInputText('');
+    setMediaUrl(null);
+    setMediaType('text');
+  };
+
   return (
-    <div className="support-panel shadow-2xl">
-      <div className="flex items-center justify-between border-b pb-3">
-        <h2 className="text-sm font-black text-[#37192C]">پشتیبانی آنلاین آورا</h2>
+    <div className="support-panel shadow-2xl flex flex-col h-[520px]">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b pb-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="size-3 rounded-full bg-emerald-500 animate-pulse" />
+          <h2 className="text-sm font-black text-[#37192C]">پشتیبانی آنلاین آورا (Aura Chat)</h2>
+        </div>
         <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
           <X size={16} />
         </button>
       </div>
-      <p className="mt-4 text-xs leading-6 text-[#37192C]">پشتیبانان ما در ۲۴ ساعت شبانه‌روز آماده پاسخگویی به سوالات شما درباره سفارشات هستند.</p>
+
+      {/* Message Stream */}
+      <div className="flex-1 overflow-y-auto my-3 space-y-3 p-2 bg-[#fffdfa] rounded-2xl border border-[#37192c]/5">
+        {!userTicket || userTicket.messages.length === 0 ? (
+          <div className="text-center py-10 text-xs text-[#8b627e] font-bold">
+            سلام! چطور می‌تونیم کمکتون کنیم؟ پیام خودتون رو بنویسید تا پشتیبانان ما پاسخ بدن.
+          </div>
+        ) : (
+          userTicket.messages.map((msg) => {
+            const isUser = msg.sender === 'customer';
+            return (
+              <div
+                key={msg.id}
+                className={
+                  'max-w-[85%] rounded-2xl p-3 text-xs font-bold space-y-1 shadow-xs ' +
+                  (isUser
+                    ? 'ms-auto bg-[#37192C] text-[#FFF3C5] rounded-tr-none text-right'
+                    : 'me-auto bg-white text-[#37192C] rounded-tl-none border border-[#37192c]/10 text-right')
+                }
+              >
+                <div className="flex items-center justify-between text-[9px] opacity-75 mb-1">
+                  <span>{msg.senderName}</span>
+                  <span>{msg.createdAt}</span>
+                </div>
+
+                {msg.mediaUrl && (
+                  <div className="my-1.5 overflow-hidden rounded-xl border border-black/10">
+                    {msg.type === 'image' && (
+                      <img src={msg.mediaUrl} alt="تصویر" className="max-h-48 w-full object-cover" />
+                    )}
+                    {msg.type === 'video' && (
+                      <video src={msg.mediaUrl} controls className="max-h-48 w-full rounded-xl bg-black" />
+                    )}
+                    {msg.type === 'audio' && (
+                      <audio src={msg.mediaUrl} controls className="w-full my-1" />
+                    )}
+                  </div>
+                )}
+
+                {msg.message && <p className="leading-5 whitespace-pre-line font-extrabold">{msg.message}</p>}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Media Preview */}
+      {mediaUrl && (
+        <div className="mb-2 p-2 bg-[#fffaf0] rounded-xl border flex items-center justify-between text-xs font-bold">
+          <span>فایل پیوست شده</span>
+          <button onClick={() => setMediaUrl(null)} className="text-rose-600 font-bold"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* Input */}
+      <form onSubmit={handleSend} className="flex items-center gap-2 pt-2 border-t shrink-0">
+        <label className="grid size-9 place-items-center rounded-xl bg-white border text-[#37192C] cursor-pointer hover:bg-[#FFF3C5]">
+          <Paperclip size={16} />
+          <input type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileUpload} />
+        </label>
+
+        <input
+          type="text"
+          placeholder="پیام خود را بنویسید..."
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          className="flex-1 bg-white border rounded-xl px-3 py-2 text-xs font-bold outline-none text-[#37192C]"
+        />
+
+        <button type="submit" className="grid size-9 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5]">
+          <Send size={16} />
+        </button>
+      </form>
     </div>
   );
 }
