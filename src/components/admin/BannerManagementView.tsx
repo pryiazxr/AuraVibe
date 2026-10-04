@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { satinImage, jewelryImage } from '../../data';
 import { Banner, db, CropData, AdminUser } from '../../services/db';
-import { ImageCropper } from '../ImageCropper';
+import { categoryList } from '../../data';
 
 type BannerManagementViewProps = {
   currentAdmin: AdminUser;
@@ -31,12 +31,9 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
   const [bEyebrow, setBEyebrow] = useState('');
   const [bTitle, setBTitle] = useState('');
   const [bSubtitle, setBSubtitle] = useState('');
+  const [bCategory, setBCategory] = useState('گردنبند');
   const [bImage, setBImage] = useState('');
   const [bActive, setBActive] = useState(true);
-
-  // Crop Editor
-  const [cropperOpen, setCropperOpen] = useState(false);
-  const [activeCropData, setActiveCropData] = useState<CropData | undefined>();
 
   const refreshList = () => {
     setBanners(db.getBanners());
@@ -49,18 +46,18 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
       setBEyebrow(banner.eyebrow);
       setBTitle(banner.title);
       setBSubtitle(banner.subtitle);
+      setBCategory(banner.targetCategory || 'گردنبند');
       setBImage(banner.image);
       setBActive(banner.active);
-      setActiveCropData(banner.cropData);
     } else {
       setEditingBanner(null);
-      setBInternalName('کمپین زمستانه آورا');
-      setBEyebrow('NEW DROP');
+      setBInternalName('کمپین جدید آورا');
+      setBEyebrow('NEW COLLECTION');
       setBTitle('عنوان بنر جذاب');
       setBSubtitle('توضیحات کوتاه بنر برای نمایش در اسلایدر اصلی.');
+      setBCategory('گردنبند');
       setBImage(satinImage);
       setBActive(true);
-      setActiveCropData(undefined);
     }
     setModalOpen(true);
   };
@@ -76,9 +73,9 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
         eyebrow: bEyebrow,
         title: bTitle,
         subtitle: bSubtitle,
+        targetCategory: bCategory,
         image: bImage,
-        active: bActive,
-        cropData: activeCropData
+        active: bActive
       },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
@@ -115,10 +112,17 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
     refreshList();
   };
 
-  const handleCropComplete = (croppedUrl: string, cropData: CropData) => {
-    setBImage(croppedUrl);
-    setActiveCropData(cropData);
-    setCropperOpen(false);
+  const handleBannerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          setBImage(reader.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -259,37 +263,47 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-[#37192C]">زیرعنوان / زیرمتن</label>
-                <input
-                  type="text"
-                  value={bSubtitle}
-                  onChange={(e) => setBSubtitle(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-[#37192C]">زیرعنوان / زیرمتن</label>
+                  <input
+                    type="text"
+                    value={bSubtitle}
+                    onChange={(e) => setBSubtitle(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-[#37192C]">دسته‌بندی مقصد (Target Category)</label>
+                  <select
+                    value={bCategory}
+                    onChange={(e) => setBCategory(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none font-bold"
+                  >
+                    {categoryList.map((c) => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                    <option value="جدیدترین‌ها">جدیدترین‌ها</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Banner Image & Crop Button */}
+              {/* Banner Image Selection */}
               <div className="rounded-2xl border border-[#37192c]/10 bg-[#fffaf0] p-4 space-y-3">
-                <p className="font-bold text-[#37192C]">تصویر بنر و برش غیرمخرب (Crop Editor):</p>
-                <div className="relative h-36 w-full overflow-hidden rounded-xl border">
-                  <img src={bImage} alt="تصویر بنر" className="size-full object-cover" />
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-[#37192C]">تصویر بنر (انتخاب مستقیم از فایل/گالری)</p>
+                  <label className="rounded-full bg-[#37192C] px-3.5 py-1.5 text-[11px] font-bold text-[#FFF3C5] cursor-pointer hover:bg-[#5a2548] transition">
+                    + انتخاب تصویر
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBannerImageUpload}
+                    />
+                  </label>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCropperOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#37192C] py-2.5 text-xs font-bold text-[#FFF3C5]"
-                  >
-                    <Crop size={16} /> برش تعاملی تصویر (Crop)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBImage(bImage === satinImage ? jewelryImage : satinImage)}
-                    className="rounded-xl bg-[#FFF3C5] px-4 py-2.5 text-xs font-bold text-[#37192C]"
-                  >
-                    تغییر عکس نمونه
-                  </button>
+                <div className="relative h-36 w-full overflow-hidden rounded-xl border border-[#37192c]/20">
+                  <img src={bImage} alt="تصویر بنر" className="size-full object-cover" />
                 </div>
               </div>
 
@@ -317,15 +331,6 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
         </div>
       )}
 
-      {/* Cropper Modal */}
-      {cropperOpen && (
-        <ImageCropper
-          imageUrl={bImage}
-          initialCropData={activeCropData}
-          onCropComplete={handleCropComplete}
-          onCancel={() => setCropperOpen(false)}
-        />
-      )}
     </div>
   );
 }

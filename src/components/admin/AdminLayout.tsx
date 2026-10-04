@@ -28,6 +28,7 @@ type AdminTab =
   | 'orders'
   | 'users'
   | 'support'
+  | 'magazine'
   | 'analytics'
   | 'seo'
   | 'settings'
@@ -53,8 +54,23 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, chi
     { id: 'products', label: 'مدیریت محصولات', icon: <Box size={18} />, permission: 'manage_products' },
     { id: 'banners', label: 'مدیریت بنرها', icon: <Image size={18} />, permission: 'manage_banners' },
     { id: 'orders', label: 'مدیریت سفارشات', icon: <ShoppingBag size={18} />, permission: 'manage_orders' },
+    { id: 'magazine', label: 'مجله آورا', icon: <Globe size={18} />, permission: 'manage_content' },
     { id: 'users', label: 'کاربران و نقش‌ها (RBAC)', icon: <Users size={18} />, permission: 'manage_users' },
-    { id: 'support', label: 'تیکت‌های پشتیبانی', icon: <MessageSquare size={18} />, permission: 'manage_support' },
+    {
+      id: 'support',
+      label: 'پشتیبانی',
+      icon: (
+        <div className="relative flex items-center">
+          <MessageSquare size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -end-2 grid size-4 place-items-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
+              {unreadCount}
+            </span>
+          )}
+        </div>
+      ),
+      permission: 'manage_support'
+    },
     { id: 'analytics', label: 'گزارشات و آمار فروش', icon: <BarChart3 size={18} />, permission: 'manage_orders' },
     { id: 'seo', label: 'تنظیمات سئو (SEO)', icon: <Globe size={18} />, permission: 'manage_seo' },
     { id: 'settings', label: 'تنظیمات عمومی سایت', icon: <Settings size={18} />, permission: 'manage_settings' },

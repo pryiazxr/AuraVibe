@@ -31,6 +31,9 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
   const [statusNote, setStatusNote] = useState('');
   const [shippingMethodKey, setShippingMethodKey] = useState<ShippingMethodKey>('POST');
 
+  // Product Modal inside Order
+  const [modalProduct, setModalProduct] = useState<any | null>(null);
+
   const refreshList = () => {
     setOrders(db.getOrders());
   };
@@ -235,18 +238,40 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#37192c]/5">
-                    {selectedOrder.items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="p-3 flex items-center gap-2 font-bold text-[#37192C]">
-                          <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
-                          <span>{item.productName}</span>
-                        </td>
-                        <td className="p-3 font-mono font-bold text-[#8b627e]">{item.productCode}</td>
-                        <td className="p-3 font-bold text-[#37192C]">{item.finalPrice.toLocaleString('fa-IR')} تومان</td>
-                        <td className="p-3 font-bold">{item.quantity}</td>
-                        <td className="p-3 font-black text-[#37192C]">{item.lineTotal.toLocaleString('fa-IR')} تومان</td>
-                      </tr>
-                    ))}
+                    {selectedOrder.items.map((item, idx) => {
+                      const matchedProduct = db.getProductById(item.productId);
+                      return (
+                        <tr
+                          key={idx}
+                          onClick={() => setModalProduct(matchedProduct || {
+                            id: item.productId,
+                            productCode: item.productCode,
+                            name: item.productName,
+                            category: 'اکسسوری',
+                            price: item.finalPrice,
+                            oldPrice: item.originalPrice !== item.finalPrice ? item.originalPrice : undefined,
+                            stock: 10,
+                            images: [item.productImage],
+                            mainImageIndex: 0,
+                            badge: 'ثبت شده در سفارش',
+                            colors: ['#37192C'],
+                            description: 'اطلاعات کامل این محصول بر اساس فاکتور خرید کاربر.',
+                            status: 'active',
+                            updatedAt: new Date().toISOString()
+                          })}
+                          className="hover:bg-[#fffaf0] cursor-pointer transition"
+                        >
+                          <td className="p-3 flex items-center gap-2 font-bold text-[#37192C]">
+                            <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
+                            <span className="hover:underline text-xs">{item.productName}</span>
+                          </td>
+                          <td className="p-3 font-mono font-bold text-[#8b627e]">{item.productCode}</td>
+                          <td className="p-3 font-bold text-[#37192C]">{item.finalPrice.toLocaleString('fa-IR')} تومان</td>
+                          <td className="p-3 font-bold">{item.quantity}</td>
+                          <td className="p-3 font-black text-[#37192C]">{item.lineTotal.toLocaleString('fa-IR')} تومان</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -133,6 +133,7 @@ export type User = {
   lastName: string;
   phone: string; // Unique Identifier
   email?: string;
+  avatar?: string;
   address?: string;
   province?: string;
   city?: string;
