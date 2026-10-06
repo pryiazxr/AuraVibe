@@ -76,7 +76,8 @@ import {
   SupportTicket,
   Article,
   ShippingMethodKey,
-  OrderItemSnapshot
+  OrderItemSnapshot,
+  CategoryItem
 } from './services/db';
 
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -107,6 +108,7 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Real-time Database Subscription States
+  const [categories, setCategories] = useState<CategoryItem[]>(() => db.getCategories());
   const [products, setProducts] = useState<Product[]>(() => db.getProducts());
   const [banners, setBanners] = useState<Banner[]>(() => db.getActiveBanners());
   const [orders, setOrders] = useState<Order[]>(() => db.getOrders());
@@ -149,6 +151,7 @@ function App() {
   // Subscribe to central DB updates
   useEffect(() => {
     const unsubscribe = db.subscribe(() => {
+      setCategories(db.getCategories());
       setProducts(db.getProducts());
       setBanners(db.getActiveBanners());
       setOrders(db.getOrders());
@@ -190,7 +193,7 @@ function App() {
   const menuSections = [
     { id: 'admin', label: '⚡ پیشخوان مدیریتی (Admin Dashboard)' },
     { id: 'home', label: 'صفحه اصلی سایت' },
-    ...categoryList.slice(0, 6).map((c) => ({ id: c.name, label: c.name })),
+    ...categories.slice(0, 6).map((c) => ({ id: c.name, label: c.name })),
     { id: 'جدیدترین‌ها', label: 'تازه رسیده‌ها' },
     { id: 'پرفروش‌ترین‌ها', label: 'پرطرفدارها' },
     { id: 'تخفیف ویژه', label: 'فرصت‌های خوش‌رنگ' },
@@ -198,11 +201,89 @@ function App() {
     { id: 'journal', label: 'مجله استایل' },
   ];
 
-  const handleNavClick = (viewId: string) => {
+  const openProductModal = (product: Product | null) => {
+    if (product) {
+      window.history.pushState({ view: activeView, modal: 'product', productId: product.id }, '', window.location.href);
+    }
+    setSelectedProduct(product);
+  };
+
+  const openSearchModal = (open: boolean) => {
+    if (open) {
+      window.history.pushState({ view: activeView, modal: 'search' }, '', window.location.href);
+    }
+    setSearchOpen(open);
+  };
+
+  const openSupportModal = (open: boolean) => {
+    if (open) {
+      window.history.pushState({ view: activeView, modal: 'support' }, '', window.location.href);
+    }
+    setSupportOpen(open);
+  };
+
+  const openMenuDrawer = (open: boolean) => {
+    if (open) {
+      window.history.pushState({ view: activeView, modal: 'menu' }, '', window.location.href);
+    }
+    setMenuOpen(open);
+  };
+
+  const openCheckoutModalFunc = (open: boolean) => {
+    if (open) {
+      window.history.pushState({ view: activeView, modal: 'checkout' }, '', window.location.href);
+    }
+    setCheckoutModal(open);
+  };
+
+  const openOrderDetailsModalFunc = (order: Order | null) => {
+    if (order) {
+      window.history.pushState({ view: activeView, modal: 'orderDetails', orderId: order.id }, '', window.location.href);
+    }
+    setSelectedOrderDetails(order);
+  };
+
+  const navigateToView = (viewId: string, pushHistory = true) => {
     setActiveView(viewId);
     setMenuOpen(false);
+    setSelectedProduct(null);
+    setSearchOpen(false);
+    setCheckoutModal(false);
+    setSelectedOrderDetails(null);
+    setSupportOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (pushHistory) {
+      window.history.pushState({ view: viewId }, '', window.location.href);
+    }
   };
+
+  const handleNavClick = (viewId: string) => {
+    navigateToView(viewId, true);
+  };
+
+  // Handle browser / mobile back button via popstate
+  useEffect(() => {
+    // Ensure initial history state is set
+    if (!window.history.state || !window.history.state.view) {
+      window.history.replaceState({ view: 'home' }, '', window.location.href);
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      setSelectedProduct(null);
+      setSearchOpen(false);
+      setSupportOpen(false);
+      setMenuOpen(false);
+      setCheckoutModal(false);
+      setSelectedOrderDetails(null);
+
+      const targetView = e.state?.view || 'home';
+      setActiveView(targetView);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Section collections dynamically sliced from real db based on badges and categories
   const productsNewest = useMemo(() => {
@@ -251,7 +332,7 @@ function App() {
           {adminTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'analytics' && <AnalyticsView />}
+          {adminTab === 'analytics' && <AnalyticsView currentAdmin={currentAdmin} />}
           {adminTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
           {adminTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
           {adminTab === 'audit' && <AuditLogsView currentAdmin={currentAdmin} />}
@@ -264,7 +345,7 @@ function App() {
               <button
                 className="grid size-11 place-items-center rounded-full hover:bg-[#37192c]/7 md:hidden"
                 aria-label="منو"
-                onClick={() => setMenuOpen(true)}
+                onClick={() => openMenuDrawer(true)}
               >
                 <Menu size={21} />
               </button>
@@ -328,9 +409,9 @@ function App() {
               user={currentUser}
               setUser={setCurrentUser}
               orders={orders}
-              openCheckout={() => setCheckoutModal(true)}
-              openOrderDetails={(order: Order) => setSelectedOrderDetails(order)}
-              openProduct={setSelectedProduct}
+              openCheckout={() => openCheckoutModalFunc(true)}
+              openOrderDetails={(order: Order) => openOrderDetailsModalFunc(order)}
+              openProduct={openProductModal}
               openHome={() => handleNavClick('home')}
             />
           ) : activeView === 'home' ? (
@@ -342,9 +423,9 @@ function App() {
                   <h1 className="mt-1 text-2xl font-black sm:text-3xl">دسته‌بندی‌های محبوب</h1>
                 </div>
                 <div className="story-row mt-5">
-                  {categoryList.map((cat) => (
+                  {categories.map((cat) => (
                     <button
-                      key={cat.name}
+                      key={cat.id || cat.name}
                       onClick={() => handleNavClick(cat.name)}
                       className="group w-[105px] shrink-0 text-center"
                     >
@@ -369,10 +450,10 @@ function App() {
 
               {/* Collections Grid */}
               <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های آورا استایل" items={productsNewest} open={setSelectedProduct} onViewMore={() => handleNavClick('جدیدترین‌ها')} testid="new-products" />
-                <ProductSection title="پرفروش‌ترین‌ها" intro="محبوب‌ترین انتخاب‌های کاربران" items={productsBestSellers} open={setSelectedProduct} onViewMore={() => handleNavClick('پرفروش‌ترین‌ها')} testid="best-sellers" />
-                <ProductSection title="تخفیف ویژه" intro="پیشنهادهای استثنایی و محدود" items={productsSpecial} open={setSelectedProduct} onViewMore={() => handleNavClick('تخفیف ویژه')} testid="special-offers" />
-                <ProductSection title="ساعت" intro="کالکشن ساعت‌های ظریف و خاص" items={productsWatches} open={setSelectedProduct} onViewMore={() => handleNavClick('ساعت')} testid="watches" />
+                <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های آورا استایل" items={productsNewest} open={openProductModal} onViewMore={() => handleNavClick('جدیدترین‌ها')} testid="new-products" />
+                <ProductSection title="پرفروش‌ترین‌ها" intro="محبوب‌ترین انتخاب‌های کاربران" items={productsBestSellers} open={openProductModal} onViewMore={() => handleNavClick('پرفروش‌ترین‌ها')} testid="best-sellers" />
+                <ProductSection title="تخفیف ویژه" intro="پیشنهادهای استثنایی و محدود" items={productsSpecial} open={openProductModal} onViewMore={() => handleNavClick('تخفیف ویژه')} testid="special-offers" />
+                <ProductSection title="ساعت" intro="کالکشن ساعت‌های ظریف و خاص" items={productsWatches} open={openProductModal} onViewMore={() => handleNavClick('ساعت')} testid="watches" />
               </div>
 
               {/* Social Banner */}
@@ -401,7 +482,7 @@ function App() {
             <CategoryPageView
               categoryName={activeView}
               products={products.filter((p) => p.category === activeView || activeView === 'جدیدترین‌ها')}
-              openProduct={setSelectedProduct}
+              openProduct={openProductModal}
               backToHome={() => handleNavClick('home')}
             />
           )}
@@ -440,12 +521,21 @@ function App() {
           </footer>
 
           {/* Support Floating Button */}
-          <button className="support-button" onClick={() => setSupportOpen(true)} aria-label="پشتیبانی">
+          <button className="support-button" onClick={() => openSupportModal(true)} aria-label="پشتیبانی">
             <Headphones size={22} />
           </button>
 
           {/* Modals */}
-          {supportOpen && <SupportModal close={() => setSupportOpen(false)} />}
+          {supportOpen && (
+            <SupportModal
+              close={() => setSupportOpen(false)}
+              user={currentUser}
+              openProfile={() => {
+                setAccountTab('profile');
+                setActiveView('account');
+              }}
+            />
+          )}
 
           {selectedProduct && (
             <ProductModal
@@ -455,12 +545,12 @@ function App() {
               toggleWish={toggleWishlist}
               isWished={wishlist.some((w) => w.id === selectedProduct.id)}
               allProducts={products}
-              openProduct={setSelectedProduct}
+              openProduct={openProductModal}
             />
           )}
 
           {menuOpen && <SectionMenu sections={menuSections} close={() => setMenuOpen(false)} go={handleNavClick} />}
-          {searchOpen && <SearchModal close={() => setSearchOpen(false)} openProduct={setSelectedProduct} products={products} />}
+          {searchOpen && <SearchModal close={() => setSearchOpen(false)} openProduct={openProductModal} products={products} />}
 
 
           {checkoutModal && (
@@ -517,7 +607,7 @@ function App() {
             <button className="bottom-nav-item" onClick={() => handleNavClick('home')} aria-label="خانه">
               <Home size={22} />
             </button>
-            <button className="bottom-nav-item" onClick={() => setSearchOpen(true)} aria-label="جستجو">
+            <button className="bottom-nav-item" onClick={() => openSearchModal(true)} aria-label="جستجو">
               <Search size={22} />
             </button>
             <button className="bottom-nav-item" onClick={() => handleNavClick('admin')} aria-label="مدیریت">
@@ -1505,9 +1595,9 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
               </div>
             </div>
 
-            {/* Action Buttons: Add to Cart, Wishlist, Share */}
+            {/* Action Buttons: Add to Cart & Add to Favorites & Share */}
             <div className="space-y-3 pt-4 border-t border-[#37192c]/10">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <button
                   onClick={() => add(product)}
                   className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2"
@@ -1517,17 +1607,19 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
 
                 <button
                   onClick={() => toggleWish(product)}
-                  className={`grid size-12 place-items-center rounded-full border transition shrink-0 ${
-                    isWished ? 'bg-rose-500 text-white border-rose-500' : 'bg-white border-[#37192c]/20 text-[#37192C] hover:bg-[#FFF3C5]'
+                  className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-bold border transition flex items-center justify-center gap-2 ${
+                    isWished
+                      ? 'bg-rose-500 text-white border-rose-500'
+                      : 'bg-[#FFF3C5] border-[#37192c]/15 text-[#37192C] hover:bg-[#ffe79a]'
                   }`}
-                  title="افزودن به علاقمندی"
                 >
-                  <Heart size={20} fill={isWished ? 'currentColor' : 'none'} />
+                  <Heart size={18} fill={isWished ? 'currentColor' : 'none'} />
+                  {isWished ? 'در لیست علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها'}
                 </button>
 
                 <button
                   onClick={handleShare}
-                  className="grid size-12 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] hover:bg-[#ffe79a] transition shrink-0"
+                  className="grid size-12 place-items-center rounded-full bg-[#fffaf0] border border-[#37192c]/15 text-[#37192C] hover:bg-[#FFF3C5] transition shrink-0 self-center sm:self-auto"
                   title="اشتراک‌گذاری"
                 >
                   <Send size={18} />
@@ -1542,12 +1634,73 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
             </div>
           </div>
         </div>
+
+        {/* Related Products Section */}
+        <RelatedProductsSection
+          currentProduct={product}
+          allProducts={allProducts}
+          openProduct={openProduct}
+        />
       </div>
     </div>
   );
 }
 
-function SupportModal({ close }: { close: () => void }) {
+function RelatedProductsSection({
+  currentProduct,
+  allProducts,
+  openProduct
+}: {
+  currentProduct: Product;
+  allProducts: Product[];
+  openProduct: (p: Product) => void;
+}) {
+  const related = useMemo(() => {
+    if (currentProduct.relatedIds && currentProduct.relatedIds.length > 0) {
+      const explicit = allProducts.filter((p) => currentProduct.relatedIds?.includes(p.id));
+      if (explicit.length > 0) return explicit;
+    }
+    // Fallback: Same category excluding current
+    return allProducts
+      .filter((p) => p.category === currentProduct.category && p.id !== currentProduct.id)
+      .slice(0, 6);
+  }, [currentProduct, allProducts]);
+
+  if (related.length === 0) return null;
+
+  return (
+    <div className="border-t border-[#37192c]/10 p-6 sm:p-8 bg-[#fffaf0] rounded-b-[2rem] space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base sm:text-lg font-black text-[#37192C]">محصولات مرتبط</h3>
+          <p className="text-[11px] text-[#8b627e] font-semibold">پیشنهادهای ویژه و مکمل برای استایل شما</p>
+        </div>
+      </div>
+
+      <div className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 select-none">
+        {related.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => openProduct(p)}
+            className="group shrink-0 w-40 sm:w-48 text-right bg-white p-3 rounded-2xl border border-[#37192c]/10 shadow-2xs hover:border-[#37192C] transition flex flex-col justify-between"
+          >
+            <div>
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-[#f1e4c8] mb-2">
+                <img src={p.images[0]} alt={p.name} className="size-full object-cover group-hover:scale-105 transition" />
+              </div>
+              <h4 className="font-bold text-xs text-[#37192C] line-clamp-2">{p.name}</h4>
+            </div>
+            <div className="mt-2 font-black text-xs text-[#37192C]">
+              {p.price.toLocaleString('fa-IR')} تومان
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SupportModal({ close, user, openProfile }: { close: () => void; user?: User; openProfile?: () => void }) {
   const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
   const [inputText, setInputText] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
@@ -1569,6 +1722,10 @@ function SupportModal({ close }: { close: () => void }) {
     }
   }, [userTicket?.id, userTicket?.messages?.length]);
 
+  const isProfileComplete = useMemo(() => {
+    return Boolean(user && user.firstName && user.lastName && user.phone);
+  }, [user]);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1589,12 +1746,17 @@ function SupportModal({ close }: { close: () => void }) {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isProfileComplete) return;
     if (!inputText.trim() && !mediaUrl) return;
+
+    const senderName = user ? `${user.firstName} ${user.lastName}` : 'کاربر آورا';
 
     if (!userTicket) {
       db.createTicket({
-        customerName: 'مریم احمدی',
-        customerPhone: '۰۹۱۲۹۸۷۶۵۴۳',
+        userId: user?.id,
+        customerName: senderName,
+        customerPhone: user?.phone || '۰۹۱۲۰۰۰۰۰۰۰',
+        customerAvatar: user?.avatar,
         subject: 'سوال از پشتیبانی آنلاین',
         category: 'سوال درباره محصول',
         initialMessage: inputText.trim() || '[تصویر/پیوست]',
@@ -1606,7 +1768,7 @@ function SupportModal({ close }: { close: () => void }) {
         userTicket.id,
         inputText.trim() || (mediaType === 'image' ? '[تصویر]' : mediaType === 'video' ? '[ویدیو]' : '[وویس]'),
         'customer',
-        'مریم احمدی',
+        senderName,
         false,
         'New',
         mediaType,
@@ -1685,25 +1847,44 @@ function SupportModal({ close }: { close: () => void }) {
         </div>
       )}
 
-      {/* Input */}
-      <form onSubmit={handleSend} className="flex items-center gap-2 pt-2 border-t shrink-0">
-        <label className="grid size-9 place-items-center rounded-xl bg-white border text-[#37192C] cursor-pointer hover:bg-[#FFF3C5]">
-          <Paperclip size={16} />
-          <input type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileUpload} />
-        </label>
+      {/* Profile Completion Gate / Chat Form */}
+      {!isProfileComplete ? (
+        <div className="p-4 bg-[#FFF3C5] rounded-2xl border border-[#37192c]/10 text-center space-y-2 shrink-0">
+          <p className="text-xs font-bold text-[#37192C] leading-5">
+            جهت گفتگو با پشتیبانی ابتدا ورود / تکمیل اطلاعات پروفایل را انجام دهید.
+          </p>
+          {openProfile && (
+            <button
+              onClick={() => {
+                close();
+                openProfile();
+              }}
+              className="px-4 py-2 rounded-full bg-[#37192C] text-[#FFF3C5] text-xs font-bold shadow-xs hover:bg-[#5a2548] transition"
+            >
+              ورود و تکمیل اطلاعات حساب
+            </button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSend} className="flex items-center gap-2 pt-2 border-t shrink-0">
+          <label className="grid size-9 place-items-center rounded-xl bg-white border text-[#37192C] cursor-pointer hover:bg-[#FFF3C5]">
+            <Paperclip size={16} />
+            <input type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileUpload} />
+          </label>
 
-        <input
-          type="text"
-          placeholder="پیام خود را بنویسید..."
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          className="flex-1 bg-white border rounded-xl px-3 py-2 text-xs font-bold outline-none text-[#37192C]"
-        />
+          <input
+            type="text"
+            placeholder="پیام خود را بنویسید..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            className="flex-1 bg-white border rounded-xl px-3 py-2 text-xs font-bold outline-none text-[#37192C]"
+          />
 
-        <button type="submit" className="grid size-9 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5]">
-          <Send size={16} />
-        </button>
-      </form>
+          <button type="submit" className="grid size-9 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5]">
+            <Send size={16} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

@@ -19,6 +19,19 @@ export type ProductSEO = {
   ogImage?: string;
 };
 
+export type CategoryItem = {
+  id: number;
+  name: string;
+  image: string;
+  displayOrder: number;
+};
+
+export type ProductBadgeItem = {
+  id: number;
+  title: string;
+  color?: string;
+};
+
 export type Product = {
   id: number;
   productCode: string;
@@ -35,6 +48,7 @@ export type Product = {
   colors: string[];
   description: string;
   seo?: ProductSEO;
+  relatedIds?: number[];
   status: 'active' | 'draft' | 'archived';
   updatedAt: string;
 };
@@ -805,6 +819,24 @@ class DatabaseService {
   }
 
   private initSeed() {
+    if (!localStorage.getItem('aura_categories')) {
+      const initialCats: CategoryItem[] = categoryList.map((cat, idx) => ({
+        id: idx + 1,
+        name: cat.name,
+        image: cat.image,
+        displayOrder: idx + 1
+      }));
+      localStorage.setItem('aura_categories', JSON.stringify(initialCats));
+    }
+    if (!localStorage.getItem('aura_badges')) {
+      const initialBadges: ProductBadgeItem[] = [
+        { id: 1, title: 'جدیدترین‌ها' },
+        { id: 2, title: 'پرفروش‌ترین‌ها' },
+        { id: 3, title: 'تخفیف ویژه' },
+        { id: 4, title: 'ساعت‌ها' }
+      ];
+      localStorage.setItem('aura_badges', JSON.stringify(initialBadges));
+    }
     if (!localStorage.getItem('aura_products')) {
       localStorage.setItem('aura_products', JSON.stringify(SEED_PRODUCTS));
     }
@@ -860,6 +892,121 @@ class DatabaseService {
   private set<T>(key: string, data: T) {
     localStorage.setItem(key, JSON.stringify(data));
     this.notify();
+  }
+
+  // --- PRODUCT BADGES / LABELS ---
+  public getBadges(): ProductBadgeItem[] {
+    return this.get<ProductBadgeItem[]>('aura_badges');
+  }
+
+  public saveBadge(badgeData: Partial<ProductBadgeItem>, adminUser: { id: number; name: string }): ProductBadgeItem {
+    const badges = this.getBadges();
+    let saved: ProductBadgeItem;
+    if (badgeData.id) {
+      const idx = badges.findIndex((b) => b.id === badgeData.id);
+      saved = { ...badges[idx], ...badgeData } as ProductBadgeItem;
+      badges[idx] = saved;
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Badge Edited',
+        module: 'Settings',
+        target: saved.title,
+        details: 'برچسب محصول ویرایش شد'
+      });
+    } else {
+      saved = {
+        id: Date.now(),
+        title: badgeData.title || 'برچسب جدید',
+        color: badgeData.color
+      };
+      badges.push(saved);
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Badge Created',
+        module: 'Settings',
+        target: saved.title,
+        details: 'برچسب جدید ایجاد شد'
+      });
+    }
+    this.set('aura_badges', badges);
+    return saved;
+  }
+
+  public deleteBadge(id: number, adminUser: { id: number; name: string }) {
+    const badges = this.getBadges();
+    const target = badges.find((b) => b.id === id);
+    const updated = badges.filter((b) => b.id !== id);
+    this.set('aura_badges', updated);
+    if (target) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Badge Deleted',
+        module: 'Settings',
+        target: target.title,
+        details: `برچسب ${target.title} حذف گردید`
+      });
+    }
+  }
+
+  // --- CATEGORIES ---
+  public getCategories(): CategoryItem[] {
+    return this.get<CategoryItem[]>('aura_categories').sort((a, b) => a.displayOrder - b.displayOrder);
+  }
+
+  public saveCategory(catData: Partial<CategoryItem>, adminUser: { id: number; name: string }): CategoryItem {
+    const categories = this.getCategories();
+    let saved: CategoryItem;
+    if (catData.id) {
+      const idx = categories.findIndex((c) => c.id === catData.id);
+      saved = { ...categories[idx], ...catData } as CategoryItem;
+      categories[idx] = saved;
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Category Edited',
+        module: 'Settings',
+        target: saved.name,
+        details: `نام دسته‌بندی تغییر یافت`
+      });
+    } else {
+      saved = {
+        id: Date.now(),
+        name: catData.name || 'دسته‌بندی جدید',
+        image: catData.image || satinImage,
+        displayOrder: categories.length + 1
+      };
+      categories.push(saved);
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Category Created',
+        module: 'Settings',
+        target: saved.name,
+        details: `دسته‌بندی جدید ایجاد شد`
+      });
+    }
+    this.set('aura_categories', categories);
+    return saved;
+  }
+
+  public deleteCategory(id: number, adminUser: { id: number; name: string }) {
+    const categories = this.getCategories();
+    const target = categories.find((c) => c.id === id);
+    const updated = categories.filter((c) => c.id !== id);
+    this.set('aura_categories', updated);
+    if (target) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Category Deleted',
+        module: 'Settings',
+        target: target.name,
+        details: `دسته‌بندی ${target.name} حذف گردید`
+      });
+    }
   }
 
   // --- PRODUCTS ---
