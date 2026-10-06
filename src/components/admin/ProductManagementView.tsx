@@ -9,7 +9,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { categoryList, satinImage, jewelryImage, necklaceImage, watchImage } from '../../data';
-import { Product, db, AdminUser } from '../../services/db';
+import { Product, db, AdminUser, ProductBadgeItem } from '../../services/db';
 
 type ProductManagementViewProps = {
   currentAdmin: AdminUser;
@@ -17,6 +17,7 @@ type ProductManagementViewProps = {
 
 export function ProductManagementView({ currentAdmin }: ProductManagementViewProps) {
   const [products, setProducts] = useState<Product[]>(() => db.getProducts());
+  const [dbBadges, setDbBadges] = useState<ProductBadgeItem[]>(() => db.getBadges());
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('همه');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
@@ -44,6 +45,8 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const [pImages, setPImages] = useState<string[]>([]);
   const [mainImgIdx, setMainImgIdx] = useState(0);
   const [pVideoUrl, setPVideoUrl] = useState<string>('');
+  const [pRelatedIds, setPRelatedIds] = useState<number[]>([]);
+  const [relatedSearch, setRelatedSearch] = useState('');
 
   const refreshList = () => {
     setProducts(db.getProducts());
@@ -64,6 +67,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
       setPImages(prod.images.length ? prod.images : [satinImage]);
       setMainImgIdx(prod.mainImageIndex || 0);
       setPVideoUrl(prod.videoUrl || '');
+      setPRelatedIds(prod.relatedIds || []);
     } else {
       setEditingProduct(null);
       setPCode(`AUR-${Math.floor(100 + Math.random() * 899)}`);
@@ -78,7 +82,9 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
       setPImages([necklaceImage]);
       setMainImgIdx(0);
       setPVideoUrl('');
+      setPRelatedIds([]);
     }
+    setRelatedSearch('');
     setModalOpen(true);
   };
 
@@ -100,6 +106,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
         videoUrl: pVideoUrl || undefined,
         badge: pBadge || undefined,
         description: pDescription,
+        relatedIds: pRelatedIds,
         status: pStatus
       },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
@@ -169,7 +176,9 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
     'نیم ست'
   ];
 
-  const allBadges = ['تخفیف ویژه', 'جدیدترین‌ها', 'پرفروش‌ترین‌ها', 'ساعت'];
+  const allBadges = useMemo(() => {
+    return Array.from(new Set([...dbBadges.map((b) => b.title), 'تخفیف ویژه', 'جدیدترین‌ها', 'پرفروش‌ترین‌ها', 'ساعت']));
+  }, [dbBadges]);
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -591,6 +600,76 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                   onChange={(e) => setPDescription(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2 outline-none font-semibold"
                 />
+              </div>
+
+              {/* Related Products Linker Field */}
+              <div className="rounded-2xl border border-[#37192c]/10 bg-[#fffaf0] p-4 space-y-3">
+                <div>
+                  <h4 className="font-bold text-xs text-[#37192C]">محصولات مرتبط (Related Products)</h4>
+                  <p className="text-[11px] text-[#8b627e] font-semibold mt-0.5">
+                    جستجو و انتخاب محصولات مرتبط جهت نمایش در صفحه جزئیات محصول خریدار
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-xl bg-white border border-[#37192c]/20 px-3 py-2">
+                  <Search size={16} className="text-[#37192C]/50 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="جستجوی نام یا کد محصول جهت لینک کردن..."
+                    value={relatedSearch}
+                    onChange={(e) => setRelatedSearch(e.target.value)}
+                    className="w-full bg-transparent text-xs font-bold outline-none"
+                  />
+                </div>
+
+                {/* Selected Count */}
+                <div className="text-[11px] font-bold text-[#37192C]">
+                  {pRelatedIds.length} محصول انتخاب شده است.
+                </div>
+
+                {/* List of Products with Checkboxes */}
+                <div className="max-h-48 overflow-y-auto space-y-1.5 p-1 bg-white rounded-xl border border-[#37192c]/10">
+                  {products
+                    .filter((p) => !editingProduct || p.id !== editingProduct.id)
+                    .filter((p) =>
+                      relatedSearch.trim() === ''
+                        ? true
+                        : p.name.toLowerCase().includes(relatedSearch.toLowerCase()) ||
+                          p.productCode.toLowerCase().includes(relatedSearch.toLowerCase())
+                    )
+                    .map((p) => {
+                      const isChecked = pRelatedIds.includes(p.id);
+                      return (
+                        <label
+                          key={p.id}
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-[#FFF3C5]/40 transition cursor-pointer text-xs"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPRelatedIds((prev) => [...prev, p.id]);
+                                } else {
+                                  setPRelatedIds((prev) => prev.filter((id) => id !== p.id));
+                                }
+                              }}
+                              className="accent-[#37192C] size-4 rounded cursor-pointer"
+                            />
+                            <img src={p.images[0]} alt={p.name} className="size-8 rounded-lg object-cover" />
+                            <div>
+                              <span className="font-bold text-[#37192C] block">{p.name}</span>
+                              <span className="font-mono text-[10px] text-[#8b627e]">{p.productCode} | {p.category}</span>
+                            </div>
+                          </div>
+                          <span className="font-black text-[11px] text-[#37192C]">
+                            {p.price.toLocaleString('fa-IR')} تومان
+                          </span>
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
 
               <button
