@@ -1,86 +1,113 @@
 # راهنمای جامع راه‌اندازی و اتصال پایگاه‌داده Supabase در AuraVibe
 # (AuraVibe Supabase Backend Setup & Migration Guide)
 
-این راهنما نحوه راه‌اندازی کامل پایگاه‌داده متمرکز Supabase (پایگاه‌داده PostgreSQL، احراز هویت Supabase Auth، ذخیره‌سازی ابری فایل‌های چندرسانه‌ای Supabase Storage و قوانین امنیتی RLS) را برای پروژه AuraVibe شرح می‌دهد.
+این راهنما نحوه راه‌اندازی، اتصال، پیکربندی ساختار پایگاه‌داده (PostgreSQL)، سیستم احراز هویت ادمین (Supabase Auth)، باکت‌های ذخیره‌سازی ابری (Supabase Storage) و ارتباط بلادرنگ (Supabase Realtime) را برای پروژه **AuraVibe** شرح می‌دهد.
 
 ---
 
-## ۱. پیش‌نیازها و ایجاد پروژه در Supabase
+## وضعیت منابع داده (Data Source Policy)
+
+> **قانون قطعی منبع داده:**
+> 
+> ```text
+> AuraVibe no longer uses localStorage as its data source.
+> There is no one-time localStorage migration flow.
+> Supabase is the source of truth.
+> ```
+> 
+> کلیه اطلاعات کاتالوگ، کاربران، سفارشات و تنظیمات منحصراً بر روی پایگاه‌داده متمرکز Supabase نگهداری می‌شوند. حافظه محلی مرورگر (localStorage) به عنوان منبع داده در این پروژه کاربردی ندارد.
+
+---
+
+## ۱. ایجاد پروژه در Supabase (Project Creation)
 
 1. وارد حساب کاربری خود در [Supabase Dashboard](https://supabase.com/dashboard) شوید.
-2. روی دکمه **"New Project"** کلیک کنید.
-3. یک نام برای پروژه (مثلاً `AuraVibe`) و یک رمز عبور قوی برای پایگاه داده انتخاب نمایید.
-4. ناحیه جغرافیایی (Region) مورد نظر خود را انتخاب کرده و پروژه را بسازید.
+2. بر روی دکمه **"New Project"** کلیک کنید.
+3. مشخصات پروژه را وارد نمایید:
+   * **Name**: نام پروژه (مثلاً `AuraVibe`).
+   * **Database Password**: یک رمز عبور قوی و یکتا برای دیتابیس انتخاب کنید و آن را در جای امن نگه دارید.
+   * **Region**: نزدیک‌ترین ناحیه جغرافیایی را به کاربران هدف خود انتخاب فرمایید (مانند `Central EU - Frankfurt`).
+4. روی **"Create new project"** کلیک کنید تا پروژه آماده به کار شود.
 
 ---
 
-## ۲. تنظیم متغیرهای محیطی (Environment Configuration)
+## ۲. متغیرهای محیطی فرانت‌اند (Frontend Environment)
 
-1. در پنل Supabase، به مسیر **Project Settings > API** مراجعه کنید.
-2. مقادیر زیر را دریافت کنید:
-   - **Project URL** (`VITE_SUPABASE_URL`)
-   - **Project API Keys > anon / public** (`VITE_SUPABASE_PUBLISHABLE_KEY`)
-   - *(اختیاری برای اسکریپت‌های سیدینگ سمت سرور)*: **service_role key**
-3. در ریشه پروژه AuraVibe، یک فایل بنام `.env.local` یا `.env` در کنار `.env.example` بسازید و مقادیر را قرار دهید:
+در ریشه پروژه، یک فایل به نام `.env.local` بر اساس ساختار `.env.example` ایجاد کنید:
 
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOi...
 ```
 
-> **نکته امنیتی بسیار مهم**: هرگز کلیدهای محرمانه `service_role` یا رمزهای عبور دیتابیس را داخل متغیرهای `VITE_*` قرار ندهید. این متغیرها در خروجی نهایی فرانت‌اند مرورگر قرار می‌گیرند.
+* **`VITE_SUPABASE_URL`**: آدرس اختصاصی Project URL که از بخش **Project Settings > API** داشبورد Supabase قابل کپی است.
+* **`VITE_SUPABASE_PUBLISHABLE_KEY`**: کلید عمومی `anon / public` که جهت ارسال درخواست‌های مجاز از مرورگر کلاینت استفاده می‌شود.
 
 ---
 
-## ۳. اعمال ساختار جداول و قوانین امنیتی (Migrations & RLS)
+## ۳. خط‌مشی کلیدهای محرمانه (Secret Key & Security Policy)
 
-تمام مایگریشن‌های پایگاه‌داده به صورت فایل‌های استاندارد SQL در مسیر `supabase/migrations/` ذخیره شده‌اند:
-- `supabase/migrations/20261007000001_initial_schema.sql`: ساختار ۱۴ جدول اصلی دامنه
-- `supabase/migrations/20261007000002_storage_and_rls.sql`: باکت‌های ذخیره‌سازی، فعال‌سازی RLS و پالیسی‌های پایه
-- `supabase/migrations/20261007000003_hardening_rls_and_auth.sql`: ارتقای امنیت دسترسی‌ها (حذف بای‌پس‌های دمو، امنیت ادمین‌ها، توابع امن RPC برای سفارشات و تیکت‌ها و توابع `is_admin()` / `is_super_admin()`)
+کلیدهای محرمانه و با دسترسی بالا (نظیر `SUPABASE_SECRET_KEY` یا `SUPABASE_SERVICE_ROLE_KEY`):
 
-### روش اول: استفاده از SQL Editor در داشبورد Supabase (ساده‌ترین روش)
-1. در داشبورد پروژه به بخش **SQL Editor** بروید.
-2. محتوای فایل‌های زیر را به ترتیب اجرا (Run) کنید:
-   - `supabase/migrations/20261007000001_initial_schema.sql`
-   - `supabase/migrations/20261007000002_storage_and_rls.sql`
-   - `supabase/migrations/20261007000003_hardening_rls_and_auth.sql`
+* **تنها برای اسکریپت‌های معتمد و سمت سرور (Trusted Server-Side Scripts)** مجاز هستند (مانند اسکریپت‌های سیدینگ اولیه دیتابیس).
+* **هرگز** نباید در متغیرهای با پیشوند `VITE_*` قرار گیرند.
+* **هرگز** نباید داخل کدهای باندل کلاینت وارد شوند، زیرا در مرورگر قابل استخراج خواهند بود.
+* **هرگز** نباید در گیت کامیت یا در مخازن عمومی ذخیره شوند.
+
+---
+
+## ۴. اعمال مایگریشن‌های پایگاه‌داده (Database Migrations)
+
+مایگریشن‌های پایگاه‌داده به صورت فایل‌های استاندارد SQL در مسیر `supabase/migrations/` قرار دارند:
+
+```text
+supabase/migrations/
+├── 20261007000001_initial_schema.sql
+├── 20261007000002_storage_and_rls.sql
+└── 20261007000003_hardening_rls_and_auth.sql
+```
+
+> **اهمیت ترتیب اجرا:** مایگریشن‌ها حتماً و دقیقاً باید با ترتیب بالا اجرا شوند:
+> 1. `20261007000001_initial_schema.sql`: ایجاد ۱۴ جدول اصلی دامنه، کلیدها، روابط و ایندکس‌ها.
+> 2. `20261007000002_storage_and_rls.sql`: تعریف ۴ باکت ذخیره‌سازی، فعال‌سازی RLS و پیکربندی انتشارات Realtime.
+> 3. `20261007000003_hardening_rls_and_auth.sql`: ارتقای امنیت دسترسی‌ها، حذف دسترسی‌های آزاد اولیه، توابع `is_admin()` و `is_super_admin()` و رویه‌های امن RPC (`create_admin_user`, `create_customer_order`, `create_customer_ticket`).
+
+### روش اول: استفاده از SQL Editor در داشبورد Supabase (پیشنهادی)
+1. در داشبورد Supabase به بخش **SQL Editor** بروید.
+2. به ترتیب، محتوای هر ۳ فایل فوق را در ویرایشگر کپی کرده و دکمه **Run** را بزنید.
 
 ### روش دوم: استفاده از Supabase CLI
 ```bash
-# لاگین به حساب سوپابیس
+# ورود به حساب کاربری
 npx supabase login
 
-# اتصال به پروژه
+# اتصال پروژه لوکال به پروژه ابری
 npx supabase link --project-ref your-project-id
 
-# اعمال مایگریشن‌ها
+# اجرای تمام مایگریشن‌ها
 npx supabase db push
 ```
 
 ---
 
-## ۴. باکت‌های ذخیره‌سازی فایل (Supabase Storage Buckets)
+## ۵. ایجاد حساب مدیر ارشد اولیه (Admin Provisioning)
 
-مایگریشن‌ها به طور خودکار ۴ باکت زیر را همراه با پالیسی‌های امنیتی عمومی خواندن و ادمین نوشتن ایجاد می‌کنند:
-1. `banners`: تصاویر بنرهای تبلیغاتی و اسلایدرها (فقط خواندنی برای عموم، ویرایش فقط توسط ادمین فعال)
-2. `products`: تصاویر گالری و کاور محصولات و دسته‌بندی‌ها (فقط خواندنی برای عموم، ویرایش فقط توسط ادمین فعال)
-3. `avatars`: تصاویر آواتار و پروفایل کاربران
-4. `support-media`: فایل‌های پیوست چت و پشتیبانی (عکس، ویدیو، وویس صوتی) با مسیرهای یکتا و غیرقابل بازنویسی
+احراز هویت مدیران در برنامه AuraVibe توسط سرویس **Supabase Auth** و بر اساس ارتباط با جدول `public.admin_users` انجام می‌گیرد:
 
----
+```text
+Supabase Auth user (auth.users)
+          +
+public.admin_users row (auth_user_id = auth.users.id)
+```
 
-## ۵. ایجاد کاربر مدیر ارشد در Supabase Auth (Admin Authentication)
-
-سیستم مدیریت پیشخوان AuraVibe از احراز هویت امن **Supabase Auth** بهره می‌برد. برای ایجاد مدیر ارشد اولیه (Super Admin):
-
+### مراحل راه‌اندازی اولین مدیر ارشد (SUPER_ADMIN):
 1. در داشبورد Supabase به بخش **Authentication > Users** بروید.
-2. روی **Add User > Create User** کلیک کنید:
-   - **Email**: `superadmin@auravibe.ir` (یا ایمیل اداری مد نظر شما)
-   - **Password**: یک رمز عبور قوی و غیرقابل حدس انتخاب نمایید (حداقل ۱۲ کاراکتر شامل حروف بزرگ و کوچک، ارقام و نمادها).
-   - گزینه **Auto Confirm User** را فعال کنید.
+2. روی **Add User > Create User** کلیک نمایید:
+   * **Email**: ایمیل مدیر ارشد (مثلاً `superadmin@auravibe.ir`).
+   * **Password**: یک رمز عبور قوی و یکتا با حداقل ۱۲ کاراکتر تعیین فرمایید (*Choose a strong unique password*).
+   * گزینه **Auto Confirm User** را فعال کنید.
 3. مقدار **User UID** کاربر ساخته‌شده را کپی کنید.
-4. در **SQL Editor**، کاربر ادمین را به جدول `admin_users` متصل کنید:
+4. در بخش **SQL Editor**، دستور زیر را اجرا کنید (شناسه UID کپی‌شده را جایگزین نمایید):
 
 ```sql
 INSERT INTO public.admin_users (
@@ -104,46 +131,100 @@ INSERT INTO public.admin_users (
 ) ON CONFLICT (username) DO UPDATE SET auth_user_id = EXCLUDED.auth_user_id;
 ```
 
-> **نکته**: پس از ورود با حساب مدیر ارشد، ایجاد سایر مدیران به صورت مستقیم از طریق پیشخوان مدیریت و به کمک تابع امنیتی سرور `create_admin_user` انجام می‌شود و نیازی به عملیات دستی در دیتابیس نخواهد بود.
+> **تعریف سایر مدیران در آینده:** پس از ورود با حساب مدیر ارشد، ایجاد سایر مدیران مستقیماً از بخش مدیریت کاربران پیشخوان و از طریق تابع امنیتی `create_admin_user` انجام می‌شود و نیازی به ورود دستی در دیتابیس نیست.
 
 ---
 
 ## ۶. درج داده‌های اولیه (Data Seeding)
 
-برای تزریق کاتالوگ محصولات اولیه، دسته‌بندی‌ها، بنرها و تنظیمات فروشگاه با دارایی‌های بومی و قطعی:
+اسکریپت `scripts/seed.js` وظیفه تزریق داده‌های قطعی اولیه (شامل محصولات، دسته‌بندی‌ها، بنرها، مقالات، سفارشات نمونه، تیکت‌ها و تنظیمات) به پایگاه‌داده را بر عهده دارد.
 
-### روش الف: استفاده از اسکریپت خودکار Node.js
+> **ماهیت داده‌های Seed:**
+> تمام داده‌های موجود در فایل سید، داده‌های توسعه و دمو (**Development / Demo Data**) هستند.
+
+### جداول تحت پوشش اسکریپت Seed:
+* `categories`
+* `product_badges`
+* `products`
+* `banners`
+* `users`
+* `orders`
+* `support_tickets`
+* `articles`
+* `global_seo`
+* `general_settings`
+* `redirects`
+* `audit_logs`
+* `admin_users` (در صورت تامین کلید Service Role)
+
+### اجرای اسکریپت Seed:
+
+#### حالت عادی (با کلید ناشناس یا مقادیر فایل env.local.):
 ```bash
-# با استفاده از کلید anon یا service_role در متغیر محیطی
-SUPABASE_URL=https://your-project.supabase.co SUPABASE_KEY=your-service-role-or-anon-key node scripts/seed.js
+node scripts/seed.js
 ```
 
-### روش ب: اجرای اسکریپت SQL در SQL Editor
-محتوای فایل `supabase/seed.sql` را در تب **SQL Editor** داشبورد Supabase اجرا نمایید.
+#### حالت پیشرفته (همراه با ساخت خودکار حساب‌های مدیر در Supabase Auth):
+برای ساخت خودکار حساب‌های Auth ادمین‌ها در زمان اجرای سیدینگ، دسترسی ممتاز `SUPABASE_SERVICE_ROLE_KEY` الزامی است:
+```bash
+SUPABASE_URL=https://your-project.supabase.co SUPABASE_SERVICE_ROLE_KEY=your-service-role-key node scripts/seed.js
+```
+
+همچنین می‌توانید کلمه عبور مدیران اولیه را با متغیرهای زیر سفارشی کنید:
+```bash
+INITIAL_ADMIN_PASSWORD="YourStrongPassword1" INITIAL_MANAGER_PASSWORD="YourStrongPassword2" node scripts/seed.js
+```
 
 ---
 
-## ۷. استقرار روی GitHub Pages (Deployment)
+## ۷. باکت‌های ذخیره‌سازی فایل (Supabase Storage Buckets)
 
-برای استقرار خودکار توسط GitHub Actions:
-1. در مخزن گیت‌هاب پروژه به مسیر **Settings > Secrets and variables > Actions** بروید.
-2. دو سکرت (یا متغیر) زیر را اضافه کنید:
-   - `VITE_SUPABASE_URL`: آدرس پروژه Supabase شما
-   - `VITE_SUPABASE_PUBLISHABLE_KEY`: کلید Anon پروژه Supabase شما
-3. با هر Push روی شاخه `master`، ورک‌فلو موجود در `.github/workflows/deploy.yml` پروژه را همراه با متغیرهای محیطی بیلد کرده و نسخه کاملاً استاتیک را در GitHub Pages منتشر می‌کند.
+مایگریشن‌ها ۴ باکت ذخیره‌سازی زیر را به همراه سیاست‌های دسترسی مشخص ایجاد می‌کنند:
+
+| باکت (Bucket) | هدف و شرح کاربرد | خواندن (Read) | بارگذاری (Upload) | حذف/ویرایش (Update/Delete) |
+|---|---|---|---|---|
+| `banners` | تصاویر بنرهای اسلایدر و تبلیغات | 🌍 عمومی | 🔒 فقط ادمین فعال (`is_admin()`) | 🔒 فقط ادمین فعال |
+| `products` | تصاویر کاتالوگ، گالری و دسته‌بندی‌ها | 🌍 عمومی | 🔒 فقط ادمین فعال (`is_admin()`) | 🔒 فقط ادمین فعال |
+| `avatars` | تصاویر آواتار و پروفایل کاربران | 🌍 عمومی | 👤 ادمین، کاربر لاگین‌شده یا مسیر `avatars/*` | 🔒 فقط ادمین فعال |
+| `support-media` | فایل‌های پیوست چت پشتیبانی (عکس، ویدیو، صوت) | 🔒 ادمین یا کاربر احراز هویت‌شده | 👤 ادمین، کاربر لاگین‌شده یا مسیر `support-media/*` | 🔒 فقط ادمین فعال |
 
 ---
 
-## ۸. سناریوی آزمون و تایید صحت عملکرد (Verification)
+## ۸. قابلیت ارتباط بلادرنگ (Supabase Realtime)
 
-1. **همگام‌سازی چند دستگاهی (Multi-Device Sync)**:
-   - در دستگاه/مرورگر A وارد پنل مدیریت شوید و عنوان یک بنر یا قیمت یک محصول را ویرایش نمایید.
-   - در دستگاه/مرورگر B صفحه را بارگذاری مجدد نمایید؛ تغییرات اعمال‌شده بلافاصله قابل مشاهده هستند.
-2. **پایداری داده‌ها پس از پاک‌سازی حافظه مرورگر**:
-   - در مرورگر حافظه LocalStorage و Cache را به طور کامل پاک کنید (Clear Site Data).
-   - با رفرش صفحه مشاهده خواهید کرد که هیچ داده‌ای از دست نرفته و تمام اطلاعات از سرور متمرکز دریافت می‌شوند.
-3. **عدم وابستگی به تصاویر نامطمئن خارجی**:
-   - تمام تصاویر کاتالوگ و دسته‌بندی‌ها از دارایی‌های برداری استاندارد SVG داخلی پروژه یا Storage متمرکز استفاده می‌کنند.
-4. **امنیت RLS و احراز هویت ادمین**:
-   - جدول `audit_logs` و تغییرات کاتالوگ محصولات/بنرها فقط برای ادمین‌های احراز هویت‌شده فعال مجاز است.
-   - ثبت سفارشات و تیکت‌ها از طریق توابع تایید هویت سمت سرور (`create_customer_order` و `create_customer_ticket`) انجام می‌پذیرد.
+### جداول فعال در انتشار Realtime:
+در مایگریشن پایگاه‌داده، جداول زیر به انتشار `supabase_realtime` اضافه شده‌اند:
+* `products`
+* `banners`
+* `categories`
+* `product_badges`
+* `orders`
+* `support_tickets`
+* `articles`
+* `general_settings`
+
+### نحوه عملکرد در فرانت‌اند (`src/services/db.ts`):
+* سرویس `db` در هنگام راه‌اندازی، کانال وب‌سوکت `auravibe-table-sync` را ثبت کرده و رویدادهای تغییرات (`postgres_changes`) جداول فوق را رصد می‌کند.
+* با رخ دادن هرگونه تغییر در دیتابیس، متد `notify()` فراخوانی می‌شود و لیسنرهای ثبت‌شده در کامپوننت‌های React را مطلع می‌سازد.
+
+### تمایز بارگذاری اولیه و اعلان Realtime:
+```text
+Initial Load (بارگذاری اولیه)
+   └── درخواست مستقیم کوئری به پایگاه‌داده (Supabase Query) جهت دریافت اطلاعات
+
+Realtime Notification (اعلان بلادرنگ)
+   └── دریافت پیام تغییر سطر از وب‌سوکت و تحریک لیسنرهای فرانت‌اند جهت بارگذاری مجدد اطلاعات تازه
+```
+> پایگاه داده متمرکز PostgreSQL همواره مرجع نهایی حقیقت (Source of Truth) است و وب‌سوکت Realtime صرفاً نقش پیام‌رسان رویدادها را ایفا می‌کند.
+
+---
+
+## ۹. استقرار خودکار روی GitHub Pages (Deployment)
+
+ورک‌فلو GitHub Actions در مسیر `.github/workflows/deploy.yml` قرار دارد:
+
+1. در مخزن گیت‌هاب به مسیر **Settings > Secrets and variables > Actions** بروید.
+2. متغیرهای زیر را ثبت کنید:
+   * `VITE_SUPABASE_URL`
+   * `VITE_SUPABASE_PUBLISHABLE_KEY`
+3. با ارسال کد به شاخه `master`، فرایند بیلد به صورت خودکار اجرا شده و نسخه خروجی در GitHub Pages منتشر می‌شود.
