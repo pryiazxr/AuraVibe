@@ -53,7 +53,8 @@ import {
   HelpCircle,
   Sparkles,
   MapPin,
-  AlertTriangle
+  AlertTriangle,
+  Paperclip
 } from 'lucide-react';
 import './index.css';
 
@@ -69,6 +70,7 @@ import {
 
 import {
   db,
+  isSupabaseConfigured,
   Product,
   Banner,
   Order,
@@ -97,7 +99,7 @@ import { AuditLogsView } from './components/admin/AuditLogsView';
 const money = (value: number) => new Intl.NumberFormat('fa-IR').format(value);
 
 function App() {
-  const [intro, setIntro] = useState(true);
+  const [intro, setIntro] = useState(isSupabaseConfigured());
   const [followModal, setFollowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cart, setCart] = useState<Product[]>([]);
@@ -183,6 +185,7 @@ function App() {
 
   // Subscribe to central DB updates
   useEffect(() => {
+    if (!isSupabaseConfigured()) return;
     refreshAllAppData();
     const unsubscribe = db.subscribe(() => {
       refreshAllAppData();
@@ -192,6 +195,10 @@ function App() {
 
   // Intro and Banner Carousel
   useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      setIntro(false);
+      return;
+    }
     const timer = window.setTimeout(() => {
       setIntro(false);
       setFollowModal(true);
@@ -335,6 +342,40 @@ function App() {
     const matched = products.filter((p) => p.category === 'ساعت' || p.badge === 'ساعت');
     return matched.length >= 10 ? matched : products.filter((p) => p.category === 'ساعت');
   }, [products]);
+
+  if (!isSupabaseConfigured()) {
+    return (
+      <main className="min-h-screen bg-[#fffaf0] text-[#37192C] font-vazir flex flex-col items-center justify-center p-6 text-center" dir="rtl">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-[#37192C]/10 p-8 flex flex-col items-center gap-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-sm">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div className="space-y-3">
+            <h1 className="text-2xl font-black tracking-tight text-[#37192C]">AuraVibe</h1>
+            <p className="text-base font-bold text-red-600">اتصال به بکاند تنظیم نشده است.</p>
+            <p className="text-sm text-[#37192C]/80 leading-relaxed">
+              برای اجرای نسخه production باید
+            </p>
+            <div className="bg-[#fffaf0] rounded-xl p-3 font-mono text-xs text-[#37192C] border border-[#37192C]/10 my-2 space-y-1">
+              <div className="font-bold text-rose-700">VITE_SUPABASE_URL</div>
+              <div className="text-xs text-[#37192C]/50">و</div>
+              <div className="font-bold text-rose-700">VITE_SUPABASE_PUBLISHABLE_KEY</div>
+            </div>
+            <p className="text-sm text-[#37192C]/80 leading-relaxed">
+              تنظیم شوند.
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-3.5 px-6 bg-[#37192C] text-[#FFF3C5] font-bold rounded-2xl shadow-md hover:bg-[#37192C]/90 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>تلاش مجدد</span>
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="pb-nav min-h-screen overflow-x-hidden bg-[#fffaf0] text-[#37192C] font-vazir">

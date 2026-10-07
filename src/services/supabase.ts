@@ -1,25 +1,41 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const nodeProcessEnv = typeof globalThis !== 'undefined' ? (globalThis as any).process?.env : undefined;
+
+const supabaseUrl =
+  import.meta.env?.VITE_SUPABASE_URL ||
+  nodeProcessEnv?.VITE_SUPABASE_URL ||
+  '';
+const supabaseKey =
+  import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env?.VITE_SUPABASE_ANON_KEY ||
+  nodeProcessEnv?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  nodeProcessEnv?.VITE_SUPABASE_ANON_KEY ||
+  '';
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseKey && supabaseUrl.trim() !== '' && supabaseKey.trim() !== '');
 };
 
-if (!isSupabaseConfigured()) {
-  throw new Error(
-    'Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
-  );
-}
+export const supabase: SupabaseClient | null = isSupabaseConfigured()
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
+  : null;
 
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+export function requireSupabase(): SupabaseClient {
+  if (!isSupabaseConfigured() || !supabase) {
+    throw new Error(
+      'Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
+    );
+  }
+
+  return supabase;
+}
 
 /**
  * Uploads a File, Blob, or base64 Data URL to a Supabase Storage bucket.
@@ -31,9 +47,7 @@ export async function uploadToStorage(
   fileOrDataUrl: File | Blob | string,
   customFileName?: string
 ): Promise<string> {
-  if (!isSupabaseConfigured()) {
-    throw new Error('Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
-  }
+  const client = requireSupabase();
 
   let blob: Blob;
   let fileExt = 'png';
@@ -72,7 +86,7 @@ export async function uploadToStorage(
   const cleanName = customFileName || `${bucket}/${Date.now()}_${randomId}.${fileExt}`;
   const filePath = cleanName.replace(/[^a-zA-Z0-9/._-]/g, '_');
 
-  const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, blob, {
+  const { error: uploadError } = await client.storage.from(bucket).upload(filePath, blob, {
     upsert: false,
     contentType: blob.type || 'image/png',
   });
@@ -82,6 +96,6 @@ export async function uploadToStorage(
     throw uploadError;
   }
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+  const { data } = client.storage.from(bucket).getPublicUrl(filePath);
   return data.publicUrl;
 }

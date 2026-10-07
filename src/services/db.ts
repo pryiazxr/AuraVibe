@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured, uploadToStorage } from './supabase';
+import { supabase, isSupabaseConfigured, uploadToStorage, requireSupabase } from './supabase';
 import {
   rowToCategory, categoryToRow,
   rowToBadge, badgeToRow,
@@ -356,6 +356,8 @@ export function getJalaliDateString(isoString: string): string {
 
 // --- CENTRAL SUPABASE DATA ACCESS & REPOSITORY LAYER ---
 
+const getClient = () => requireSupabase();
+
 class DatabaseService {
   private listeners: Set<() => void> = new Set();
   private realtimeChannel: any = null;
@@ -381,7 +383,7 @@ class DatabaseService {
   }
 
   private initRealtime() {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured() || !supabase) return;
 
     try {
       const tables = [
@@ -394,7 +396,7 @@ class DatabaseService {
         'general_settings'
       ];
 
-      this.realtimeChannel = supabase.channel('auravibe-table-sync');
+      this.realtimeChannel = getClient().channel('auravibe-table-sync');
 
       for (const table of tables) {
         this.realtimeChannel.on(
@@ -440,7 +442,7 @@ class DatabaseService {
 
   // --- PRODUCT BADGES / LABELS ---
   public async getBadges(): Promise<ProductBadgeItem[]> {
-    const { data, error } = await supabase.from('product_badges').select('*').order('id', { ascending: true });
+    const { data, error } = await getClient().from('product_badges').select('*').order('id', { ascending: true });
     if (error) {
       console.error('[AuraVibe DB] Error fetching badges:', error);
       throw error;
@@ -454,7 +456,7 @@ class DatabaseService {
     if (!row.id) {
       delete row.id;
     }
-    const { data, error } = await supabase.from('product_badges').upsert(row).select().single();
+    const { data, error } = await getClient().from('product_badges').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving badge:', error);
       throw error;
@@ -477,7 +479,7 @@ class DatabaseService {
   }
 
   public async deleteBadge(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('product_badges').delete().eq('id', id);
+    const { error } = await getClient().from('product_badges').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting badge:', error);
       throw error;
@@ -497,7 +499,7 @@ class DatabaseService {
 
   // --- CATEGORIES ---
   public async getCategories(): Promise<CategoryItem[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('categories')
       .select('*')
       .order('display_order', { ascending: true });
@@ -514,7 +516,7 @@ class DatabaseService {
     if (!row.id) {
       delete row.id;
     }
-    const { data, error } = await supabase.from('categories').upsert(row).select().single();
+    const { data, error } = await getClient().from('categories').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving category:', error);
       throw error;
@@ -537,7 +539,7 @@ class DatabaseService {
   }
 
   public async deleteCategory(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('categories').delete().eq('id', id);
+    const { error } = await getClient().from('categories').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting category:', error);
       throw error;
@@ -557,7 +559,7 @@ class DatabaseService {
 
   // --- PRODUCTS ---
   public async getProducts(): Promise<Product[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('products')
       .select('*')
       .order('id', { ascending: false });
@@ -570,7 +572,7 @@ class DatabaseService {
   }
 
   public async getProductById(id: number): Promise<Product | undefined> {
-    const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+    const { data, error } = await getClient().from('products').select('*').eq('id', id).single();
     if (error || !data) return undefined;
     return rowToProduct(data);
   }
@@ -581,7 +583,7 @@ class DatabaseService {
       row.id = Math.floor(100000 + Math.random() * 899999);
     }
 
-    const { data, error } = await supabase.from('products').upsert(row).select().single();
+    const { data, error } = await getClient().from('products').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving product:', error);
       throw error;
@@ -604,7 +606,7 @@ class DatabaseService {
   }
 
   public async deleteProduct(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('products').delete().eq('id', id);
+    const { error } = await getClient().from('products').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting product:', error);
       throw error;
@@ -624,7 +626,7 @@ class DatabaseService {
 
   // --- BANNERS ---
   public async getBanners(): Promise<Banner[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('banners')
       .select('*')
       .order('display_order', { ascending: true });
@@ -647,7 +649,7 @@ class DatabaseService {
       row.id = Date.now();
     }
 
-    const { data, error } = await supabase.from('banners').upsert(row).select().single();
+    const { data, error } = await getClient().from('banners').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving banner:', error);
       throw error;
@@ -676,7 +678,7 @@ class DatabaseService {
     }));
 
     for (const item of updates) {
-      const { error } = await supabase.from('banners').update({ display_order: item.display_order }).eq('id', item.id);
+      const { error } = await getClient().from('banners').update({ display_order: item.display_order }).eq('id', item.id);
       if (error) {
         console.error('[AuraVibe DB] Error reordering banner:', error);
         throw error;
@@ -698,7 +700,7 @@ class DatabaseService {
   }
 
   public async deleteBanner(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('banners').delete().eq('id', id);
+    const { error } = await getClient().from('banners').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting banner:', error);
       throw error;
@@ -718,7 +720,7 @@ class DatabaseService {
 
   // --- ORDERS ---
   public async getOrders(): Promise<Order[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('orders')
       .select('*')
       .order('created_at', { ascending: false });
@@ -737,7 +739,7 @@ class DatabaseService {
   }
 
   public async getOrderById(id: string): Promise<Order | undefined> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('orders')
       .select('*')
       .or(`id.eq.${id},order_number.eq.${id}`)
@@ -752,7 +754,7 @@ class DatabaseService {
     shippingMethod: ShippingMethod;
   }): Promise<Order> {
     // 1. Try secure RPC create_customer_order
-    const { data: rpcData, error: rpcError } = await supabase.rpc('create_customer_order', {
+    const { data: rpcData, error: rpcError } = await getClient().rpc('create_customer_order', {
       p_customer: orderPayload.customer,
       p_items: orderPayload.items,
       p_shipping_method: orderPayload.shippingMethod
@@ -806,7 +808,7 @@ class DatabaseService {
     };
 
     const row = orderToRow(newOrder);
-    const { data, error } = await supabase.from('orders').insert(row).select().single();
+    const { data, error } = await getClient().from('orders').insert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error creating order:', error);
       throw error;
@@ -853,7 +855,7 @@ class DatabaseService {
       updatePayload.tracking_code = trackingCode;
     }
 
-    const { error } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
+    const { error } = await getClient().from('orders').update(updatePayload).eq('id', orderId);
     if (error) {
       console.error('[AuraVibe DB] Error updating order status:', error);
       throw error;
@@ -872,7 +874,7 @@ class DatabaseService {
   }
 
   public async deleteOrder(orderId: string, adminUser: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    const { error } = await getClient().from('orders').delete().eq('id', orderId);
     if (error) {
       console.error('[AuraVibe DB] Error deleting order:', error);
       throw error;
@@ -890,7 +892,7 @@ class DatabaseService {
 
   // --- USERS & ADMINS ---
   public async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('users')
       .select('*')
       .order('id', { ascending: false });
@@ -903,7 +905,7 @@ class DatabaseService {
   }
 
   public async getUserById(id: number): Promise<User | undefined> {
-    const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+    const { data, error } = await getClient().from('users').select('*').eq('id', id).maybeSingle();
     if (error || !data) return undefined;
     return rowToUser(data);
   }
@@ -917,7 +919,7 @@ class DatabaseService {
       if (!row.order_count) row.order_count = 0;
     }
 
-    const { data, error } = await supabase.from('users').upsert(row).select().single();
+    const { data, error } = await getClient().from('users').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving user:', error);
       throw error;
@@ -940,7 +942,7 @@ class DatabaseService {
   }
 
   public async blockUser(userId: number, blockReason: string, adminUser: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase
+    const { error } = await getClient()
       .from('users')
       .update({ status: 'blocked', block_reason: blockReason })
       .eq('id', userId);
@@ -962,7 +964,7 @@ class DatabaseService {
   }
 
   public async unblockUser(userId: number, adminUser: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase
+    const { error } = await getClient()
       .from('users')
       .update({ status: 'active', block_reason: null })
       .eq('id', userId);
@@ -984,7 +986,7 @@ class DatabaseService {
   }
 
   public async getAdmins(): Promise<AdminUser[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('admin_users')
       .select('*')
       .order('id', { ascending: true });
@@ -997,13 +999,13 @@ class DatabaseService {
   }
 
   public async getCurrentAdmin(): Promise<AdminUser | null> {
-    if (!isSupabaseConfigured()) return null;
+    if (!isSupabaseConfigured() || !supabase) return null;
 
     try {
-      const { data: authData } = await supabase.auth.getUser();
+      const { data: authData } = await getClient().auth.getUser();
       if (!authData?.user) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await getClient()
         .from('admin_users')
         .select('*')
         .eq('auth_user_id', authData.user.id)
@@ -1027,7 +1029,7 @@ class DatabaseService {
       ? usernameOrEmail.trim().toLowerCase()
       : `${usernameOrEmail.trim().toLowerCase()}@auravibe.ir`;
 
-    const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authResult, error: authError } = await getClient().auth.signInWithPassword({
       email,
       password
     });
@@ -1036,7 +1038,7 @@ class DatabaseService {
       throw new Error(authError?.message || 'نام کاربری یا رمز عبور نامعتبر است.');
     }
 
-    const { data: adminData, error: adminErr } = await supabase
+    const { data: adminData, error: adminErr } = await getClient()
       .from('admin_users')
       .select('*')
       .eq('auth_user_id', authResult.user.id)
@@ -1044,14 +1046,14 @@ class DatabaseService {
       .single();
 
     if (adminErr || !adminData) {
-      await supabase.auth.signOut();
+      await getClient().auth.signOut();
       throw new Error('این حساب کاربری دسترسی معتبر ادمین در سیستم ندارد.');
     }
 
     const admin = rowToAdmin(adminData);
 
     // Update last_login
-    await supabase
+    await getClient()
       .from('admin_users')
       .update({ last_login: 'هم‌اکنون' })
       .eq('id', admin.id);
@@ -1070,8 +1072,8 @@ class DatabaseService {
   }
 
   public async adminLogout(): Promise<void> {
-    if (isSupabaseConfigured()) {
-      await supabase.auth.signOut();
+    if (isSupabaseConfigured() && supabase) {
+      await getClient().auth.signOut();
     }
     this.notify();
   }
@@ -1088,7 +1090,7 @@ class DatabaseService {
       // Edit existing application record
       const row = adminToRow(adminData);
       delete row.auth_user_id; // Never overwrite auth_user_id on update
-      const { data, error } = await supabase
+      const { data, error } = await getClient()
         .from('admin_users')
         .update(row)
         .eq('id', adminData.id)
@@ -1118,7 +1120,7 @@ class DatabaseService {
       const cleanUsername = (adminData.username || '').trim().toLowerCase();
       const email = `${cleanUsername}@auravibe.ir`;
 
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_admin_user', {
+      const { data: rpcResult, error: rpcError } = await getClient().rpc('create_admin_user', {
         p_username: cleanUsername,
         p_email: email,
         p_password: rawPassword,
@@ -1155,7 +1157,7 @@ class DatabaseService {
 
   // --- SUPPORT TICKETS ---
   public async getTickets(): Promise<SupportTicket[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('support_tickets')
       .select('*')
       .order('created_at', { ascending: false });
@@ -1184,7 +1186,7 @@ class DatabaseService {
     mediaType?: 'text' | 'image' | 'video' | 'audio';
   }): Promise<SupportTicket> {
     // 1. Try secure RPC create_customer_ticket
-    const { data: rpcData, error: rpcError } = await supabase.rpc('create_customer_ticket', {
+    const { data: rpcData, error: rpcError } = await getClient().rpc('create_customer_ticket', {
       p_customer_name: payload.customerName,
       p_customer_phone: payload.customerPhone,
       p_subject: payload.subject,
@@ -1245,7 +1247,7 @@ class DatabaseService {
     };
 
     const row = ticketToRow(newTicket);
-    const { data, error } = await supabase.from('support_tickets').insert(row).select().single();
+    const { data, error } = await getClient().from('support_tickets').insert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error creating ticket:', error);
       throw error;
@@ -1274,7 +1276,7 @@ class DatabaseService {
     mediaType: 'text' | 'image' | 'video' | 'audio' = 'text',
     mediaUrl?: string
   ): Promise<void> {
-    const { data: currentData, error: fetchErr } = await supabase
+    const { data: currentData, error: fetchErr } = await getClient()
       .from('support_tickets')
       .select('*')
       .eq('id', ticketId)
@@ -1309,7 +1311,7 @@ class DatabaseService {
     ticket.updatedAt = now.toISOString();
 
     const row = ticketToRow(ticket);
-    const { error } = await supabase
+    const { error } = await getClient()
       .from('support_tickets')
       .update(row)
       .eq('id', ticketId);
@@ -1335,7 +1337,7 @@ class DatabaseService {
     if (updates.isBlocked !== undefined) rowUpdates.is_blocked = updates.isBlocked;
     if (updates.assignedAdminId !== undefined) rowUpdates.assigned_admin_id = updates.assignedAdminId;
 
-    const { error } = await supabase.from('support_tickets').update(rowUpdates).eq('id', ticketId);
+    const { error } = await getClient().from('support_tickets').update(rowUpdates).eq('id', ticketId);
     if (error) {
       console.error('[AuraVibe DB] Error updating ticket state:', error);
       throw error;
@@ -1344,7 +1346,7 @@ class DatabaseService {
   }
 
   public async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await getClient()
       .from('support_tickets')
       .update({ unread_admin_count: 0 })
       .eq('id', ticketId);
@@ -1356,7 +1358,7 @@ class DatabaseService {
   }
 
   public async markTicketAsReadByUser(ticketId: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await getClient()
       .from('support_tickets')
       .update({ unread_user_count: 0 })
       .eq('id', ticketId);
@@ -1368,7 +1370,7 @@ class DatabaseService {
   }
 
   public async deleteMessageFromTicket(ticketId: string, messageId: string): Promise<void> {
-    const { data, error: fetchErr } = await supabase
+    const { data, error: fetchErr } = await getClient()
       .from('support_tickets')
       .select('*')
       .eq('id', ticketId)
@@ -1380,7 +1382,7 @@ class DatabaseService {
     ticket.updatedAt = new Date().toISOString();
 
     const row = ticketToRow(ticket);
-    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    const { error } = await getClient().from('support_tickets').update(row).eq('id', ticketId);
     if (error) {
       console.error('[AuraVibe DB] Error deleting message from ticket:', error);
       throw error;
@@ -1390,7 +1392,7 @@ class DatabaseService {
 
   // --- ARTICLES / MAGAZINE ---
   public async getArticles(): Promise<Article[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('articles')
       .select('*')
       .order('display_order', { ascending: true });
@@ -1409,7 +1411,7 @@ class DatabaseService {
       if (!row.slug) row.slug = `article-${Date.now()}`;
     }
 
-    const { data, error } = await supabase.from('articles').upsert(row).select().single();
+    const { data, error } = await getClient().from('articles').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving article:', error);
       throw error;
@@ -1432,7 +1434,7 @@ class DatabaseService {
   }
 
   public async deleteArticle(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('articles').delete().eq('id', id);
+    const { error } = await getClient().from('articles').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting article:', error);
       throw error;
@@ -1452,7 +1454,7 @@ class DatabaseService {
 
   // --- SEO & SETTINGS ---
   public async getGlobalSEO(): Promise<GlobalSEO> {
-    const { data, error } = await supabase.from('global_seo').select('*').eq('id', 1).maybeSingle();
+    const { data, error } = await getClient().from('global_seo').select('*').eq('id', 1).maybeSingle();
     if (error) {
       console.error('[AuraVibe DB] Error fetching global SEO:', error);
       throw error;
@@ -1475,7 +1477,7 @@ class DatabaseService {
 
   public async updateGlobalSEO(seoData: Partial<GlobalSEO>, adminUser?: { id: number; name: string }): Promise<void> {
     const row = globalSeoToRow(seoData);
-    const { error } = await supabase.from('global_seo').upsert(row);
+    const { error } = await getClient().from('global_seo').upsert(row);
     if (error) {
       console.error('[AuraVibe DB] Error updating global SEO:', error);
       throw error;
@@ -1494,7 +1496,7 @@ class DatabaseService {
   }
 
   public async getGeneralSettings(): Promise<GeneralSettings> {
-    const { data, error } = await supabase.from('general_settings').select('*').eq('id', 1).maybeSingle();
+    const { data, error } = await getClient().from('general_settings').select('*').eq('id', 1).maybeSingle();
     if (error) {
       console.error('[AuraVibe DB] Error fetching general settings:', error);
       throw error;
@@ -1536,7 +1538,7 @@ class DatabaseService {
 
   public async updateGeneralSettings(settings: Partial<GeneralSettings>, adminUser?: { id: number; name: string }): Promise<void> {
     const row = generalSettingsToRow(settings);
-    const { error } = await supabase.from('general_settings').upsert(row);
+    const { error } = await getClient().from('general_settings').upsert(row);
     if (error) {
       console.error('[AuraVibe DB] Error updating general settings:', error);
       throw error;
@@ -1556,7 +1558,7 @@ class DatabaseService {
 
   // --- REDIRECTS ---
   public async getRedirects(): Promise<RedirectRule[]> {
-    const { data, error } = await supabase.from('redirects').select('*').order('created_at', { ascending: false });
+    const { data, error } = await getClient().from('redirects').select('*').order('created_at', { ascending: false });
     if (error) {
       console.error('[AuraVibe DB] Error fetching redirects:', error);
       throw error;
@@ -1568,7 +1570,7 @@ class DatabaseService {
   public async saveRedirect(redirect: Partial<RedirectRule>, adminUser?: { id: number; name: string }): Promise<RedirectRule> {
     const row = redirectToRow(redirect);
     if (!row.id) row.id = String(Date.now());
-    const { data, error } = await supabase.from('redirects').upsert(row).select().single();
+    const { data, error } = await getClient().from('redirects').upsert(row).select().single();
     if (error) {
       console.error('[AuraVibe DB] Error saving redirect:', error);
       throw error;
@@ -1590,7 +1592,7 @@ class DatabaseService {
   }
 
   public async deleteRedirect(id: string, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('redirects').delete().eq('id', id);
+    const { error } = await getClient().from('redirects').delete().eq('id', id);
     if (error) {
       console.error('[AuraVibe DB] Error deleting redirect:', error);
       throw error;
@@ -1610,7 +1612,7 @@ class DatabaseService {
 
   // --- AUDIT LOGS ---
   public async getAuditLogs(): Promise<AuditLog[]> {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('audit_logs')
       .select('*')
       .order('created_at', { ascending: false })
@@ -1648,7 +1650,7 @@ class DatabaseService {
     };
 
     const row = auditLogToRow(newLog);
-    const { error } = await supabase.from('audit_logs').insert(row);
+    const { error } = await getClient().from('audit_logs').insert(row);
     if (error) {
       console.warn('[AuraVibe DB] Warning inserting audit log:', error.message);
     }
@@ -1656,7 +1658,7 @@ class DatabaseService {
 
   // --- NOTIFICATIONS ---
   public async getNotifications(role: 'admin' | 'user', userId?: number): Promise<AppNotification[]> {
-    let query = supabase.from('notifications').select('*').eq('target_role', role);
+    let query = getClient().from('notifications').select('*').eq('target_role', role);
     if (userId) {
       query = query.eq('user_id', userId);
     }
@@ -1677,7 +1679,7 @@ class DatabaseService {
       createdAt: new Date().toISOString()
     };
     const row = notificationToRow(newNotif);
-    const { error } = await supabase.from('notifications').insert(row);
+    const { error } = await getClient().from('notifications').insert(row);
     if (error) {
       console.warn('[AuraVibe DB] Warning inserting notification:', error.message);
     }
@@ -1686,3 +1688,5 @@ class DatabaseService {
 }
 
 export const db = new DatabaseService();
+
+export { isSupabaseConfigured, requireSupabase, supabase } from './supabase';
