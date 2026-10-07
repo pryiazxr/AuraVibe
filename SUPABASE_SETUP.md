@@ -26,7 +26,6 @@
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOi...
-VITE_ENABLE_LOCAL_MIGRATION=false
 ```
 
 > **نکته امنیتی بسیار مهم**: هرگز کلیدهای محرمانه `service_role` یا رمزهای عبور دیتابیس را داخل متغیرهای `VITE_*` قرار ندهید. این متغیرها در خروجی نهایی فرانت‌اند مرورگر قرار می‌گیرند.
@@ -37,12 +36,15 @@ VITE_ENABLE_LOCAL_MIGRATION=false
 
 تمام مایگریشن‌های پایگاه‌داده به صورت فایل‌های استاندارد SQL در مسیر `supabase/migrations/` ذخیره شده‌اند:
 - `supabase/migrations/20261007000001_initial_schema.sql`: ساختار ۱۴ جدول اصلی دامنه
-- `supabase/migrations/20261007000002_storage_and_rls.sql`: باکت‌های ذخیره‌سازی، فعال‌سازی RLS، تابع ضد بازگشت `is_admin()` و پالیسی‌های دسترسی
+- `supabase/migrations/20261007000002_storage_and_rls.sql`: باکت‌های ذخیره‌سازی، فعال‌سازی RLS و پالیسی‌های پایه
+- `supabase/migrations/20261007000003_hardening_rls_and_auth.sql`: ارتقای امنیت دسترسی‌ها (حذف بای‌پس‌های دمو، امنیت ادمین‌ها، توابع امن RPC برای سفارشات و تیکت‌ها و توابع `is_admin()` / `is_super_admin()`)
 
 ### روش اول: استفاده از SQL Editor در داشبورد Supabase (ساده‌ترین روش)
 1. در داشبورد پروژه به بخش **SQL Editor** بروید.
-2. محتوای فایل `supabase/migrations/20261007000001_initial_schema.sql` را کپی کرده و اجرا (Run) کنید.
-3. محتوای فایل `supabase/migrations/20261007000002_storage_and_rls.sql` را کپی کرده و اجرا کنید.
+2. محتوای فایل‌های زیر را به ترتیب اجرا (Run) کنید:
+   - `supabase/migrations/20261007000001_initial_schema.sql`
+   - `supabase/migrations/20261007000002_storage_and_rls.sql`
+   - `supabase/migrations/20261007000003_hardening_rls_and_auth.sql`
 
 ### روش دوم: استفاده از Supabase CLI
 ```bash
@@ -60,24 +62,22 @@ npx supabase db push
 
 ## ۴. باکت‌های ذخیره‌سازی فایل (Supabase Storage Buckets)
 
-مایگریشن دوم به طور خودکار ۴ باکت زیر را همراه با پالیسی‌های امنیتی عمومی خواندن و ادمین نوشتن ایجاد می‌کند:
-1. `banners`: تصاویر بنرهای تبلیغاتی و اسلایدرها
-2. `products`: تصاویر گالری و کاور محصولات و دسته‌بندی‌ها
+مایگریشن‌ها به طور خودکار ۴ باکت زیر را همراه با پالیسی‌های امنیتی عمومی خواندن و ادمین نوشتن ایجاد می‌کنند:
+1. `banners`: تصاویر بنرهای تبلیغاتی و اسلایدرها (فقط خواندنی برای عموم، ویرایش فقط توسط ادمین فعال)
+2. `products`: تصاویر گالری و کاور محصولات و دسته‌بندی‌ها (فقط خواندنی برای عموم، ویرایش فقط توسط ادمین فعال)
 3. `avatars`: تصاویر آواتار و پروفایل کاربران
-4. `support-media`: فایل‌های پیوست چت و پشتیبانی (عکس، ویدیو، وویس صوتی)
-
-اگر به هر دلیلی مایگریشن روی استوریج اجرا نشد، می‌توانید از منوی **Storage** در داشبورد Supabase، ۴ باکت فوق را به صورت **Public Bucket** ایجاد کنید.
+4. `support-media`: فایل‌های پیوست چت و پشتیبانی (عکس، ویدیو، وویس صوتی) با مسیرهای یکتا و غیرقابل بازنویسی
 
 ---
 
 ## ۵. ایجاد کاربر مدیر ارشد در Supabase Auth (Admin Authentication)
 
-سیستم مدیریت پیشخوان AuraVibe از احراز هویت امن **Supabase Auth** بهره می‌برد. برای ایجاد ادمین اولیه:
+سیستم مدیریت پیشخوان AuraVibe از احراز هویت امن **Supabase Auth** بهره می‌برد. برای ایجاد مدیر ارشد اولیه (Super Admin):
 
 1. در داشبورد Supabase به بخش **Authentication > Users** بروید.
 2. روی **Add User > Create User** کلیک کنید:
-   - **Email**: `superadmin@auravibe.ir`
-   - **Password**: `superadmin123`
+   - **Email**: `superadmin@auravibe.ir` (یا ایمیل اداری مد نظر شما)
+   - **Password**: یک رمز عبور قوی و غیرقابل حدس انتخاب نمایید (حداقل ۱۲ کاراکتر شامل حروف بزرگ و کوچک، ارقام و نمادها).
    - گزینه **Auto Confirm User** را فعال کنید.
 3. مقدار **User UID** کاربر ساخته‌شده را کپی کنید.
 4. در **SQL Editor**، کاربر ادمین را به جدول `admin_users` متصل کنید:
@@ -95,8 +95,8 @@ INSERT INTO public.admin_users (
 ) VALUES (
   'UID_کپی_شده_از_مرحله_قبل',
   'ADM-1001',
-  'سوپر',
-  'ادمین',
+  'مدیر ارشد',
+  'آورا',
   'superadmin',
   'SUPER_ADMIN',
   '["manage_products", "manage_orders", "manage_banners", "manage_tickets", "manage_users", "manage_settings", "manage_magazine", "manage_seo", "view_analytics", "view_audit_logs"]'::jsonb,
@@ -104,11 +104,13 @@ INSERT INTO public.admin_users (
 ) ON CONFLICT (username) DO UPDATE SET auth_user_id = EXCLUDED.auth_user_id;
 ```
 
+> **نکته**: پس از ورود با حساب مدیر ارشد، ایجاد سایر مدیران به صورت مستقیم از طریق پیشخوان مدیریت و به کمک تابع امنیتی سرور `create_admin_user` انجام می‌شود و نیازی به عملیات دستی در دیتابیس نخواهد بود.
+
 ---
 
 ## ۶. درج داده‌های اولیه (Data Seeding)
 
-برای تزریق کاتالوگ محصولات اولیه، دسته‌بندی‌ها، بنرها، مقالات و تنظیمات فروشگاه:
+برای تزریق کاتالوگ محصولات اولیه، دسته‌بندی‌ها، بنرها و تنظیمات فروشگاه با دارایی‌های بومی و قطعی:
 
 ### روش الف: استفاده از اسکریپت خودکار Node.js
 ```bash
@@ -121,28 +123,7 @@ SUPABASE_URL=https://your-project.supabase.co SUPABASE_KEY=your-service-role-or-
 
 ---
 
-## ۷. انتقال داده‌های مرورگر قبلی (One-time LocalStorage Migration)
-
-اگر در مرورگر خود یا نسخه پیشین داده‌هایی در `localStorage` دارید و می‌خواهید آن‌ها را به سرور Supabase منتقل کنید:
-
-1. در فایل `.env.local` مقدار زیر را قرار دهید:
-   ```env
-   VITE_ENABLE_LOCAL_MIGRATION=true
-   ```
-2. پروژه را با `npm run dev` اجرا کنید و وارد برنامه شوید.
-3. در کنسول مرورگر (F12 > Console) دستور زیر را اجرا کنید:
-   ```javascript
-   await window.__AURA_MIGRATE__();
-   ```
-4. این ابزار به صورت خودکار:
-   - داده‌های ذخیره شده در کلیدهای `aura_*` را استخراج می‌کند.
-   - تصاویر Base64 را به فایل تبدیل کرده و در باکت‌های مناسب Supabase Storage آپلود می‌کند.
-   - رکوردها را در جداول متناظر در دیتابیس PostgreSQL ذخیره (Upsert) می‌کند.
-5. پس از پایان عملیات، برای مسائل امنیتی مجدداً `VITE_ENABLE_LOCAL_MIGRATION=false` را تنظیم نمایید.
-
----
-
-## ۸. استقرار روی GitHub Pages (Deployment)
+## ۷. استقرار روی GitHub Pages (Deployment)
 
 برای استقرار خودکار توسط GitHub Actions:
 1. در مخزن گیت‌هاب پروژه به مسیر **Settings > Secrets and variables > Actions** بروید.
@@ -153,7 +134,7 @@ SUPABASE_URL=https://your-project.supabase.co SUPABASE_KEY=your-service-role-or-
 
 ---
 
-## ۹. سناریوی آزمون و تایید صحت عملکرد (Verification)
+## ۸. سناریوی آزمون و تایید صحت عملکرد (Verification)
 
 1. **همگام‌سازی چند دستگاهی (Multi-Device Sync)**:
    - در دستگاه/مرورگر A وارد پنل مدیریت شوید و عنوان یک بنر یا قیمت یک محصول را ویرایش نمایید.
@@ -161,7 +142,8 @@ SUPABASE_URL=https://your-project.supabase.co SUPABASE_KEY=your-service-role-or-
 2. **پایداری داده‌ها پس از پاک‌سازی حافظه مرورگر**:
    - در مرورگر حافظه LocalStorage و Cache را به طور کامل پاک کنید (Clear Site Data).
    - با رفرش صفحه مشاهده خواهید کرد که هیچ داده‌ای از دست نرفته و تمام اطلاعات از سرور متمرکز دریافت می‌شوند.
-3. **عدم ذخیره Base64**:
-   - در جدول `products` و `banners` در داشبورد دیتابیس Supabase بررسی کنید؛ فیلدهای تصویر شامل آدرس URL مستقیم به Supabase Storage هستند و رشته‌های طولانی Base64 ذخیره نمی‌شوند.
-4. **امنیت RLS**:
-   - جدول `audit_logs` فقط برای ادمین‌های لاگین‌شده قابل دسترسی است و دسترسی عمومی به آن مسدود می‌باشد.
+3. **عدم وابستگی به تصاویر نامطمئن خارجی**:
+   - تمام تصاویر کاتالوگ و دسته‌بندی‌ها از دارایی‌های برداری استاندارد SVG داخلی پروژه یا Storage متمرکز استفاده می‌کنند.
+4. **امنیت RLS و احراز هویت ادمین**:
+   - جدول `audit_logs` و تغییرات کاتالوگ محصولات/بنرها فقط برای ادمین‌های احراز هویت‌شده فعال مجاز است.
+   - ثبت سفارشات و تیکت‌ها از طریق توابع تایید هویت سمت سرور (`create_customer_order` و `create_customer_ticket`) انجام می‌پذیرد.

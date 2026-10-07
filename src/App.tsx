@@ -52,7 +52,8 @@ import {
   Layers,
   HelpCircle,
   Sparkles,
-  MapPin
+  MapPin,
+  AlertTriangle
 } from 'lucide-react';
 import './index.css';
 
@@ -151,6 +152,7 @@ function App() {
 
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [checkoutModal, setCheckoutModal] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   const refreshAllAppData = async () => {
     try {
@@ -172,8 +174,10 @@ function App() {
       if (admin && !currentAdmin) {
         setCurrentAdmin(admin);
       }
-    } catch (err) {
-      console.error('Failed to load initial app data:', err);
+      setBackendError(null);
+    } catch (err: any) {
+      console.error('Failed to load initial app data from Supabase:', err);
+      setBackendError(err?.message || 'خطا در برقراری ارتباط با پایگاه‌داده متمرکز Supabase.');
     }
   };
 
@@ -334,6 +338,21 @@ function App() {
 
   return (
     <main className="pb-nav min-h-screen overflow-x-hidden bg-[#fffaf0] text-[#37192C] font-vazir">
+      {backendError && (
+        <div className="sticky top-0 z-50 flex items-center justify-between gap-3 bg-red-600 px-4 py-3 text-white shadow-md" dir="rtl">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <AlertTriangle className="h-5 w-5 shrink-0" />
+            <span>{backendError}</span>
+          </div>
+          <button
+            onClick={() => refreshAllAppData()}
+            className="flex items-center gap-1 rounded bg-white/20 px-3 py-1 text-xs font-bold hover:bg-white/30"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            تلاش مجدد
+          </button>
+        </div>
+      )}
       {intro && <Intro />}
       {followModal && <FollowModal close={() => setFollowModal(false)} />}
 

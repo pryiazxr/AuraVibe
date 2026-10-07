@@ -8,16 +8,12 @@ export const isSupabaseConfigured = (): boolean => {
 };
 
 if (!isSupabaseConfigured()) {
-  console.warn(
-    '[AuraVibe Supabase] Supabase credentials are not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your .env.local file. Centralized database operations will require valid configuration.'
+  throw new Error(
+    'Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.'
   );
 }
 
-// Fallback dummy URL and key to prevent createClient constructor from crashing at bundle-time
-const activeUrl = supabaseUrl || 'https://placeholder-project.supabase.co';
-const activeKey = supabaseKey || 'placeholder-anon-key';
-
-export const supabase: SupabaseClient = createClient(activeUrl, activeKey, {
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -28,6 +24,7 @@ export const supabase: SupabaseClient = createClient(activeUrl, activeKey, {
 /**
  * Uploads a File, Blob, or base64 Data URL to a Supabase Storage bucket.
  * Returns the public URL of the uploaded asset.
+ * Generates unique, non-colliding UUID filepaths to prevent overwriting.
  */
 export async function uploadToStorage(
   bucket: 'banners' | 'products' | 'avatars' | 'support-media',
@@ -35,7 +32,7 @@ export async function uploadToStorage(
   customFileName?: string
 ): Promise<string> {
   if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured. Please define VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+    throw new Error('Supabase configuration is missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
   }
 
   let blob: Blob;
@@ -54,7 +51,7 @@ export async function uploadToStorage(
       }
       blob = new Blob([bytes], { type: mime });
     } else if (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://')) {
-      // Already an HTTP URL, no upload needed
+      // Already a remote HTTP URL
       return fileOrDataUrl;
     } else {
       blob = new Blob([fileOrDataUrl], { type: 'text/plain' });
@@ -71,11 +68,12 @@ export async function uploadToStorage(
     }
   }
 
-  const cleanName = customFileName || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-  const filePath = cleanName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const randomId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 10);
+  const cleanName = customFileName || `${bucket}/${Date.now()}_${randomId}.${fileExt}`;
+  const filePath = cleanName.replace(/[^a-zA-Z0-9/._-]/g, '_');
 
   const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, blob, {
-    upsert: true,
+    upsert: false,
     contentType: blob.type || 'image/png',
   });
 

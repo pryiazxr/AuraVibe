@@ -42,10 +42,10 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false }
 });
 
-const satinImage = 'https://images.unsplash.com/photo-1576053139778-7e32f2ae3cfd?w=800&auto=format&fit=crop&q=80';
-const jewelryImage = 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=800&auto=format&fit=crop&q=80';
-const necklaceImage = 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&auto=format&fit=crop&q=80';
-const watchImage = 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=800&auto=format&fit=crop&q=80';
+const satinImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%2337192C"/><circle cx="150" cy="150" r="100" fill="%23FFF3C5"/><path d="M100 180 Q150 90 200 180" stroke="%2337192C" stroke-width="12" fill="none"/></svg>';
+const jewelryImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23FFF3C5"/><circle cx="150" cy="150" r="90" fill="%2337192C"/><polygon points="150,75 172,127 225,127 180,157 198,210 150,180 102,210 120,157 75,127 128,127" fill="%23FFF3C5"/></svg>';
+const necklaceImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%2337192C"/><path d="M70 80 Q150 220 230 80" stroke="%23FFF3C5" stroke-width="10" fill="none"/><circle cx="150" cy="180" r="22" fill="%23FFF3C5"/></svg>';
+const watchImage = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23FFF3C5"/><circle cx="150" cy="150" r="75" stroke="%2337192C" stroke-width="10" fill="none"/><line x1="150" y1="150" x2="150" y2="105" stroke="%2337192C" stroke-width="8"/><line x1="150" y1="150" x2="185" y2="150" stroke="%2337192C" stroke-width="8"/></svg>';
 
 const categories = [
   { id: 1, name: 'ساعت', image: watchImage, display_order: 1 },
@@ -536,61 +536,74 @@ async function seed() {
   try {
     // 1. Categories
     console.log('Inserting categories...');
-    await supabase.from('categories').upsert(categories);
+    const { error: catErr } = await supabase.from('categories').upsert(categories);
+    if (catErr) throw new Error(`Categories insert failed: ${catErr.message}`);
 
     // 2. Product Badges
     console.log('Inserting product badges...');
-    await supabase.from('product_badges').upsert(badges);
+    const { error: badgeErr } = await supabase.from('product_badges').upsert(badges);
+    if (badgeErr) throw new Error(`Product badges insert failed: ${badgeErr.message}`);
 
     // 3. Products
     console.log(`Inserting ${products.length} products...`);
     // Insert in batches of 50
     for (let i = 0; i < products.length; i += 50) {
       const chunk = products.slice(i, i + 50);
-      const { error } = await supabase.from('products').upsert(chunk);
-      if (error) console.error('Error inserting product chunk:', error);
+      const { error: prodErr } = await supabase.from('products').upsert(chunk);
+      if (prodErr) throw new Error(`Product chunk [${i}-${i + chunk.length}] insert failed: ${prodErr.message}`);
     }
 
     // 4. Banners
     console.log('Inserting banners...');
-    await supabase.from('banners').upsert(banners);
+    const { error: bannerErr } = await supabase.from('banners').upsert(banners);
+    if (bannerErr) throw new Error(`Banners insert failed: ${bannerErr.message}`);
 
     // 5. Users
     console.log('Inserting users...');
-    await supabase.from('users').upsert(users);
+    const { error: userErr } = await supabase.from('users').upsert(users);
+    if (userErr) throw new Error(`Users insert failed: ${userErr.message}`);
 
     // 6. Orders
     console.log('Inserting orders...');
-    await supabase.from('orders').upsert(orders);
+    const { error: orderErr } = await supabase.from('orders').upsert(orders);
+    if (orderErr) throw new Error(`Orders insert failed: ${orderErr.message}`);
 
     // 7. Support Tickets
     console.log('Inserting support tickets...');
-    await supabase.from('support_tickets').upsert(tickets);
+    const { error: ticketErr } = await supabase.from('support_tickets').upsert(tickets);
+    if (ticketErr) throw new Error(`Support tickets insert failed: ${ticketErr.message}`);
 
     // 8. Articles
     console.log('Inserting articles...');
-    await supabase.from('articles').upsert(articles);
+    const { error: artErr } = await supabase.from('articles').upsert(articles);
+    if (artErr) throw new Error(`Articles insert failed: ${artErr.message}`);
 
     // 9. Global SEO
     console.log('Inserting global SEO...');
-    await supabase.from('global_seo').upsert(globalSeo);
+    const { error: seoErr } = await supabase.from('global_seo').upsert(globalSeo);
+    if (seoErr) throw new Error(`Global SEO insert failed: ${seoErr.message}`);
 
     // 10. General Settings
     console.log('Inserting general settings...');
-    await supabase.from('general_settings').upsert(generalSettings);
+    const { error: setErr } = await supabase.from('general_settings').upsert(generalSettings);
+    if (setErr) throw new Error(`General settings insert failed: ${setErr.message}`);
 
     // 11. Redirects
     console.log('Inserting redirects...');
-    await supabase.from('redirects').upsert(redirects);
+    const { error: redErr } = await supabase.from('redirects').upsert(redirects);
+    if (redErr) throw new Error(`Redirects insert failed: ${redErr.message}`);
 
     // 12. Audit Logs
     console.log('Inserting audit logs...');
-    await supabase.from('audit_logs').upsert(auditLogs);
+    const { error: auditErr } = await supabase.from('audit_logs').upsert(auditLogs);
+    if (auditErr) throw new Error(`Audit logs insert failed: ${auditErr.message}`);
 
     // 13. Admin accounts provision
     console.log('Checking admin users provisioning...');
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.log('Service role key detected. Provisioning Supabase Auth accounts...');
+      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'AuraVibe_Admin_2026!';
+      const managerPassword = process.env.INITIAL_MANAGER_PASSWORD || 'AuraVibe_Mgr_2026!';
       const adminsToProvision = [
         {
           id: 100,
@@ -599,7 +612,7 @@ async function seed() {
           last_name: 'کریمی',
           username: 'superadmin',
           email: 'superadmin@auravibe.ir',
-          password: 'superadmin123',
+          password: adminPassword,
           role: 'SUPER_ADMIN',
           custom_permissions: [
             'manage_products',
@@ -621,7 +634,7 @@ async function seed() {
           last_name: 'کریمی',
           username: 'store_manager',
           email: 'store_manager@auravibe.ir',
-          password: 'manager123',
+          password: managerPassword,
           role: 'MANAGER',
           custom_permissions: ['manage_products', 'manage_orders', 'manage_banners', 'manage_support']
         }
@@ -643,13 +656,16 @@ async function seed() {
         let authId = userData?.user?.id;
         if (createErr && createErr.message.includes('already registered')) {
           // Find user by email
-          const { data: listData } = await supabase.auth.admin.listUsers();
+          const { data: listData, error: listErr } = await supabase.auth.admin.listUsers();
+          if (listErr) throw listErr;
           const existing = listData?.users?.find((u) => u.email === adm.email);
           authId = existing?.id;
+        } else if (createErr) {
+          throw new Error(`Admin user creation failed for ${adm.username}: ${createErr.message}`);
         }
 
         if (authId) {
-          await supabase.from('admin_users').upsert({
+          const { error: admUpsertErr } = await supabase.from('admin_users').upsert({
             id: adm.id,
             auth_user_id: authId,
             admin_code: adm.admin_code,
@@ -661,6 +677,7 @@ async function seed() {
             status: 'active',
             last_login: 'هم‌اکنون'
           });
+          if (admUpsertErr) throw new Error(`Admin users record upsert failed: ${admUpsertErr.message}`);
           console.log(`Admin user '${adm.username}' provisioned with auth_user_id: ${authId}`);
         }
       }

@@ -360,7 +360,7 @@ class DatabaseService {
   private listeners: Set<() => void> = new Set();
   private realtimeChannel: any = null;
 
-  // In-memory caches to allow instant initial reads and fast synchronous lookups
+  // Runtime In-memory caches to allow fast synchronous lookups during active sessions
   private cachedCategories: CategoryItem[] = [];
   private cachedBadges: ProductBadgeItem[] = [];
   private cachedProducts: Product[] = [];
@@ -373,45 +373,8 @@ class DatabaseService {
   private cachedAuditLogs: AuditLog[] = [];
   private cachedRedirects: RedirectRule[] = [];
   private cachedNotifications: AppNotification[] = [];
-  private cachedSEO: GlobalSEO = {
-    siteTitle: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-    defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
-    defaultOgImage: '',
-    defaultCanonical: 'https://auravibe.ir',
-    organizationName: 'مجموعه آورا وایب و وینا اکسسوری',
-    organizationLogo: '',
-    robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml',
-    sitemapGeneratedAt: new Date().toISOString()
-  };
-  private cachedSettings: GeneralSettings = {
-    siteName: 'AuraVibe | آورا وایب',
-    logoUrl: '',
-    faviconUrl: '',
-    contactEmail: 'hello@auravibe.ir',
-    contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
-    address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
-    workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
-    socialLinks: {
-      instagram: 'https://instagram.com/auravibe',
-      telegram: 'https://t.me/auravibe',
-      bale: 'https://ble.ir/auravibe'
-    },
-    timezone: 'Asia/Tehran',
-    language: 'fa',
-    headerLinks: [
-      { title: 'صفحه اصلی', url: '/' },
-      { title: 'جدیدترین‌ها', url: '/category/new' },
-      { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
-      { title: 'مجله استایل', url: '/journal' }
-    ],
-    footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
-    notifications: {
-      newOrder: true,
-      newUser: true,
-      newTicket: true,
-      securityAlert: true
-    }
-  };
+  private cachedSEO: GlobalSEO | null = null;
+  private cachedSettings: GeneralSettings | null = null;
 
   constructor() {
     this.initRealtime();
@@ -421,16 +384,29 @@ class DatabaseService {
     if (!isSupabaseConfigured()) return;
 
     try {
-      this.realtimeChannel = supabase
-        .channel('public:auravibe-changes')
-        .on(
+      const tables = [
+        'products',
+        'banners',
+        'categories',
+        'product_badges',
+        'orders',
+        'support_tickets',
+        'general_settings'
+      ];
+
+      this.realtimeChannel = supabase.channel('auravibe-table-sync');
+
+      for (const table of tables) {
+        this.realtimeChannel.on(
           'postgres_changes',
-          { event: '*', schema: 'public' },
+          { event: '*', schema: 'public', table },
           () => {
             this.notify();
           }
-        )
-        .subscribe();
+        );
+      }
+
+      this.realtimeChannel.subscribe();
     } catch (err) {
       console.warn('[AuraVibe DB] Realtime subscription could not be established:', err);
     }
@@ -464,22 +440,18 @@ class DatabaseService {
 
   // --- PRODUCT BADGES / LABELS ---
   public async getBadges(): Promise<ProductBadgeItem[]> {
-    if (!isSupabaseConfigured()) return this.cachedBadges;
-    try {
-      const { data, error } = await supabase.from('product_badges').select('*').order('id', { ascending: true });
-      if (error) throw error;
-      this.cachedBadges = (data || []).map(rowToBadge);
-      return this.cachedBadges;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching badges:', err);
-      return this.cachedBadges;
+    const { data, error } = await supabase.from('product_badges').select('*').order('id', { ascending: true });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching badges:', error);
+      throw error;
     }
+    this.cachedBadges = (data || []).map(rowToBadge);
+    return this.cachedBadges;
   }
 
   public async saveBadge(badgeData: Partial<ProductBadgeItem>, adminUser?: { id: number; name: string }): Promise<ProductBadgeItem> {
     const row = badgeToRow(badgeData);
     if (!row.id) {
-      // In PostgreSQL, identity or generate
       delete row.id;
     }
     const { data, error } = await supabase.from('product_badges').upsert(row).select().single();
@@ -525,19 +497,16 @@ class DatabaseService {
 
   // --- CATEGORIES ---
   public async getCategories(): Promise<CategoryItem[]> {
-    if (!isSupabaseConfigured()) return this.cachedCategories;
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (error) throw error;
-      this.cachedCategories = (data || []).map(rowToCategory);
-      return this.cachedCategories;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching categories:', err);
-      return this.cachedCategories;
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching categories:', error);
+      throw error;
     }
+    this.cachedCategories = (data || []).map(rowToCategory);
+    return this.cachedCategories;
   }
 
   public async saveCategory(catData: Partial<CategoryItem>, adminUser?: { id: number; name: string }): Promise<CategoryItem> {
@@ -588,37 +557,28 @@ class DatabaseService {
 
   // --- PRODUCTS ---
   public async getProducts(): Promise<Product[]> {
-    if (!isSupabaseConfigured()) return this.cachedProducts;
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('id', { ascending: false });
-      if (error) throw error;
-      this.cachedProducts = (data || []).map(rowToProduct);
-      return this.cachedProducts;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching products:', err);
-      return this.cachedProducts;
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('id', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching products:', error);
+      throw error;
     }
+    this.cachedProducts = (data || []).map(rowToProduct);
+    return this.cachedProducts;
   }
 
   public async getProductById(id: number): Promise<Product | undefined> {
-    if (!isSupabaseConfigured()) return this.cachedProducts.find((p) => p.id === id);
-    try {
-      const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
-      if (error || !data) return undefined;
-      return rowToProduct(data);
-    } catch {
-      return undefined;
-    }
+    const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+    if (error || !data) return undefined;
+    return rowToProduct(data);
   }
 
   public async saveProduct(prodData: Partial<Product>, adminUser?: { id: number; name: string }): Promise<Product> {
     const row = productToRow(prodData);
     if (!row.id) {
       row.id = Math.floor(100000 + Math.random() * 899999);
-      if (!row.product_code) row.product_code = `AUR-${row.id}`;
     }
 
     const { data, error } = await supabase.from('products').upsert(row).select().single();
@@ -635,31 +595,12 @@ class DatabaseService {
         action: prodData.id ? 'Product Edited' : 'Product Created',
         module: 'Products',
         target: saved.name,
-        details: `کد: ${saved.productCode} | قیمت: ${saved.price} تومان | دسته: ${saved.category}`
+        details: `کد محصول: ${saved.productCode} | قیمت: ${saved.price} تومان`
       }).catch(console.error);
     }
 
     this.notify();
     return saved;
-  }
-
-  public async deleteArticle(id: number, adminUser?: { id: number; name: string }): Promise<void> {
-    const { error } = await supabase.from('articles').delete().eq('id', id);
-    if (error) {
-      console.error('[AuraVibe DB] Error deleting article:', error);
-      throw error;
-    }
-    if (adminUser) {
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Article Deleted',
-        module: 'Content',
-        target: String(id),
-        details: `مقاله شناسه ${id} حذف شد`
-      }).catch(console.error);
-    }
-    this.notify();
   }
 
   public async deleteProduct(id: number, adminUser?: { id: number; name: string }): Promise<void> {
@@ -675,7 +616,7 @@ class DatabaseService {
         action: 'Product Deleted',
         module: 'Products',
         target: String(id),
-        details: `محصول شناسه ${id} حذف گردید`
+        details: `محصول با شناسه ${id} حذف شد`
       }).catch(console.error);
     }
     this.notify();
@@ -683,19 +624,16 @@ class DatabaseService {
 
   // --- BANNERS ---
   public async getBanners(): Promise<Banner[]> {
-    if (!isSupabaseConfigured()) return this.cachedBanners;
-    try {
-      const { data, error } = await supabase
-        .from('banners')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (error) throw error;
-      this.cachedBanners = (data || []).map(rowToBanner);
-      return this.cachedBanners;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching banners:', err);
-      return this.cachedBanners;
+    const { data, error } = await supabase
+      .from('banners')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching banners:', error);
+      throw error;
     }
+    this.cachedBanners = (data || []).map(rowToBanner);
+    return this.cachedBanners;
   }
 
   public async getActiveBanners(): Promise<Banner[]> {
@@ -738,7 +676,11 @@ class DatabaseService {
     }));
 
     for (const item of updates) {
-      await supabase.from('banners').update({ display_order: item.display_order }).eq('id', item.id);
+      const { error } = await supabase.from('banners').update({ display_order: item.display_order }).eq('id', item.id);
+      if (error) {
+        console.error('[AuraVibe DB] Error reordering banner:', error);
+        throw error;
+      }
     }
 
     if (adminUser) {
@@ -776,19 +718,16 @@ class DatabaseService {
 
   // --- ORDERS ---
   public async getOrders(): Promise<Order[]> {
-    if (!isSupabaseConfigured()) return this.cachedOrders;
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      this.cachedOrders = (data || []).map(rowToOrder);
-      return this.cachedOrders;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching orders:', err);
-      return this.cachedOrders;
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching orders:', error);
+      throw error;
     }
+    this.cachedOrders = (data || []).map(rowToOrder);
+    return this.cachedOrders;
   }
 
   public async getValidOrders(): Promise<Order[]> {
@@ -798,8 +737,13 @@ class DatabaseService {
   }
 
   public async getOrderById(id: string): Promise<Order | undefined> {
-    const all = await this.getOrders();
-    return all.find((o) => o.id === id || o.orderNumber === id);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(`id.eq.${id},order_number.eq.${id}`)
+      .maybeSingle();
+    if (error || !data) return undefined;
+    return rowToOrder(data);
   }
 
   public async createOrder(orderPayload: {
@@ -807,6 +751,30 @@ class DatabaseService {
     items: OrderItemSnapshot[];
     shippingMethod: ShippingMethod;
   }): Promise<Order> {
+    // 1. Try secure RPC create_customer_order
+    const { data: rpcData, error: rpcError } = await supabase.rpc('create_customer_order', {
+      p_customer: orderPayload.customer,
+      p_items: orderPayload.items,
+      p_shipping_method: orderPayload.shippingMethod
+    });
+
+    if (!rpcError && rpcData) {
+      const saved = rowToOrder(rpcData);
+      this.cachedOrders.unshift(saved);
+
+      // Auto notify admin
+      this.addNotification({
+        targetRole: 'admin',
+        title: 'سفارش جدید',
+        message: `سفارش جدید ${saved.orderNumber} به ارزش ${saved.totalAmount} تومان ثبت گردید.`,
+        type: 'order'
+      }).catch(console.error);
+
+      this.notify();
+      return saved;
+    }
+
+    // 2. Direct validated insert fallback
     const orderNum = `ORD-${Math.floor(10000 + Math.random() * 89999)}`;
     const now = new Date();
 
@@ -844,23 +812,12 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToOrder(data);
+    this.cachedOrders.unshift(saved);
 
-    // Update order count for user
-    if (orderPayload.customer.userId) {
-      const user = await this.getUserById(orderPayload.customer.userId);
-      if (user) {
-        await supabase
-          .from('users')
-          .update({ order_count: (user.orderCount || 0) + 1 })
-          .eq('id', user.id);
-      }
-    }
-
-    // Add notification
     this.addNotification({
       targetRole: 'admin',
-      title: 'سفارش جدید ثبت شد',
-      message: `سفارش ${orderNum} به مبلغ ${totalAmount.toLocaleString('fa-IR')} تومان ثبت گردید.`,
+      title: 'سفارش جدید',
+      message: `سفارش جدید ${saved.orderNumber} به ارزش ${saved.totalAmount} تومان ثبت گردید.`,
       type: 'order'
     }).catch(console.error);
 
@@ -870,53 +827,33 @@ class DatabaseService {
 
   public async updateOrderStatus(
     orderId: string,
-    newStatus: OrderStatus,
+    status: OrderStatus,
     adminUser: { id: number; name: string },
     note?: string,
-    shippingMethodKey?: ShippingMethodKey
+    trackingCode?: string
   ): Promise<void> {
-    const order = await this.getOrderById(orderId);
-    if (!order) return;
-
-    const oldStatus = order.orderStatus;
-    order.orderStatus = newStatus;
-    order.updatedAt = new Date().toISOString();
-
-    if (shippingMethodKey) {
-      if (shippingMethodKey === 'POST') {
-        order.shippingMethod = {
-          key: 'POST',
-          title: 'پست پیشتاز',
-          subtitle: 'ارسال به سراسر کشور (۲ تا ۴ روز کاری)',
-          costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-        };
-      } else if (shippingMethodKey === 'TIPAX') {
-        order.shippingMethod = {
-          key: 'TIPAX',
-          title: 'تیپاکس',
-          subtitle: 'ارسال اکسپرس به سراسر کشور',
-          costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-        };
-      } else {
-        order.shippingMethod = {
-          key: 'AURA_EXPRESS',
-          title: 'پیک اختصاصی آورا',
-          subtitle: 'فقط تهران (تحویل همان روز)',
-          costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-        };
-      }
-    }
-
     const now = new Date();
-    order.timeline.push({
-      status: newStatus,
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('سفارش مورد نظر یافت نشد.');
+
+    const newTimelineEvent: TimelineEvent = {
+      status,
       date: now.toLocaleDateString('fa-IR'),
       time: now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-      note: note || `وضعیت سفارش توسط ${adminUser.name} به "${newStatus}" تغییر نمود.`
-    });
+      note: note || `وضعیت سفارش توسط ${adminUser.name} به «${status}» تغییر یافت.`
+    };
 
-    const row = orderToRow(order);
-    const { error } = await supabase.from('orders').update(row).eq('id', orderId);
+    const updatedTimeline = [...order.timeline, newTimelineEvent];
+    const updatePayload: Record<string, any> = {
+      order_status: status,
+      timeline: updatedTimeline,
+      updated_at: now.toISOString()
+    };
+    if (trackingCode !== undefined) {
+      updatePayload.tracking_code = trackingCode;
+    }
+
+    const { error } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
     if (error) {
       console.error('[AuraVibe DB] Error updating order status:', error);
       throw error;
@@ -928,42 +865,47 @@ class DatabaseService {
       action: 'Order Status Changed',
       module: 'Orders',
       target: order.orderNumber,
-      details: `تغییر از "${oldStatus}" به "${newStatus}"`
+      details: `وضعیت به «${status}» تغییر یافت`
     }).catch(console.error);
 
-    if (order.customer.userId) {
-      this.addNotification({
-        targetRole: 'user',
-        userId: order.customer.userId,
-        title: `به‌روزرسانی وضعیت سفارش ${order.orderNumber}`,
-        message: `وضعیت سفارش شما به "${newStatus}" تغییر یافت.`,
-        type: 'order'
-      }).catch(console.error);
-    }
+    this.notify();
+  }
 
+  public async deleteOrder(orderId: string, adminUser: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting order:', error);
+      throw error;
+    }
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: 'Order Deleted',
+      module: 'Orders',
+      target: orderId,
+      details: 'سفارش از سیستم حذف گردید'
+    }).catch(console.error);
     this.notify();
   }
 
   // --- USERS & ADMINS ---
   public async getUsers(): Promise<User[]> {
-    if (!isSupabaseConfigured()) return this.cachedUsers;
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('id', { ascending: true });
-      if (error) throw error;
-      this.cachedUsers = (data || []).map(rowToUser);
-      return this.cachedUsers;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching users:', err);
-      return this.cachedUsers;
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('id', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching users:', error);
+      throw error;
     }
+    this.cachedUsers = (data || []).map(rowToUser);
+    return this.cachedUsers;
   }
 
   public async getUserById(id: number): Promise<User | undefined> {
-    const users = await this.getUsers();
-    return users.find((u) => u.id === id);
+    const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return undefined;
+    return rowToUser(data);
   }
 
   public async saveUser(userData: Partial<User>, adminUser?: { id: number; name: string }): Promise<User> {
@@ -972,7 +914,7 @@ class DatabaseService {
       row.id = Math.floor(1000 + Math.random() * 8999);
       if (!row.registration_date) row.registration_date = new Date().toLocaleDateString('fa-IR');
       if (!row.status) row.status = 'active';
-      if (!row.last_login) row.last_login = 'هم‌اکنون';
+      if (!row.order_count) row.order_count = 0;
     }
 
     const { data, error } = await supabase.from('users').upsert(row).select().single();
@@ -986,10 +928,10 @@ class DatabaseService {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
-        action: userData.id ? 'User Edited' : 'User Created',
+        action: userData.id ? 'User Profile Updated' : 'New User Created',
         module: 'Users',
         target: `${saved.firstName} ${saved.lastName}`,
-        details: userData.id ? `وضعیت: ${saved.status}` : `شماره تماس: ${saved.phone}`
+        details: `شماره همراه: ${saved.phone}`
       }).catch(console.error);
     }
 
@@ -1006,14 +948,16 @@ class DatabaseService {
       console.error('[AuraVibe DB] Error blocking user:', error);
       throw error;
     }
+
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
       action: 'User Blocked',
       module: 'Users',
       target: String(userId),
-      details: `دلیل مسدودی: ${blockReason}`
+      details: `علت مسدودی: ${blockReason}`
     }).catch(console.error);
+
     this.notify();
   }
 
@@ -1026,40 +970,34 @@ class DatabaseService {
       console.error('[AuraVibe DB] Error unblocking user:', error);
       throw error;
     }
+
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
       action: 'User Unblocked',
       module: 'Users',
       target: String(userId),
-      details: 'کاربر از حالت مسدود خارج گردید'
+      details: 'حساب کاربر مجدداً فعال گردید'
     }).catch(console.error);
+
     this.notify();
   }
 
-  // --- ADMIN USERS & SUPABASE AUTH ---
   public async getAdmins(): Promise<AdminUser[]> {
-    if (!isSupabaseConfigured()) return this.cachedAdmins;
-    try {
-      const { data, error } = await supabase
-        .from('admin_users')
-        .select('*')
-        .order('id', { ascending: true });
-      if (error) throw error;
-      this.cachedAdmins = (data || []).map(rowToAdmin);
-      return this.cachedAdmins;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching admins:', err);
-      return this.cachedAdmins;
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('*')
+      .order('id', { ascending: true });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching admins:', error);
+      throw error;
     }
+    this.cachedAdmins = (data || []).map(rowToAdmin);
+    return this.cachedAdmins;
   }
 
   public async getCurrentAdmin(): Promise<AdminUser | null> {
-    if (!isSupabaseConfigured()) {
-      // Fallback in unconfigured mode
-      const admins = await this.getAdmins();
-      return admins[0] || null;
-    }
+    if (!isSupabaseConfigured()) return null;
 
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -1086,7 +1024,7 @@ class DatabaseService {
     }
 
     const email = usernameOrEmail.includes('@')
-      ? usernameOrEmail
+      ? usernameOrEmail.trim().toLowerCase()
       : `${usernameOrEmail.trim().toLowerCase()}@auravibe.ir`;
 
     const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
@@ -1146,17 +1084,20 @@ class DatabaseService {
       throw new Error('فقط مدیر اصلی (SUPER_ADMIN) مجاز به مدیریت حساب ادمین‌ها می‌باشد.');
     }
 
-    const row = adminToRow(adminData);
-
     if (adminData.id) {
       // Edit existing application record
+      const row = adminToRow(adminData);
+      delete row.auth_user_id; // Never overwrite auth_user_id on update
       const { data, error } = await supabase
         .from('admin_users')
         .update(row)
         .eq('id', adminData.id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error('[AuraVibe DB] Error updating admin user:', error);
+        throw error;
+      }
       const saved = rowToAdmin(data);
       this.addAuditLog({
         adminId: currentSuperAdmin.id,
@@ -1169,13 +1110,16 @@ class DatabaseService {
       this.notify();
       return saved;
     } else {
-      // Create new admin
-      const rawPassword = adminData.password || adminData.passwordHash || 'admin123';
-      const email = `${(adminData.username || `admin_${Date.now()}`).trim().toLowerCase()}@auravibe.ir`;
+      // Create new admin user in auth.users and admin_users via secure RPC
+      const rawPassword = adminData.password || adminData.passwordHash;
+      if (!rawPassword) {
+        throw new Error('کلمه عبور اختصاصی برای ایجاد حساب ادمین الزامی است.');
+      }
+      const cleanUsername = (adminData.username || '').trim().toLowerCase();
+      const email = `${cleanUsername}@auravibe.ir`;
 
-      // Try RPC if defined
       const { data: rpcResult, error: rpcError } = await supabase.rpc('create_admin_user', {
-        p_username: adminData.username || `admin_${Date.now()}`,
+        p_username: cleanUsername,
         p_email: email,
         p_password: rawPassword,
         p_first_name: adminData.firstName || 'ادمین',
@@ -1184,34 +1128,26 @@ class DatabaseService {
         p_permissions: adminData.customPermissions || ['manage_products', 'manage_orders']
       });
 
-      if (!rpcError && rpcResult?.user_id) {
-        const admins = await this.getAdmins();
-        const saved = admins.find((a) => a.username === adminData.username) || {
-          id: Date.now(),
-          adminCode: `ADM-${Math.floor(100 + Math.random() * 899)}`,
-          firstName: adminData.firstName || 'ادمین',
-          lastName: adminData.lastName || 'جدید',
-          username: adminData.username || 'admin',
-          role: adminData.role || 'MANAGER',
-          customPermissions: adminData.customPermissions || [],
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          lastLogin: 'هرگز'
-        };
-        this.notify();
-        return saved;
+      if (rpcError) {
+        console.error('[AuraVibe DB] Error creating admin user via RPC:', rpcError);
+        throw rpcError;
       }
 
-      // Direct fallback insert if RLS permits
-      row.id = Date.now();
-      row.admin_code = `ADM-${Math.floor(100 + Math.random() * 899)}`;
-      row.auth_user_id = row.auth_user_id || crypto.randomUUID();
-      const { data, error } = await supabase.from('admin_users').insert(row).select().single();
-      if (error) {
-        console.error('[AuraVibe DB] Error creating admin:', error);
-        throw error;
+      const admins = await this.getAdmins();
+      const saved = admins.find((a) => a.username === cleanUsername);
+      if (!saved) {
+        throw new Error('حساب ادمین ایجاد شد، لطفاً صفحه را مجدداً بارگذاری فرمایید.');
       }
-      const saved = rowToAdmin(data);
+
+      this.addAuditLog({
+        adminId: currentSuperAdmin.id,
+        adminName: currentSuperAdmin.name,
+        action: 'Admin Account Created',
+        module: 'Admins',
+        target: saved.username,
+        details: `کد ادمین: ${saved.adminCode} | نقش: ${saved.role}`
+      }).catch(console.error);
+
       this.notify();
       return saved;
     }
@@ -1219,19 +1155,16 @@ class DatabaseService {
 
   // --- SUPPORT TICKETS ---
   public async getTickets(): Promise<SupportTicket[]> {
-    if (!isSupabaseConfigured()) return this.cachedTickets;
-    try {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      this.cachedTickets = (data || []).map(rowToTicket);
-      return this.cachedTickets;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching tickets:', err);
-      return this.cachedTickets;
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching tickets:', error);
+      throw error;
     }
+    this.cachedTickets = (data || []).map(rowToTicket);
+    return this.cachedTickets;
   }
 
   public async getUnreadSupportConversationsCount(): Promise<number> {
@@ -1250,6 +1183,34 @@ class DatabaseService {
     mediaUrl?: string;
     mediaType?: 'text' | 'image' | 'video' | 'audio';
   }): Promise<SupportTicket> {
+    // 1. Try secure RPC create_customer_ticket
+    const { data: rpcData, error: rpcError } = await supabase.rpc('create_customer_ticket', {
+      p_customer_name: payload.customerName,
+      p_customer_phone: payload.customerPhone,
+      p_subject: payload.subject,
+      p_category: payload.category,
+      p_initial_message: payload.initialMessage,
+      p_media_url: payload.mediaUrl || null,
+      p_media_type: payload.mediaType || 'text',
+      p_customer_avatar: payload.customerAvatar || null
+    });
+
+    if (!rpcError && rpcData) {
+      const saved = rowToTicket(rpcData);
+      this.cachedTickets.unshift(saved);
+
+      this.addNotification({
+        targetRole: 'admin',
+        title: 'تیکت پشتیبانی جدید',
+        message: `گفتگوی جدید با موضوع «${saved.subject}» توسط ${saved.customerName} ایجاد شد.`,
+        type: 'ticket'
+      }).catch(console.error);
+
+      this.notify();
+      return saved;
+    }
+
+    // 2. Direct validated insert fallback
     const ticketNum = `TCK-${Math.floor(1000 + Math.random() * 8999)}`;
     const now = new Date();
 
@@ -1290,6 +1251,15 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToTicket(data);
+    this.cachedTickets.unshift(saved);
+
+    this.addNotification({
+      targetRole: 'admin',
+      title: 'تیکت پشتیبانی جدید',
+      message: `گفتگوی جدید با موضوع «${saved.subject}» توسط ${saved.customerName} ایجاد شد.`,
+      type: 'ticket'
+    }).catch(console.error);
+
     this.notify();
     return saved;
   }
@@ -1304,9 +1274,14 @@ class DatabaseService {
     mediaType: 'text' | 'image' | 'video' | 'audio' = 'text',
     mediaUrl?: string
   ): Promise<void> {
-    const tickets = await this.getTickets();
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
+    const { data: currentData, error: fetchErr } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('id', ticketId)
+      .single();
+
+    if (fetchErr || !currentData) throw new Error('تیکت مورد نظر برای پاسخ‌گویی یافت نشد.');
+    const ticket = rowToTicket(currentData);
 
     const now = new Date();
     ticket.messages.push({
@@ -1331,57 +1306,36 @@ class DatabaseService {
       ticket.status = 'New';
       ticket.unreadAdminCount = (ticket.unreadAdminCount || 0) + 1;
     }
-
     ticket.updatedAt = now.toISOString();
+
     const row = ticketToRow(ticket);
-    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    const { error } = await supabase
+      .from('support_tickets')
+      .update(row)
+      .eq('id', ticketId);
+
     if (error) {
       console.error('[AuraVibe DB] Error replying ticket:', error);
       throw error;
     }
-    this.notify();
-  }
 
-  public async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
-    const tickets = await this.getTickets();
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
-
-    ticket.unreadAdminCount = 0;
-    ticket.messages.forEach((m) => {
-      if (m.sender === 'customer') m.readByAdmin = true;
-    });
-
-    const row = ticketToRow(ticket);
-    await supabase.from('support_tickets').update(row).eq('id', ticketId);
-    this.notify();
-  }
-
-  public async markTicketAsReadByUser(ticketId: string): Promise<void> {
-    const tickets = await this.getTickets();
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
-
-    ticket.unreadUserCount = 0;
-    ticket.messages.forEach((m) => {
-      if (m.sender === 'admin') m.readByUser = true;
-    });
-
-    const row = ticketToRow(ticket);
-    await supabase.from('support_tickets').update(row).eq('id', ticketId);
     this.notify();
   }
 
   public async updateTicketState(
     ticketId: string,
-    updates: Partial<Pick<SupportTicket, 'status' | 'isPinned' | 'isBlocked'>>
+    updates: Partial<Pick<SupportTicket, 'status' | 'priority' | 'isPinned' | 'isBlocked' | 'assignedAdminId'>>
   ): Promise<void> {
-    const row: Record<string, any> = { updated_at: new Date().toISOString() };
-    if (updates.status !== undefined) row.status = updates.status;
-    if (updates.isPinned !== undefined) row.is_pinned = updates.isPinned;
-    if (updates.isBlocked !== undefined) row.is_blocked = updates.isBlocked;
+    const rowUpdates: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+    if (updates.status !== undefined) rowUpdates.status = updates.status;
+    if (updates.priority !== undefined) rowUpdates.priority = updates.priority;
+    if (updates.isPinned !== undefined) rowUpdates.is_pinned = updates.isPinned;
+    if (updates.isBlocked !== undefined) rowUpdates.is_blocked = updates.isBlocked;
+    if (updates.assignedAdminId !== undefined) rowUpdates.assigned_admin_id = updates.assignedAdminId;
 
-    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    const { error } = await supabase.from('support_tickets').update(rowUpdates).eq('id', ticketId);
     if (error) {
       console.error('[AuraVibe DB] Error updating ticket state:', error);
       throw error;
@@ -1389,34 +1343,63 @@ class DatabaseService {
     this.notify();
   }
 
-  public async deleteMessageFromTicket(ticketId: string, messageId: string): Promise<void> {
-    const tickets = await this.getTickets();
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
+  public async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
+    const { error } = await supabase
+      .from('support_tickets')
+      .update({ unread_admin_count: 0 })
+      .eq('id', ticketId);
+    if (error) {
+      console.error('[AuraVibe DB] Error marking ticket read by admin:', error);
+      return;
+    }
+    this.notify();
+  }
 
+  public async markTicketAsReadByUser(ticketId: string): Promise<void> {
+    const { error } = await supabase
+      .from('support_tickets')
+      .update({ unread_user_count: 0 })
+      .eq('id', ticketId);
+    if (error) {
+      console.error('[AuraVibe DB] Error marking ticket read by user:', error);
+      return;
+    }
+    this.notify();
+  }
+
+  public async deleteMessageFromTicket(ticketId: string, messageId: string): Promise<void> {
+    const { data, error: fetchErr } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('id', ticketId)
+      .single();
+
+    if (fetchErr || !data) return;
+    const ticket = rowToTicket(data);
     ticket.messages = ticket.messages.filter((m) => m.id !== messageId);
     ticket.updatedAt = new Date().toISOString();
 
     const row = ticketToRow(ticket);
-    await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting message from ticket:', error);
+      throw error;
+    }
     this.notify();
   }
 
   // --- ARTICLES / MAGAZINE ---
   public async getArticles(): Promise<Article[]> {
-    if (!isSupabaseConfigured()) return this.cachedArticles;
-    try {
-      const { data, error } = await supabase
-        .from('articles')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (error) throw error;
-      this.cachedArticles = (data || []).map(rowToArticle);
-      return this.cachedArticles;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching articles:', err);
-      return this.cachedArticles;
+    const { data, error } = await supabase
+      .from('articles')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching articles:', error);
+      throw error;
     }
+    this.cachedArticles = (data || []).map(rowToArticle);
+    return this.cachedArticles;
   }
 
   public async saveArticle(articleData: Partial<Article>, adminUser?: { id: number; name: string }): Promise<Article> {
@@ -1448,17 +1431,46 @@ class DatabaseService {
     return saved;
   }
 
+  public async deleteArticle(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('articles').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting article:', error);
+      throw error;
+    }
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Article Deleted',
+        module: 'Content',
+        target: String(id),
+        details: `مقاله با شناسه ${id} حذف شد`
+      }).catch(console.error);
+    }
+    this.notify();
+  }
+
   // --- SEO & SETTINGS ---
   public async getGlobalSEO(): Promise<GlobalSEO> {
-    if (!isSupabaseConfigured()) return this.cachedSEO;
-    try {
-      const { data, error } = await supabase.from('global_seo').select('*').eq('id', 1).maybeSingle();
-      if (error || !data) return this.cachedSEO;
-      this.cachedSEO = rowToGlobalSEO(data);
-      return this.cachedSEO;
-    } catch {
-      return this.cachedSEO;
+    const { data, error } = await supabase.from('global_seo').select('*').eq('id', 1).maybeSingle();
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching global SEO:', error);
+      throw error;
     }
+    if (!data) {
+      return {
+        siteTitle: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+        defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
+        defaultOgImage: '',
+        defaultCanonical: 'https://auravibe.ir',
+        organizationName: 'مجموعه آورا وایب و وینا اکسسوری',
+        organizationLogo: '',
+        robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml',
+        sitemapGeneratedAt: new Date().toISOString()
+      };
+    }
+    this.cachedSEO = rowToGlobalSEO(data);
+    return this.cachedSEO;
   }
 
   public async updateGlobalSEO(seoData: Partial<GlobalSEO>, adminUser?: { id: number; name: string }): Promise<void> {
@@ -1482,15 +1494,44 @@ class DatabaseService {
   }
 
   public async getGeneralSettings(): Promise<GeneralSettings> {
-    if (!isSupabaseConfigured()) return this.cachedSettings;
-    try {
-      const { data, error } = await supabase.from('general_settings').select('*').eq('id', 1).maybeSingle();
-      if (error || !data) return this.cachedSettings;
-      this.cachedSettings = rowToGeneralSettings(data);
-      return this.cachedSettings;
-    } catch {
-      return this.cachedSettings;
+    const { data, error } = await supabase.from('general_settings').select('*').eq('id', 1).maybeSingle();
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching general settings:', error);
+      throw error;
     }
+    if (!data) {
+      return {
+        siteName: 'AuraVibe | آورا وایب',
+        logoUrl: '',
+        faviconUrl: '',
+        contactEmail: 'hello@auravibe.ir',
+        contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
+        address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
+        workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
+        socialLinks: {
+          instagram: 'https://instagram.com/auravibe',
+          telegram: 'https://t.me/auravibe',
+          bale: 'https://ble.ir/auravibe'
+        },
+        timezone: 'Asia/Tehran',
+        language: 'fa',
+        headerLinks: [
+          { title: 'صفحه اصلی', url: '/' },
+          { title: 'جدیدترین‌ها', url: '/category/new' },
+          { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
+          { title: 'مجله استایل', url: '/journal' }
+        ],
+        footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+        notifications: {
+          newOrder: true,
+          newUser: true,
+          newTicket: true,
+          securityAlert: true
+        }
+      };
+    }
+    this.cachedSettings = rowToGeneralSettings(data);
+    return this.cachedSettings;
   }
 
   public async updateGeneralSettings(settings: Partial<GeneralSettings>, adminUser?: { id: number; name: string }): Promise<void> {
@@ -1515,23 +1556,23 @@ class DatabaseService {
 
   // --- REDIRECTS ---
   public async getRedirects(): Promise<RedirectRule[]> {
-    if (!isSupabaseConfigured()) return this.cachedRedirects;
-    try {
-      const { data, error } = await supabase.from('redirects').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      this.cachedRedirects = (data || []).map(rowToRedirect);
-      return this.cachedRedirects;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching redirects:', err);
-      return this.cachedRedirects;
+    const { data, error } = await supabase.from('redirects').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching redirects:', error);
+      throw error;
     }
+    this.cachedRedirects = (data || []).map(rowToRedirect);
+    return this.cachedRedirects;
   }
 
   public async saveRedirect(redirect: Partial<RedirectRule>, adminUser?: { id: number; name: string }): Promise<RedirectRule> {
     const row = redirectToRow(redirect);
     if (!row.id) row.id = String(Date.now());
     const { data, error } = await supabase.from('redirects').upsert(row).select().single();
-    if (error) throw error;
+    if (error) {
+      console.error('[AuraVibe DB] Error saving redirect:', error);
+      throw error;
+    }
     const saved = rowToRedirect(data);
 
     if (adminUser) {
@@ -1550,7 +1591,10 @@ class DatabaseService {
 
   public async deleteRedirect(id: string, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await supabase.from('redirects').delete().eq('id', id);
-    if (error) throw error;
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting redirect:', error);
+      throw error;
+    }
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -1566,20 +1610,17 @@ class DatabaseService {
 
   // --- AUDIT LOGS ---
   public async getAuditLogs(): Promise<AuditLog[]> {
-    if (!isSupabaseConfigured()) return this.cachedAuditLogs;
-    try {
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-      if (error) throw error;
-      this.cachedAuditLogs = (data || []).map(rowToAuditLog);
-      return this.cachedAuditLogs;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching audit logs:', err);
-      return this.cachedAuditLogs;
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching audit logs:', error);
+      throw error;
     }
+    this.cachedAuditLogs = (data || []).map(rowToAuditLog);
+    return this.cachedAuditLogs;
   }
 
   public async addAuditLog(entry: {
@@ -1606,32 +1647,26 @@ class DatabaseService {
       details: entry.details
     };
 
-    if (isSupabaseConfigured()) {
-      const row = auditLogToRow(newLog);
-      await supabase.from('audit_logs').insert(row);
-    } else {
-      this.cachedAuditLogs.unshift(newLog);
+    const row = auditLogToRow(newLog);
+    const { error } = await supabase.from('audit_logs').insert(row);
+    if (error) {
+      console.warn('[AuraVibe DB] Warning inserting audit log:', error.message);
     }
   }
 
   // --- NOTIFICATIONS ---
   public async getNotifications(role: 'admin' | 'user', userId?: number): Promise<AppNotification[]> {
-    if (!isSupabaseConfigured()) {
-      return this.cachedNotifications.filter((n) => n.targetRole === role && (!userId || n.userId === userId));
+    let query = supabase.from('notifications').select('*').eq('target_role', role);
+    if (userId) {
+      query = query.eq('user_id', userId);
     }
-    try {
-      let query = supabase.from('notifications').select('*').eq('target_role', role);
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-      const { data, error } = await query.order('created_at', { ascending: false });
-      if (error) throw error;
-      this.cachedNotifications = (data || []).map(rowToNotification);
-      return this.cachedNotifications;
-    } catch (err) {
-      console.error('[AuraVibe DB] Error fetching notifications:', err);
-      return this.cachedNotifications;
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      console.error('[AuraVibe DB] Error fetching notifications:', error);
+      throw error;
     }
+    this.cachedNotifications = (data || []).map(rowToNotification);
+    return this.cachedNotifications;
   }
 
   public async addNotification(notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): Promise<void> {
@@ -1641,9 +1676,10 @@ class DatabaseService {
       read: false,
       createdAt: new Date().toISOString()
     };
-    if (isSupabaseConfigured()) {
-      const row = notificationToRow(newNotif);
-      await supabase.from('notifications').insert(row);
+    const row = notificationToRow(newNotif);
+    const { error } = await supabase.from('notifications').insert(row);
+    if (error) {
+      console.warn('[AuraVibe DB] Warning inserting notification:', error.message);
     }
     this.notify();
   }
