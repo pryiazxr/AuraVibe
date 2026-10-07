@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Globe, CheckCircle2, AlertCircle, FileText, RefreshCw, Save, ArrowLeftRight } from 'lucide-react';
 import { db, GlobalSEO, RedirectRule, AdminUser } from '../../services/db';
 
@@ -7,51 +7,92 @@ type SEOManagementViewProps = {
 };
 
 export function SEOManagementView({ currentAdmin }: SEOManagementViewProps) {
-  const [globalSeo, setGlobalSeo] = useState<GlobalSEO>(() => db.getGlobalSEO());
-  const [articles] = useState(() => db.getArticles());
-  const [redirects, setRedirects] = useState<RedirectRule[]>(() => {
-    const raw = localStorage.getItem('aura_redirects');
-    return raw ? JSON.parse(raw) : [
-      { id: '1', sourceUrl: '/old-jewel', destinationUrl: '/category/زیورآلات', type: 301, createdAt: '1403/05/10' }
-    ];
+  const [globalSeo, setGlobalSeo] = useState<GlobalSEO>({
+    siteTitle: '',
+    defaultMetaDescription: '',
+    defaultOgImage: '',
+    defaultCanonical: '',
+    organizationName: '',
+    organizationLogo: '',
+    robotsTxt: '',
+    sitemapGeneratedAt: ''
   });
+  const [articles, setArticles] = useState<any[]>([]);
+  const [redirects, setRedirects] = useState<RedirectRule[]>([]);
 
   const [activeSubTab, setActiveSubTab] = useState<'global' | 'articles' | 'redirects' | 'robots'>('global');
 
   // Form Fields
-  const [siteTitle, setSiteTitle] = useState(globalSeo.siteTitle);
-  const [metaDesc, setMetaDesc] = useState(globalSeo.defaultMetaDescription);
-  const [canonical, setCanonical] = useState(globalSeo.defaultCanonical);
-  const [orgName, setOrgName] = useState(globalSeo.organizationName);
-  const [robotsTxt, setRobotsTxt] = useState(globalSeo.robotsTxt);
+  const [siteTitle, setSiteTitle] = useState('');
+  const [metaDesc, setMetaDesc] = useState('');
+  const [canonical, setCanonical] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [robotsTxt, setRobotsTxt] = useState('');
 
   // New Redirect Form
   const [srcUrl, setSrcUrl] = useState('');
   const [destUrl, setDestUrl] = useState('');
 
-  const handleSaveGlobalSeo = (e: React.FormEvent) => {
+  useEffect(() => {
+    let active = true;
+    const loadData = async () => {
+      try {
+        const [seo, arts, reds] = await Promise.all([
+          db.getGlobalSEO(),
+          db.getArticles(),
+          db.getRedirects()
+        ]);
+        if (active) {
+          setGlobalSeo(seo);
+          setArticles(arts);
+          setRedirects(reds);
+          setSiteTitle(seo.siteTitle);
+          setMetaDesc(seo.defaultMetaDescription);
+          setCanonical(seo.defaultCanonical);
+          setOrgName(seo.organizationName);
+          setRobotsTxt(seo.robotsTxt);
+        }
+      } catch (err) {
+        console.error('Failed to load SEO data:', err);
+      }
+    };
+
+    loadData();
+    const unsub = db.subscribe(() => {
+      loadData();
+    });
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
+
+  const handleSaveGlobalSeo = async (e: React.FormEvent) => {
     e.preventDefault();
-    db.updateGlobalSEO(
+    await db.updateGlobalSEO(
       { siteTitle, defaultMetaDescription: metaDesc, defaultCanonical: canonical, organizationName: orgName, robotsTxt },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
-    setGlobalSeo(db.getGlobalSEO());
+    const updated = await db.getGlobalSEO();
+    setGlobalSeo(updated);
     alert('تنظیمات عمومی سئو با موفقیت ذخیره شد.');
   };
 
-  const handleAddRedirect = (e: React.FormEvent) => {
+  const handleAddRedirect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!srcUrl || !destUrl) return;
-    const newRule: RedirectRule = {
-      id: String(Date.now()),
-      sourceUrl: srcUrl,
-      destinationUrl: destUrl,
-      type: 301,
-      createdAt: new Date().toLocaleDateString('fa-IR')
-    };
-    const updated = [newRule, ...redirects];
+    await db.saveRedirect(
+      {
+        sourceUrl: srcUrl,
+        destinationUrl: destUrl,
+        type: 301,
+        createdAt: new Date().toLocaleDateString('fa-IR')
+      },
+      { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
+    );
+    const updated = await db.getRedirects();
     setRedirects(updated);
-    localStorage.setItem('aura_redirects', JSON.stringify(updated));
     setSrcUrl('');
     setDestUrl('');
   };

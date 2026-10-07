@@ -26,7 +26,7 @@ type TicketManagementViewProps = {
 };
 
 export function TicketManagementView({ currentAdmin }: TicketManagementViewProps) {
-  const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [activeTab, setActiveTab] = useState<'New' | 'Open' | 'Closed'>('New');
   const [search, setSearch] = useState('');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -36,18 +36,24 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
   const [mediaType, setMediaType] = useState<'text' | 'image' | 'video' | 'audio'>('text');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [recordingVoice, setRecordingVoice] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const refreshData = async () => {
+    try {
+      const latest = await db.getTickets();
+      setTickets(latest);
+    } catch (err) {
+      console.error('Failed to load tickets:', err);
+    }
+  };
 
   useEffect(() => {
+    refreshData();
     const unsub = db.subscribe(() => {
-      const latest = db.getTickets();
-      setTickets(latest);
+      refreshData();
     });
     return () => unsub();
   }, []);
-
-  const refreshData = () => {
-    setTickets(db.getTickets());
-  };
 
   const selectedTicket = useMemo(() => {
     return tickets.find((t) => t.id === selectedTicketId) || null;
@@ -56,41 +62,52 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
   // Mark ticket as read by admin when opened
   useEffect(() => {
     if (selectedTicketId) {
-      db.markTicketAsReadByAdmin(selectedTicketId);
+      db.markTicketAsReadByAdmin(selectedTicketId).then(() => refreshData());
     }
   }, [selectedTicketId]);
 
-  const handleSelectTicket = (tId: string) => {
+  const handleSelectTicket = async (tId: string) => {
     setSelectedTicketId(tId);
-    db.markTicketAsReadByAdmin(tId);
+    await db.markTicketAsReadByAdmin(tId);
     setInputText('');
     setMediaUrl(null);
     setMediaType('text');
+    await refreshData();
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
       const isVideo = file.type.startsWith('video/');
       const isAudio = file.type.startsWith('audio/');
-      reader.onload = () => {
-        if (reader.result) {
-          setMediaUrl(reader.result as string);
-          if (isVideo) setMediaType('video');
-          else if (isAudio) setMediaType('audio');
-          else setMediaType('image');
-        }
-      };
-      reader.readAsDataURL(file);
+      if (isVideo) setMediaType('video');
+      else if (isAudio) setMediaType('audio');
+      else setMediaType('image');
+
+      setUploading(true);
+      try {
+        const url = await db.uploadFile('support-media', file);
+        setMediaUrl(url);
+      } catch (err) {
+        console.error('Failed to upload file to Supabase:', err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            setMediaUrl(reader.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
-  const handleSendReply = (e: React.FormEvent) => {
+  const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicketId || (!inputText.trim() && !mediaUrl)) return;
 
-    db.replyTicket(
+    await db.replyTicket(
       selectedTicketId,
       inputText.trim() || (mediaType === 'image' ? '[تصویر]' : mediaType === 'video' ? '[ویدیو]' : '[وویس صوتی]'),
       'admin',
@@ -104,15 +121,15 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
     setInputText('');
     setMediaUrl(null);
     setMediaType('text');
-    refreshData();
+    await refreshData();
   };
 
   const handleSendVoiceSample = () => {
     if (!selectedTicketId) return;
     setRecordingVoice(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       setRecordingVoice(false);
-      db.replyTicket(
+      await db.replyTicket(
         selectedTicketId,
         'پیام صوتی پشتیبانی آورا',
         'admin',
@@ -122,29 +139,29 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
         'audio',
         'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg' // Sample valid audio
       );
-      refreshData();
+      await refreshData();
     }, 1200);
   };
 
-  const handleTogglePin = (ticketId: string, currentPin?: boolean) => {
-    db.updateTicketState(ticketId, { isPinned: !currentPin });
-    refreshData();
+  const handleTogglePin = async (ticketId: string, currentPin?: boolean) => {
+    await db.updateTicketState(ticketId, { isPinned: !currentPin });
+    await refreshData();
   };
 
-  const handleToggleBlock = (ticketId: string, currentBlock?: boolean) => {
-    db.updateTicketState(ticketId, { isBlocked: !currentBlock });
-    refreshData();
+  const handleToggleBlock = async (ticketId: string, currentBlock?: boolean) => {
+    await db.updateTicketState(ticketId, { isBlocked: !currentBlock });
+    await refreshData();
   };
 
-  const handleStatusChange = (ticketId: string, newStatus: TicketStatus) => {
-    db.updateTicketState(ticketId, { status: newStatus });
-    refreshData();
+  const handleStatusChange = async (ticketId: string, newStatus: TicketStatus) => {
+    await db.updateTicketState(ticketId, { status: newStatus });
+    await refreshData();
   };
 
-  const handleDeleteMessage = (ticketId: string, msgId: string) => {
+  const handleDeleteMessage = async (ticketId: string, msgId: string) => {
     if (confirm('آیا از حذف این پیام اطمینان دارید؟')) {
-      db.deleteMessageFromTicket(ticketId, msgId);
-      refreshData();
+      await db.deleteMessageFromTicket(ticketId, msgId);
+      await refreshData();
     }
   };
 
@@ -178,6 +195,10 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
       });
   }, [tickets, activeTab, search]);
 
+  const newTicketsCount = useMemo(() => {
+    return tickets.filter((t) => (t.unreadAdminCount ?? 0) > 0 && t.status !== 'Closed').length;
+  }, [tickets]);
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -208,9 +229,9 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
                 }
               >
                 پیام‌های جدید
-                {db.getUnreadSupportConversationsCount() > 0 && (
+                {newTicketsCount > 0 && (
                   <span className="ms-1 px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-black">
-                    {db.getUnreadSupportConversationsCount()}
+                    {newTicketsCount}
                   </span>
                 )}
               </button>

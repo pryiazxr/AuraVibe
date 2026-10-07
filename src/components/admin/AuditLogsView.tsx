@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Activity, Search, ShieldAlert, Filter, Lock } from 'lucide-react';
 import { AuditLog, db, AdminUser } from '../../services/db';
 
@@ -7,9 +7,29 @@ type AuditLogsViewProps = {
 };
 
 export function AuditLogsView({ currentAdmin }: AuditLogsViewProps) {
-  const [logs] = useState<AuditLog[]>(() => db.getAuditLogs());
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [search, setSearch] = useState('');
   const [moduleFilter, setModuleFilter] = useState<string>('all');
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const data = await db.getAuditLogs();
+        if (active) setLogs(data);
+      } catch (err) {
+        console.error('Failed to load audit logs:', err);
+      }
+    };
+    load();
+    const unsub = db.subscribe(() => {
+      load();
+    });
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
 
   // SUPER_ADMIN Security Check
   if (currentAdmin.role !== 'SUPER_ADMIN') {

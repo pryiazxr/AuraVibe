@@ -1,4 +1,20 @@
-import { categoryList, satinImage, jewelryImage, necklaceImage, watchImage } from '../data';
+import { supabase, isSupabaseConfigured, uploadToStorage } from './supabase';
+import {
+  rowToCategory, categoryToRow,
+  rowToBadge, badgeToRow,
+  rowToProduct, productToRow,
+  rowToBanner, bannerToRow,
+  rowToUser, userToRow,
+  rowToAdmin, adminToRow,
+  rowToOrder, orderToRow,
+  rowToTicket, ticketToRow,
+  rowToArticle, articleToRow,
+  rowToGlobalSEO, globalSeoToRow,
+  rowToGeneralSettings, generalSettingsToRow,
+  rowToRedirect, redirectToRow,
+  rowToNotification, notificationToRow,
+  rowToAuditLog, auditLogToRow
+} from './mappers';
 
 // --- TYPES & INTERFACES ---
 
@@ -144,6 +160,7 @@ export type UserStatus = 'active' | 'blocked';
 
 export type User = {
   id: number;
+  authUserId?: string;
   firstName: string;
   lastName: string;
   phone: string; // Unique Identifier
@@ -176,11 +193,12 @@ export type AdminRole = 'SUPER_ADMIN' | 'MANAGER' | 'PRODUCT_MANAGER' | 'ORDER_M
 
 export type AdminUser = {
   id: number;
+  authUserId?: string;
   adminCode: string;
   firstName: string;
   lastName: string;
   username: string; // Unique
-  passwordHash: string;
+  passwordHash?: string;
   role: AdminRole;
   customPermissions: Permission[];
   status: 'active' | 'disabled';
@@ -330,548 +348,91 @@ export function getJalaliDateString(isoString: string): string {
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return '۱۴۰۳/۰۶/۰۱';
-    return d.toLocaleDateString('fa-IR-u-nu-latn'); // e.g. 1403/6/15
+    return d.toLocaleDateString('fa-IR-u-nu-latn');
   } catch {
     return '۱۴۰۳/۰۶/۰۱';
   }
 }
 
-// --- INITIAL SEED DATA ---
-
-import { generateProducts } from '../data';
-
-const SEED_PRODUCTS: Product[] = [
-  ...categoryList.flatMap((cat, idx) =>
-    generateProducts(10, cat.name, cat.name, 120000 + idx * 15000, idx % 3 === 0)
-  )
-];
-
-const SEED_BANNERS: Banner[] = [
-  {
-    id: 1,
-    internalName: 'بنر دسته‌بندی ساعت',
-    eyebrow: 'AURA TIMEPIECES',
-    title: 'کالکشن تخصصی ساعت',
-    subtitle: 'ساعت‌های ظریف زنانه با بند استیل لوکس و طراحی مینیمال.',
-    image: watchImage,
-    targetCategory: 'ساعت',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 1
-  },
-  {
-    id: 2,
-    internalName: 'بنر دسته‌بندی گردنبند',
-    eyebrow: 'PEARL COLLECTION',
-    title: 'درخشش آرام مروارید',
-    subtitle: 'گردنبندهای مروارید و استیل رنگ ثابت ضدحساسیت.',
-    image: necklaceImage,
-    targetCategory: 'گردنبند',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 2
-  },
-  {
-    id: 3,
-    internalName: 'بنر دسته‌بندی اسکرانچی',
-    eyebrow: 'SATIN & SILK',
-    title: 'لطافت ابریشم و ساتن',
-    subtitle: 'اسکرانچی‌های ابریشمی بدون آسیب به موها در رنگ‌های پاستیلی.',
-    image: satinImage,
-    targetCategory: 'اسکرانچی',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 3
-  },
-  {
-    id: 4,
-    internalName: 'بنر دسته‌بندی دستبند',
-    eyebrow: 'AURA BRACELETS',
-    title: 'دستبندهای ظریف آورا',
-    subtitle: 'دستبندهای جواهری و زنجیری شیک برای استایل روزمره.',
-    image: jewelryImage,
-    targetCategory: 'دستبند',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 4
-  },
-  {
-    id: 5,
-    internalName: 'بنر دسته‌بندی گوشواره',
-    eyebrow: 'EARRINGS DROP',
-    title: 'گوشواره‌های میخی و آویز',
-    subtitle: 'مجموعه‌ای خاص از گوشواره‌های استیل رنگ ثابت درخشان.',
-    image: jewelryImage,
-    targetCategory: 'گوشواره',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 5
-  },
-  {
-    id: 6,
-    internalName: 'بنر دسته‌بندی انگشتر',
-    eyebrow: 'RINGS COLLECTION',
-    title: 'انگشترهای فری‌سایز نگین‌دار',
-    subtitle: 'انگشترهای جواهری فری‌سایز با آبکاری طلا.',
-    image: jewelryImage,
-    targetCategory: 'انگشتر',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 6
-  },
-  {
-    id: 7,
-    internalName: 'بنر دسته‌بندی نیم ست',
-    eyebrow: 'GIFT SETS',
-    title: 'نیم‌ست‌های هدیه آورا',
-    subtitle: 'ست‌های کامل زیورآلات ظریف با بسته‌بندی لوکس هدیه.',
-    image: necklaceImage,
-    targetCategory: 'نیم ست',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 7
-  },
-  {
-    id: 8,
-    internalName: 'بنر دسته‌بندی تل',
-    eyebrow: 'HEADBANDS',
-    title: 'تل‌های مخمل و پارچه‌ای',
-    subtitle: 'تل‌های سر شیک و پینترستی برای استایل‌های دانشگاهی و مهمانی.',
-    image: satinImage,
-    targetCategory: 'تل',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 8
-  },
-  {
-    id: 9,
-    internalName: 'بنر دسته‌بندی کلیپس',
-    eyebrow: 'HAIR CLIPS',
-    title: 'کلیپس‌های فلزی و مرواریدی',
-    subtitle: 'کلیپس‌های محکم و مقاوم با گیرندگی بالا.',
-    image: jewelryImage,
-    targetCategory: 'کلیپس',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 9
-  },
-  {
-    id: 10,
-    internalName: 'بنر دسته‌بندی زیورآلات مرواریدی',
-    eyebrow: 'CLASSIC PEARL',
-    title: 'زیورآلات کلاسیک مروارید',
-    subtitle: 'زیورآلات مرواریدی با طراحی‌های کلاسیک و اولد مانی.',
-    image: necklaceImage,
-    targetCategory: 'زیورآلات مرواریدی',
-    ctaText: 'دیدن کالکشن',
-    active: true,
-    displayOrder: 10
-  }
-];
-
-const SEED_ORDERS: Order[] = [
-  {
-    id: 'ORD-9821',
-    orderNumber: 'ORD-9821',
-    customer: {
-      userId: 1,
-      firstName: 'مریم',
-      lastName: 'احمدی',
-      phone: '۰۹۱۲۹۸۷۶۵۴۳',
-      email: 'maryam@gmail.com',
-      province: 'تهران',
-      city: 'تهران',
-      fullAddress: 'نیاوران، خیابان مژده، پلاک ۱۲، واحد ۳',
-      postalCode: '۱۹۸۷۶۵۴۳۲۱'
-    },
-    items: [
-      {
-        productId: 101,
-        productCode: 'AUR-101',
-        productName: 'گردنبند مروارید آورا کد ۱۰۱',
-        productImage: necklaceImage,
-        originalPrice: 450000,
-        finalPrice: 380000,
-        quantity: 2,
-        lineTotal: 760000
-      }
-    ],
-    subtotal: 900000,
-    discount: 140000,
-    totalAmount: 760000,
-    shippingMethod: {
-      key: 'POST',
-      title: 'پست پیشتاز',
-      subtitle: 'ارسال به سراسر کشور (۲ تا ۴ روز کاری)',
-      costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-    },
-    orderStatus: 'تحویل داده شده',
-    paymentStatus: 'پرداخت شده',
-    trackingCode: '24567891011121314',
-    timeline: [
-      { status: 'جدید', date: '۱۴۰۳/۰۶/۱۵', time: '۱۰:۳۰', note: 'سفارش توسط مشتری ثبت شد' },
-      { status: 'تأیید شده', date: '۱۴۰۳/۰۶/۱۵', time: '۱۱:۰۰', note: 'پرداخت تایید گردید' },
-      { status: 'ارسال شده', date: '۱۴۰۳/۰۶/۱۶', time: '۰۹:۱۵', note: 'تحویل به پست پیشتاز' },
-      { status: 'تحویل داده شده', date: '۱۴۰۳/۰۶/۱۸', time: '۱۴:۲۰', note: 'مرسوله با موفقیت تحویل داده شد' }
-    ],
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
-  },
-  {
-    id: 'ORD-9412',
-    orderNumber: 'ORD-9412',
-    customer: {
-      userId: 2,
-      firstName: 'سارا',
-      lastName: 'رضایی',
-      phone: '۰۹۳۵۱۲۳۴۵۶۷',
-      province: 'تهران',
-      city: 'تهران',
-      fullAddress: 'سعادت آباد، بلوار پاکنژاد، کوچه چهارم، پلاک ۵',
-      postalCode: '۱۹۹۸۷۶۵۴۳۲'
-    },
-    items: [
-      {
-        productId: 103,
-        productCode: 'AUR-103',
-        productName: 'ساعت زنانه آورا مدل رزگلد',
-        productImage: watchImage,
-        originalPrice: 820000,
-        finalPrice: 690000,
-        quantity: 1,
-        lineTotal: 690000
-      }
-    ],
-    subtotal: 820000,
-    discount: 130000,
-    totalAmount: 690000,
-    shippingMethod: {
-      key: 'AURA_EXPRESS',
-      title: 'پیک اختصاصی آورا',
-      subtitle: 'فقط تهران (تحویل همان روز)',
-      costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-    },
-    orderStatus: 'در حال آماده‌سازی',
-    paymentStatus: 'پرداخت شده',
-    timeline: [
-      { status: 'جدید', date: '۱۴۰۳/۰۶/۲۰', time: '۱۶:۴۵', note: 'سفارش ثبت گردید' },
-      { status: 'در حال آماده‌سازی', date: '۱۴۰۳/۰۶/۲۱', time: '۰۸:۳۰', note: 'بسته‌بندی در انبار آورا' }
-    ],
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
-  }
-];
-
-const SEED_USERS: User[] = [
-  {
-    id: 1,
-    firstName: 'مریم',
-    lastName: 'احمدی',
-    phone: '۰۹۱۲۹۸۷۶۵۴۳',
-    email: 'maryam@gmail.com',
-    province: 'تهران',
-    city: 'تهران',
-    postalCode: '۱۹۸۷۶۵۴۳۲۱',
-    registrationDate: '۱۴۰۳/۰۱/۱۰',
-    lastLogin: '۱۴۰۳/۰۶/۱۸',
-    status: 'active',
-    orderCount: 3
-  },
-  {
-    id: 2,
-    firstName: 'سارا',
-    lastName: 'رضایی',
-    phone: '۰۹۳۵۱۲۳۴۵۶۷',
-    province: 'تهران',
-    city: 'تهران',
-    postalCode: '۱۹۹۸۷۶۵۴۳۲',
-    registrationDate: '۱۴۰۳/۰۴/۰۵',
-    lastLogin: '۱۴۰۳/۰۶/۲۱',
-    status: 'active',
-    orderCount: 1
-  }
-];
-
-const SEED_ADMINS: AdminUser[] = [
-  {
-    id: 100,
-    adminCode: 'ADM-100',
-    firstName: 'آرتین',
-    lastName: 'کریمی',
-    username: 'superadmin',
-    passwordHash: 'superadmin123',
-    role: 'SUPER_ADMIN',
-    customPermissions: [
-      'manage_products',
-      'manage_orders',
-      'manage_banners',
-      'manage_users',
-      'manage_roles',
-      'manage_support',
-      'manage_content',
-      'manage_seo',
-      'manage_settings',
-      'view_audit_logs'
-    ],
-    status: 'active',
-    createdAt: '2024-01-01T00:00:00Z',
-    lastLogin: 'هم‌اکنون'
-  },
-  {
-    id: 101,
-    adminCode: 'ADM-101',
-    firstName: 'مهرنوش',
-    lastName: 'کریمی',
-    username: 'store_manager',
-    passwordHash: 'manager123',
-    role: 'MANAGER',
-    customPermissions: ['manage_products', 'manage_orders', 'manage_banners', 'manage_support'],
-    status: 'active',
-    createdAt: '2024-02-10T00:00:00Z',
-    lastLogin: 'دیروز'
-  }
-];
-
-const SEED_TICKETS: SupportTicket[] = [
-  {
-    id: 'TCK-1001',
-    ticketNumber: 'TCK-1001',
-    userId: 1,
-    customerName: 'مریم احمدی',
-    customerPhone: '۰۹۱۲۹۸۷۶۵۴۳',
-    subject: 'پیگیری ارسال سفارش ORD-9821',
-    category: 'پیگیری ارسال',
-    status: 'Open',
-    priority: 'Normal',
-    unreadAdminCount: 1,
-    unreadUserCount: 0,
-    messages: [
-      {
-        id: 'msg-1',
-        sender: 'customer',
-        senderName: 'مریم احمدی',
-        message: 'سلام، کد رهگیری پستی من ارسال نشده است.',
-        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۰۰',
-        type: 'text',
-        readByAdmin: false,
-        readByUser: true
-      },
-      {
-        id: 'msg-2',
-        sender: 'admin',
-        senderName: 'پشتیبان آورا',
-        message: 'سلام مریم عزیز، کد رهگیری پستی مرسوله شما 24567891011121314 می‌باشد.',
-        createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۳۰',
-        type: 'text',
-        readByAdmin: true,
-        readByUser: true
-      }
-    ],
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-  }
-];
-
-const SEED_ARTICLES: Article[] = [
-  {
-    id: 1,
-    title: 'استایل لایت آکادمیا',
-    subtitle: 'ترند تر و تمیز فصل جدید',
-    fullArticleTitle: 'استایل لایت آکادمیا چیست؟ راهنمای کامل لباس و اکسسوری در فصل جدید با رنگ‌های ملایم و کرمی.',
-    articleLink: '/journal/light-academia',
-    displayOrder: 1,
-    slug: 'light-academia-style-guide',
-    digest: 'راهنمای لباس و اکسسوری پاستیلی با رنگ‌های کرمی و وانیلی.',
-    content: `استایل لایت آکادمیا یکی از محبوب‌ترین ترندهای مد و اکسسوری در سال‌های اخیر است که تمرکز آن بر رنگ‌های کرم، وانیلی، قهوه‌ای روشن و زیورآلات ظریف مروارید و استیل است.
-
-![تصویر اکسسوری های لایت آکادمیا](${satinImage})
-
-این استایل با پارچه‌های ابریشمی و ساتن ترکیب فوق‌العاده‌ای ایجاد می‌کند و حس شیک و در عین حال راحتی را به شما می‌بخشد.`,
-    tag: 'ترند فصل',
-    category: 'راهنمای استایل',
-    author: 'تیم مد وینا و آورا',
-    keywords: ['لایت آکادمیا', 'اکسسوری کرم', 'مروارید'],
-    image: satinImage,
-    status: 'published',
-    createdAt: '2024-05-20T10:00:00.000Z',
-    publishedAt: '2024-05-20T10:00:00.000Z',
-    seo: {
-      seoTitle: 'استایل لایت آکادمیا چیست؟ | آورا وایب',
-      metaDescription: 'راهنمای کامل استایل لایت آکادمیا و انتخاب زیورآلات کرم وانیلی و مروارید.',
-      focusKeyword: 'لایت آکادمیا'
-    }
-  },
-  {
-    id: 2,
-    title: 'شناخت تناژ پوست',
-    subtitle: 'راز درخشش بیشتر در استایل',
-    fullArticleTitle: 'چطور بفهمیم چه رنگ زیورآلاتی بیشتر بهمون میاد؟ راهنمای کامل انتخاب اکسسوری بر اساس تناژ پوست',
-    articleLink: '/journal/skin-tone',
-    displayOrder: 2,
-    slug: 'skin-tone-guide',
-    digest: 'راهنمای کامل انتخاب رنگ مناسب استایل و اکسسوری بر اساس تناژ پوست.',
-    content: `برای انتخاب زیورآلاتی که به بهترین شکل روی پوست شما بنشیند، ابتدا باید زیرپوست خود را بشناسید.
-
-![شناخت تناژ پوست](${jewelryImage})
-
-زیورآلات طلایی و برنجی برای پوست‌های گرم و زیورآلات نقره‌ای و مروارید سفید برای پوست‌های سرد ایده‌آل هستند.`,
-    tag: 'راهنمای استایل',
-    category: 'آموزش اکسسوری',
-    author: 'تیم مد وینا و آورا',
-    keywords: ['رنگ پوست', 'اکسسوری'],
-    image: jewelryImage,
-    status: 'published',
-    createdAt: '2024-05-22T12:00:00.000Z',
-    publishedAt: '2024-05-22T12:00:00.000Z',
-    seo: {}
-  },
-  {
-    id: 3,
-    title: 'استایل اولد مانی',
-    subtitle: 'کلاسیک، شیک و ماندگار',
-    fullArticleTitle: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و آورا استایل',
-    articleLink: '/journal/old-money',
-    displayOrder: 3,
-    slug: 'old-money-guide',
-    digest: 'راهنمای کامل ساعت و اکسسوری اولد مانی برای استایل‌های اصیل و مینیمال.',
-    content: `استایل اولد مانی بر کیفیت بی‌نظیر، رنگ‌های خنثی و ساعت و زیورآلات ظریف تاکید دارد.
-
-![ساعت زنانه اولد مانی](${watchImage})
-
-ساعت‌های بند چرمی و استیل ظریف با صفحه‌های کوچک نقش کلیدی در تکمیل این استایل دارند.`,
-    tag: 'اکسسوری کلاسیک',
-    category: 'کالکشن کلاسیک',
-    author: 'تیم مد وینا و آورا',
-    keywords: ['اولد مانی', 'ساعت زنانه'],
-    image: watchImage,
-    status: 'published',
-    createdAt: '2024-05-25T14:00:00.000Z',
-    publishedAt: '2024-05-25T14:00:00.000Z',
-    seo: {}
-  }
-];
-
-const SEED_AUDIT_LOGS: AuditLog[] = [
-  {
-    id: 'log-1',
-    adminId: 100,
-    adminName: 'آرتین کریمی (Super Admin)',
-    action: 'تغییر وضعیت سفارش',
-    module: 'Orders',
-    target: 'ORD-9821',
-    timestamp: '۱۰ دقیقه پیش',
-    date: '۱۴۰۳/۰۶/۱۸',
-    time: '۱۴:۲۰',
-    ip: '192.168.1.1',
-    device: 'Chrome / Windows',
-    details: 'تغییر وضعیت سفارش ORD-9821 به "تحویل داده شده"'
-  }
-];
-
-const SEED_GLOBAL_SEO: GlobalSEO = {
-  siteTitle: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-  defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
-  defaultOgImage: jewelryImage,
-  defaultCanonical: 'https://auravibe.ir',
-  organizationName: 'مجموعه آورا وایب و وینا اکسسوری',
-  organizationLogo: satinImage,
-  robotsTxt: `User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml`,
-  sitemapGeneratedAt: new Date().toISOString()
-};
-
-const SEED_GENERAL_SETTINGS: GeneralSettings = {
-  siteName: 'AuraVibe | آورا وایب',
-  logoUrl: '',
-  faviconUrl: '',
-  contactEmail: 'hello@auravibe.ir',
-  contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
-  address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
-  workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
-  socialLinks: {
-    instagram: 'https://instagram.com/auravibe',
-    telegram: 'https://t.me/auravibe',
-    bale: 'https://ble.ir/auravibe'
-  },
-  timezone: 'Asia/Tehran',
-  language: 'fa',
-  headerLinks: [
-    { title: 'صفحه اصلی', url: '/' },
-    { title: 'جدیدترین‌ها', url: '/category/new' },
-    { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
-    { title: 'مجله استایل', url: '/journal' }
-  ],
-  footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
-  notifications: {
-    newOrder: true,
-    newUser: true,
-    newTicket: true,
-    securityAlert: true
-  }
-};
-
-// --- CENTRAL STORE ENGINE WITH LOCALSTORAGE PERSISTENCE & PUB/SUB ---
+// --- CENTRAL SUPABASE DATA ACCESS & REPOSITORY LAYER ---
 
 class DatabaseService {
   private listeners: Set<() => void> = new Set();
+  private realtimeChannel: any = null;
+
+  // In-memory caches to allow instant initial reads and fast synchronous lookups
+  private cachedCategories: CategoryItem[] = [];
+  private cachedBadges: ProductBadgeItem[] = [];
+  private cachedProducts: Product[] = [];
+  private cachedBanners: Banner[] = [];
+  private cachedOrders: Order[] = [];
+  private cachedUsers: User[] = [];
+  private cachedAdmins: AdminUser[] = [];
+  private cachedTickets: SupportTicket[] = [];
+  private cachedArticles: Article[] = [];
+  private cachedAuditLogs: AuditLog[] = [];
+  private cachedRedirects: RedirectRule[] = [];
+  private cachedNotifications: AppNotification[] = [];
+  private cachedSEO: GlobalSEO = {
+    siteTitle: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+    defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
+    defaultOgImage: '',
+    defaultCanonical: 'https://auravibe.ir',
+    organizationName: 'مجموعه آورا وایب و وینا اکسسوری',
+    organizationLogo: '',
+    robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml',
+    sitemapGeneratedAt: new Date().toISOString()
+  };
+  private cachedSettings: GeneralSettings = {
+    siteName: 'AuraVibe | آورا وایب',
+    logoUrl: '',
+    faviconUrl: '',
+    contactEmail: 'hello@auravibe.ir',
+    contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
+    address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
+    workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
+    socialLinks: {
+      instagram: 'https://instagram.com/auravibe',
+      telegram: 'https://t.me/auravibe',
+      bale: 'https://ble.ir/auravibe'
+    },
+    timezone: 'Asia/Tehran',
+    language: 'fa',
+    headerLinks: [
+      { title: 'صفحه اصلی', url: '/' },
+      { title: 'جدیدترین‌ها', url: '/category/new' },
+      { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
+      { title: 'مجله استایل', url: '/journal' }
+    ],
+    footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+    notifications: {
+      newOrder: true,
+      newUser: true,
+      newTicket: true,
+      securityAlert: true
+    }
+  };
 
   constructor() {
-    this.initSeed();
+    this.initRealtime();
   }
 
-  private initSeed() {
-    if (!localStorage.getItem('aura_categories')) {
-      const initialCats: CategoryItem[] = categoryList.map((cat, idx) => ({
-        id: idx + 1,
-        name: cat.name,
-        image: cat.image,
-        displayOrder: idx + 1
-      }));
-      localStorage.setItem('aura_categories', JSON.stringify(initialCats));
-    }
-    if (!localStorage.getItem('aura_badges')) {
-      const initialBadges: ProductBadgeItem[] = [
-        { id: 1, title: 'جدیدترین‌ها' },
-        { id: 2, title: 'پرفروش‌ترین‌ها' },
-        { id: 3, title: 'تخفیف ویژه' },
-        { id: 4, title: 'ساعت‌ها' }
-      ];
-      localStorage.setItem('aura_badges', JSON.stringify(initialBadges));
-    }
-    if (!localStorage.getItem('aura_products')) {
-      localStorage.setItem('aura_products', JSON.stringify(SEED_PRODUCTS));
-    }
-    if (!localStorage.getItem('aura_banners')) {
-      localStorage.setItem('aura_banners', JSON.stringify(SEED_BANNERS));
-    }
-    if (!localStorage.getItem('aura_orders')) {
-      localStorage.setItem('aura_orders', JSON.stringify(SEED_ORDERS));
-    }
-    if (!localStorage.getItem('aura_users')) {
-      localStorage.setItem('aura_users', JSON.stringify(SEED_USERS));
-    }
-    if (!localStorage.getItem('aura_admins')) {
-      localStorage.setItem('aura_admins', JSON.stringify(SEED_ADMINS));
-    }
-    if (!localStorage.getItem('aura_tickets')) {
-      localStorage.setItem('aura_tickets', JSON.stringify(SEED_TICKETS));
-    }
-    if (!localStorage.getItem('aura_articles')) {
-      localStorage.setItem('aura_articles', JSON.stringify(SEED_ARTICLES));
-    }
-    if (!localStorage.getItem('aura_audit_logs')) {
-      localStorage.setItem('aura_audit_logs', JSON.stringify(SEED_AUDIT_LOGS));
-    }
-    if (!localStorage.getItem('aura_global_seo')) {
-      localStorage.setItem('aura_global_seo', JSON.stringify(SEED_GLOBAL_SEO));
-    }
-    if (!localStorage.getItem('aura_settings')) {
-      localStorage.setItem('aura_settings', JSON.stringify(SEED_GENERAL_SETTINGS));
-    }
-    if (!localStorage.getItem('aura_redirects')) {
-      localStorage.setItem('aura_redirects', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('aura_notifications')) {
-      localStorage.setItem('aura_notifications', JSON.stringify([]));
+  private initRealtime() {
+    if (!isSupabaseConfigured()) return;
+
+    try {
+      this.realtimeChannel = supabase
+        .channel('public:auravibe-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public' },
+          () => {
+            this.notify();
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('[AuraVibe DB] Realtime subscription could not be established:', err);
     }
   }
 
@@ -881,318 +442,371 @@ class DatabaseService {
   }
 
   private notify() {
-    this.listeners.forEach((listener) => listener());
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('[AuraVibe DB] Listener notification error:', err);
+      }
+    });
   }
 
-  private get<T>(key: string): T {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : ([] as unknown as T);
-  }
-
-  private set<T>(key: string, data: T) {
-    localStorage.setItem(key, JSON.stringify(data));
-    this.notify();
+  /**
+   * Upload file or base64 to Supabase Storage
+   */
+  public async uploadFile(
+    bucket: 'banners' | 'products' | 'avatars' | 'support-media',
+    fileOrDataUrl: File | Blob | string,
+    fileName?: string
+  ): Promise<string> {
+    return uploadToStorage(bucket, fileOrDataUrl, fileName);
   }
 
   // --- PRODUCT BADGES / LABELS ---
-  public getBadges(): ProductBadgeItem[] {
-    return this.get<ProductBadgeItem[]>('aura_badges');
+  public async getBadges(): Promise<ProductBadgeItem[]> {
+    if (!isSupabaseConfigured()) return this.cachedBadges;
+    try {
+      const { data, error } = await supabase.from('product_badges').select('*').order('id', { ascending: true });
+      if (error) throw error;
+      this.cachedBadges = (data || []).map(rowToBadge);
+      return this.cachedBadges;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching badges:', err);
+      return this.cachedBadges;
+    }
   }
 
-  public saveBadge(badgeData: Partial<ProductBadgeItem>, adminUser: { id: number; name: string }): ProductBadgeItem {
-    const badges = this.getBadges();
-    let saved: ProductBadgeItem;
-    if (badgeData.id) {
-      const idx = badges.findIndex((b) => b.id === badgeData.id);
-      saved = { ...badges[idx], ...badgeData } as ProductBadgeItem;
-      badges[idx] = saved;
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Badge Edited',
-        module: 'Settings',
-        target: saved.title,
-        details: 'برچسب محصول ویرایش شد'
-      });
-    } else {
-      saved = {
-        id: Date.now(),
-        title: badgeData.title || 'برچسب جدید',
-        color: badgeData.color
-      };
-      badges.push(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Badge Created',
-        module: 'Settings',
-        target: saved.title,
-        details: 'برچسب جدید ایجاد شد'
-      });
+  public async saveBadge(badgeData: Partial<ProductBadgeItem>, adminUser?: { id: number; name: string }): Promise<ProductBadgeItem> {
+    const row = badgeToRow(badgeData);
+    if (!row.id) {
+      // In PostgreSQL, identity or generate
+      delete row.id;
     }
-    this.set('aura_badges', badges);
+    const { data, error } = await supabase.from('product_badges').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving badge:', error);
+      throw error;
+    }
+    const saved = rowToBadge(data);
+
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: badgeData.id ? 'Badge Edited' : 'Badge Created',
+        module: 'Settings',
+        target: saved.title,
+        details: badgeData.id ? 'برچسب محصول ویرایش شد' : 'برچسب جدید ایجاد شد'
+      }).catch(console.error);
+    }
+
+    this.notify();
     return saved;
   }
 
-  public deleteBadge(id: number, adminUser: { id: number; name: string }) {
-    const badges = this.getBadges();
-    const target = badges.find((b) => b.id === id);
-    const updated = badges.filter((b) => b.id !== id);
-    this.set('aura_badges', updated);
-    if (target) {
+  public async deleteBadge(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('product_badges').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting badge:', error);
+      throw error;
+    }
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
         action: 'Badge Deleted',
         module: 'Settings',
-        target: target.title,
-        details: `برچسب ${target.title} حذف گردید`
-      });
+        target: String(id),
+        details: `برچسب با شناسه ${id} حذف گردید`
+      }).catch(console.error);
     }
+    this.notify();
   }
 
   // --- CATEGORIES ---
-  public getCategories(): CategoryItem[] {
-    return this.get<CategoryItem[]>('aura_categories').sort((a, b) => a.displayOrder - b.displayOrder);
+  public async getCategories(): Promise<CategoryItem[]> {
+    if (!isSupabaseConfigured()) return this.cachedCategories;
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (error) throw error;
+      this.cachedCategories = (data || []).map(rowToCategory);
+      return this.cachedCategories;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching categories:', err);
+      return this.cachedCategories;
+    }
   }
 
-  public saveCategory(catData: Partial<CategoryItem>, adminUser: { id: number; name: string }): CategoryItem {
-    const categories = this.getCategories();
-    let saved: CategoryItem;
-    if (catData.id) {
-      const idx = categories.findIndex((c) => c.id === catData.id);
-      saved = { ...categories[idx], ...catData } as CategoryItem;
-      categories[idx] = saved;
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Category Edited',
-        module: 'Settings',
-        target: saved.name,
-        details: `نام دسته‌بندی تغییر یافت`
-      });
-    } else {
-      saved = {
-        id: Date.now(),
-        name: catData.name || 'دسته‌بندی جدید',
-        image: catData.image || satinImage,
-        displayOrder: categories.length + 1
-      };
-      categories.push(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Category Created',
-        module: 'Settings',
-        target: saved.name,
-        details: `دسته‌بندی جدید ایجاد شد`
-      });
+  public async saveCategory(catData: Partial<CategoryItem>, adminUser?: { id: number; name: string }): Promise<CategoryItem> {
+    const row = categoryToRow(catData);
+    if (!row.id) {
+      delete row.id;
     }
-    this.set('aura_categories', categories);
+    const { data, error } = await supabase.from('categories').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving category:', error);
+      throw error;
+    }
+    const saved = rowToCategory(data);
+
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: catData.id ? 'Category Edited' : 'Category Created',
+        module: 'Settings',
+        target: saved.name,
+        details: catData.id ? 'نام دسته‌بندی تغییر یافت' : 'دسته‌بندی جدید ایجاد شد'
+      }).catch(console.error);
+    }
+
+    this.notify();
     return saved;
   }
 
-  public deleteCategory(id: number, adminUser: { id: number; name: string }) {
-    const categories = this.getCategories();
-    const target = categories.find((c) => c.id === id);
-    const updated = categories.filter((c) => c.id !== id);
-    this.set('aura_categories', updated);
-    if (target) {
+  public async deleteCategory(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting category:', error);
+      throw error;
+    }
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
         action: 'Category Deleted',
         module: 'Settings',
-        target: target.name,
-        details: `دسته‌بندی ${target.name} حذف گردید`
-      });
+        target: String(id),
+        details: `دسته‌بندی ${id} حذف گردید`
+      }).catch(console.error);
     }
+    this.notify();
   }
 
   // --- PRODUCTS ---
-  public getProducts(): Product[] {
-    return this.get<Product[]>('aura_products');
+  public async getProducts(): Promise<Product[]> {
+    if (!isSupabaseConfigured()) return this.cachedProducts;
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('id', { ascending: false });
+      if (error) throw error;
+      this.cachedProducts = (data || []).map(rowToProduct);
+      return this.cachedProducts;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching products:', err);
+      return this.cachedProducts;
+    }
   }
 
-  public getProductById(id: number): Product | undefined {
-    return this.getProducts().find((p) => p.id === id);
+  public async getProductById(id: number): Promise<Product | undefined> {
+    if (!isSupabaseConfigured()) return this.cachedProducts.find((p) => p.id === id);
+    try {
+      const { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+      if (error || !data) return undefined;
+      return rowToProduct(data);
+    } catch {
+      return undefined;
+    }
   }
 
-  public saveProduct(prodData: Partial<Product>, adminUser: { id: number; name: string }): Product {
-    const products = this.getProducts();
-    let saved: Product;
-    if (prodData.id) {
-      // Edit
-      const index = products.findIndex((p) => p.id === prodData.id);
-      saved = {
-        ...products[index],
-        ...prodData,
-        updatedAt: new Date().toISOString()
-      } as Product;
-      products[index] = saved;
+  public async saveProduct(prodData: Partial<Product>, adminUser?: { id: number; name: string }): Promise<Product> {
+    const row = productToRow(prodData);
+    if (!row.id) {
+      row.id = Math.floor(100000 + Math.random() * 899999);
+      if (!row.product_code) row.product_code = `AUR-${row.id}`;
+    }
+
+    const { data, error } = await supabase.from('products').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving product:', error);
+      throw error;
+    }
+    const saved = rowToProduct(data);
+
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
-        action: 'Product Edited',
+        action: prodData.id ? 'Product Edited' : 'Product Created',
         module: 'Products',
         target: saved.name,
         details: `کد: ${saved.productCode} | قیمت: ${saved.price} تومان | دسته: ${saved.category}`
-      });
-    } else {
-      // Create
-      const newId = Math.floor(100000 + Math.random() * 899999);
-      const code = prodData.productCode || `AUR-${newId}`;
-      saved = {
-        id: newId,
-        productCode: code,
-        name: prodData.name || 'محصول جدید',
-        category: prodData.category || 'گردنبند',
-        price: prodData.price || 150000,
-        oldPrice: prodData.oldPrice,
-        stock: prodData.stock ?? 10,
-        images: prodData.images && prodData.images.length ? prodData.images : [satinImage],
-        mainImageIndex: prodData.mainImageIndex || 0,
-        videoUrl: prodData.videoUrl,
-        colors: prodData.colors || ['#37192C', '#FFF3C5'],
-        description: prodData.description || 'توضیحات محصول آورا وایب.',
-        status: prodData.status || 'active',
-        badge: prodData.badge,
-        seo: prodData.seo,
-        updatedAt: new Date().toISOString()
-      };
-      products.unshift(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Product Created',
-        module: 'Products',
-        target: saved.name,
-        details: `کد جدید: ${saved.productCode}`
-      });
+      }).catch(console.error);
     }
-    this.set('aura_products', products);
+
+    this.notify();
     return saved;
   }
 
-  public deleteProduct(id: number, adminUser: { id: number; name: string }) {
-    const products = this.getProducts();
-    const target = products.find((p) => p.id === id);
-    const updated = products.filter((p) => p.id !== id);
-    this.set('aura_products', updated);
-    if (target) {
+  public async deleteArticle(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('articles').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting article:', error);
+      throw error;
+    }
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Article Deleted',
+        module: 'Content',
+        target: String(id),
+        details: `مقاله شناسه ${id} حذف شد`
+      }).catch(console.error);
+    }
+    this.notify();
+  }
+
+  public async deleteProduct(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting product:', error);
+      throw error;
+    }
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
         action: 'Product Deleted',
         module: 'Products',
-        target: target.name,
-        details: `محصول ${target.productCode} حذف گردید`
-      });
+        target: String(id),
+        details: `محصول شناسه ${id} حذف گردید`
+      }).catch(console.error);
     }
+    this.notify();
   }
 
   // --- BANNERS ---
-  public getBanners(): Banner[] {
-    return this.get<Banner[]>('aura_banners').sort((a, b) => a.displayOrder - b.displayOrder);
+  public async getBanners(): Promise<Banner[]> {
+    if (!isSupabaseConfigured()) return this.cachedBanners;
+    try {
+      const { data, error } = await supabase
+        .from('banners')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (error) throw error;
+      this.cachedBanners = (data || []).map(rowToBanner);
+      return this.cachedBanners;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching banners:', err);
+      return this.cachedBanners;
+    }
   }
 
-  public getActiveBanners(): Banner[] {
-    return this.getBanners().filter((b) => b.active);
+  public async getActiveBanners(): Promise<Banner[]> {
+    const banners = await this.getBanners();
+    return banners.filter((b) => b.active);
   }
 
-  public saveBanner(bannerData: Partial<Banner>, adminUser: { id: number; name: string }): Banner {
-    const banners = this.getBanners();
-    let saved: Banner;
-    if (bannerData.id) {
-      const idx = banners.findIndex((b) => b.id === bannerData.id);
-      saved = { ...banners[idx], ...bannerData } as Banner;
-      banners[idx] = saved;
+  public async saveBanner(bannerData: Partial<Banner>, adminUser?: { id: number; name: string }): Promise<Banner> {
+    const row = bannerToRow(bannerData);
+    if (!row.id) {
+      row.id = Date.now();
+    }
+
+    const { data, error } = await supabase.from('banners').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving banner:', error);
+      throw error;
+    }
+    const saved = rowToBanner(data);
+
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
-        action: 'Banner Edited',
+        action: bannerData.id ? 'Banner Edited' : 'Banner Created',
         module: 'Banners',
         target: saved.internalName,
         details: `وضعیت: ${saved.active ? 'فعال' : 'غیرفعال'}`
-      });
-    } else {
-      saved = {
-        id: Date.now(),
-        internalName: bannerData.internalName || 'بنر تبلیغاتی جدید',
-        eyebrow: bannerData.eyebrow || 'AURAVIBE',
-        title: bannerData.title || 'عنوان بنر',
-        subtitle: bannerData.subtitle || 'توضیحات تکمیلی بنر',
-        image: bannerData.image || satinImage,
-        active: bannerData.active ?? true,
-        displayOrder: banners.length + 1
-      };
-      banners.push(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Banner Created',
-        module: 'Banners',
-        target: saved.internalName,
-        details: `ترتیب: ${saved.displayOrder}`
-      });
+      }).catch(console.error);
     }
-    this.set('aura_banners', banners);
+
+    this.notify();
     return saved;
   }
 
-  public reorderBanners(reordered: Banner[], adminUser: { id: number; name: string }) {
-    const updated = reordered.map((b, idx) => ({ ...b, displayOrder: idx + 1 }));
-    this.set('aura_banners', updated);
-    this.addAuditLog({
-      adminId: adminUser.id,
-      adminName: adminUser.name,
-      action: 'Banners Reordered',
-      module: 'Banners',
-      target: 'اسلایدر اصلی',
-      details: 'ترتیب بنرهای صفحه اصلی تغییر یافت'
-    });
+  public async reorderBanners(reordered: Banner[], adminUser?: { id: number; name: string }): Promise<void> {
+    const updates = reordered.map((b, idx) => ({
+      id: b.id,
+      display_order: idx + 1
+    }));
+
+    for (const item of updates) {
+      await supabase.from('banners').update({ display_order: item.display_order }).eq('id', item.id);
+    }
+
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Banners Reordered',
+        module: 'Banners',
+        target: 'اسلایدر اصلی',
+        details: 'ترتیب بنرهای صفحه اصلی تغییر یافت'
+      }).catch(console.error);
+    }
+
+    this.notify();
   }
 
-  public deleteBanner(id: number, adminUser: { id: number; name: string }) {
-    const banners = this.getBanners();
-    const target = banners.find((b) => b.id === id);
-    const updated = banners.filter((b) => b.id !== id);
-    this.set('aura_banners', updated);
-    if (target) {
+  public async deleteBanner(id: number, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('banners').delete().eq('id', id);
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting banner:', error);
+      throw error;
+    }
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
         action: 'Banner Deleted',
         module: 'Banners',
-        target: target.internalName,
-        details: `بنر ${target.id} حذف شد`
-      });
+        target: String(id),
+        details: `بنر ${id} حذف شد`
+      }).catch(console.error);
+    }
+    this.notify();
+  }
+
+  // --- ORDERS ---
+  public async getOrders(): Promise<Order[]> {
+    if (!isSupabaseConfigured()) return this.cachedOrders;
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      this.cachedOrders = (data || []).map(rowToOrder);
+      return this.cachedOrders;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching orders:', err);
+      return this.cachedOrders;
     }
   }
 
-  // --- ORDERS & SALES ANALYTICS ---
-  public getOrders(): Order[] {
-    return this.get<Order[]>('aura_orders');
-  }
-
-  /**
-   * Helper to filter only valid orders (excluding canceled, returned, or failed orders)
-   */
-  public getValidOrders(): Order[] {
+  public async getValidOrders(): Promise<Order[]> {
+    const all = await this.getOrders();
     const invalidStatuses: OrderStatus[] = ['لغو شده', 'مرجوع شده', 'ناموفق / مشکل در ارسال'];
-    return this.getOrders().filter((o) => !invalidStatuses.includes(o.orderStatus));
+    return all.filter((o) => !invalidStatuses.includes(o.orderStatus));
   }
 
-  public getOrderById(id: string): Order | undefined {
-    return this.getOrders().find((o) => o.id === id || o.orderNumber === id);
+  public async getOrderById(id: string): Promise<Order | undefined> {
+    const all = await this.getOrders();
+    return all.find((o) => o.id === id || o.orderNumber === id);
   }
 
-  public createOrder(orderPayload: {
+  public async createOrder(orderPayload: {
     customer: OrderCustomer;
     items: OrderItemSnapshot[];
     shippingMethod: ShippingMethod;
-  }): Order {
-    const orders = this.getOrders();
+  }): Promise<Order> {
     const orderNum = `ORD-${Math.floor(10000 + Math.random() * 89999)}`;
     const now = new Date();
 
@@ -1223,16 +837,22 @@ class DatabaseService {
       updatedAt: now.toISOString()
     };
 
-    orders.unshift(newOrder);
-    this.set('aura_orders', orders);
+    const row = orderToRow(newOrder);
+    const { data, error } = await supabase.from('orders').insert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error creating order:', error);
+      throw error;
+    }
+    const saved = rowToOrder(data);
 
-    // Also update order count for user if user exists
+    // Update order count for user
     if (orderPayload.customer.userId) {
-      const users = this.getUsers();
-      const uIdx = users.findIndex((u) => u.id === orderPayload.customer.userId);
-      if (uIdx !== -1) {
-        users[uIdx].orderCount += 1;
-        this.set('aura_users', users);
+      const user = await this.getUserById(orderPayload.customer.userId);
+      if (user) {
+        await supabase
+          .from('users')
+          .update({ order_count: (user.orderCount || 0) + 1 })
+          .eq('id', user.id);
       }
     }
 
@@ -1242,23 +862,22 @@ class DatabaseService {
       title: 'سفارش جدید ثبت شد',
       message: `سفارش ${orderNum} به مبلغ ${totalAmount.toLocaleString('fa-IR')} تومان ثبت گردید.`,
       type: 'order'
-    });
+    }).catch(console.error);
 
-    return newOrder;
+    this.notify();
+    return saved;
   }
 
-  public updateOrderStatus(
+  public async updateOrderStatus(
     orderId: string,
     newStatus: OrderStatus,
     adminUser: { id: number; name: string },
     note?: string,
     shippingMethodKey?: ShippingMethodKey
-  ) {
-    const orders = this.getOrders();
-    const idx = orders.findIndex((o) => o.id === orderId);
-    if (idx === -1) return;
+  ): Promise<void> {
+    const order = await this.getOrderById(orderId);
+    if (!order) return;
 
-    const order = orders[idx];
     const oldStatus = order.orderStatus;
     order.orderStatus = newStatus;
     order.updatedAt = new Date().toISOString();
@@ -1296,8 +915,12 @@ class DatabaseService {
       note: note || `وضعیت سفارش توسط ${adminUser.name} به "${newStatus}" تغییر نمود.`
     });
 
-    orders[idx] = order;
-    this.set('aura_orders', orders);
+    const row = orderToRow(order);
+    const { error } = await supabase.from('orders').update(row).eq('id', orderId);
+    if (error) {
+      console.error('[AuraVibe DB] Error updating order status:', error);
+      throw error;
+    }
 
     this.addAuditLog({
       adminId: adminUser.id,
@@ -1306,119 +929,235 @@ class DatabaseService {
       module: 'Orders',
       target: order.orderNumber,
       details: `تغییر از "${oldStatus}" به "${newStatus}"`
-    });
+    }).catch(console.error);
 
-    // Notify Customer
-    this.addNotification({
-      targetRole: 'user',
-      userId: order.customer.userId,
-      title: `به‌روزرسانی وضعیت سفارش ${order.orderNumber}`,
-      message: `وضعیت سفارش شما به "${newStatus}" تغییر یافت.`,
-      type: 'order'
-    });
+    if (order.customer.userId) {
+      this.addNotification({
+        targetRole: 'user',
+        userId: order.customer.userId,
+        title: `به‌روزرسانی وضعیت سفارش ${order.orderNumber}`,
+        message: `وضعیت سفارش شما به "${newStatus}" تغییر یافت.`,
+        type: 'order'
+      }).catch(console.error);
+    }
+
+    this.notify();
   }
 
   // --- USERS & ADMINS ---
-  public getUsers(): User[] {
-    return this.get<User[]>('aura_users');
+  public async getUsers(): Promise<User[]> {
+    if (!isSupabaseConfigured()) return this.cachedUsers;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('id', { ascending: true });
+      if (error) throw error;
+      this.cachedUsers = (data || []).map(rowToUser);
+      return this.cachedUsers;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching users:', err);
+      return this.cachedUsers;
+    }
   }
 
-  public saveUser(userData: Partial<User>, adminUser: { id: number; name: string }): User {
-    const users = this.getUsers();
-    let saved: User;
-    if (userData.id) {
-      const idx = users.findIndex((u) => u.id === userData.id);
-      saved = { ...users[idx], ...userData } as User;
-      users[idx] = saved;
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'User Edited',
-        module: 'Users',
-        target: `${saved.firstName} ${saved.lastName}`,
-        details: `وضعیت: ${saved.status}`
-      });
-    } else {
-      saved = {
-        id: Date.now(),
-        firstName: userData.firstName || 'کاربر',
-        lastName: userData.lastName || 'جدید',
-        phone: userData.phone || '۰۹۱۲۰۰۰۰۰۰۰',
-        email: userData.email,
-        province: userData.province,
-        city: userData.city,
-        address: userData.address,
-        postalCode: userData.postalCode,
-        registrationDate: new Date().toLocaleDateString('fa-IR'),
-        lastLogin: 'هم‌اکنون',
-        status: 'active',
-        orderCount: 0
-      };
-      users.unshift(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'User Created',
-        module: 'Users',
-        target: `${saved.firstName} ${saved.lastName}`,
-        details: `شماره تماس: ${saved.phone}`
-      });
+  public async getUserById(id: number): Promise<User | undefined> {
+    const users = await this.getUsers();
+    return users.find((u) => u.id === id);
+  }
+
+  public async saveUser(userData: Partial<User>, adminUser?: { id: number; name: string }): Promise<User> {
+    const row = userToRow(userData);
+    if (!row.id) {
+      row.id = Math.floor(1000 + Math.random() * 8999);
+      if (!row.registration_date) row.registration_date = new Date().toLocaleDateString('fa-IR');
+      if (!row.status) row.status = 'active';
+      if (!row.last_login) row.last_login = 'هم‌اکنون';
     }
-    this.set('aura_users', users);
+
+    const { data, error } = await supabase.from('users').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving user:', error);
+      throw error;
+    }
+    const saved = rowToUser(data);
+
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: userData.id ? 'User Edited' : 'User Created',
+        module: 'Users',
+        target: `${saved.firstName} ${saved.lastName}`,
+        details: userData.id ? `وضعیت: ${saved.status}` : `شماره تماس: ${saved.phone}`
+      }).catch(console.error);
+    }
+
+    this.notify();
     return saved;
   }
 
-  public blockUser(userId: number, blockReason: string, adminUser: { id: number; name: string }) {
-    const users = this.getUsers();
-    const idx = users.findIndex((u) => u.id === userId);
-    if (idx !== -1) {
-      users[idx].status = 'blocked';
-      users[idx].blockReason = blockReason;
-      this.set('aura_users', users);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'User Blocked',
-        module: 'Users',
-        target: `${users[idx].firstName} ${users[idx].lastName}`,
-        details: `دلیل مسدودی: ${blockReason}`
-      });
+  public async blockUser(userId: number, blockReason: string, adminUser: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({ status: 'blocked', block_reason: blockReason })
+      .eq('id', userId);
+    if (error) {
+      console.error('[AuraVibe DB] Error blocking user:', error);
+      throw error;
+    }
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: 'User Blocked',
+      module: 'Users',
+      target: String(userId),
+      details: `دلیل مسدودی: ${blockReason}`
+    }).catch(console.error);
+    this.notify();
+  }
+
+  public async unblockUser(userId: number, adminUser: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase
+      .from('users')
+      .update({ status: 'active', block_reason: null })
+      .eq('id', userId);
+    if (error) {
+      console.error('[AuraVibe DB] Error unblocking user:', error);
+      throw error;
+    }
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: 'User Unblocked',
+      module: 'Users',
+      target: String(userId),
+      details: 'کاربر از حالت مسدود خارج گردید'
+    }).catch(console.error);
+    this.notify();
+  }
+
+  // --- ADMIN USERS & SUPABASE AUTH ---
+  public async getAdmins(): Promise<AdminUser[]> {
+    if (!isSupabaseConfigured()) return this.cachedAdmins;
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .order('id', { ascending: true });
+      if (error) throw error;
+      this.cachedAdmins = (data || []).map(rowToAdmin);
+      return this.cachedAdmins;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching admins:', err);
+      return this.cachedAdmins;
     }
   }
 
-  public unblockUser(userId: number, adminUser: { id: number; name: string }) {
-    const users = this.getUsers();
-    const idx = users.findIndex((u) => u.id === userId);
-    if (idx !== -1) {
-      users[idx].status = 'active';
-      users[idx].blockReason = undefined;
-      this.set('aura_users', users);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'User Unblocked',
-        module: 'Users',
-        target: `${users[idx].firstName} ${users[idx].lastName}`,
-        details: 'کاربر از حالت مسدود خارج گردید'
-      });
+  public async getCurrentAdmin(): Promise<AdminUser | null> {
+    if (!isSupabaseConfigured()) {
+      // Fallback in unconfigured mode
+      const admins = await this.getAdmins();
+      return admins[0] || null;
+    }
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) return null;
+
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('auth_user_id', authData.user.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return rowToAdmin(data);
+    } catch (err) {
+      console.error('[AuraVibe DB] Error retrieving current admin:', err);
+      return null;
     }
   }
 
-  // --- ADMINS (SUPER_ADMIN ONLY ACTIONS) ---
-  public getAdmins(): AdminUser[] {
-    return this.get<AdminUser[]>('aura_admins');
+  public async adminLogin(usernameOrEmail: string, password: string): Promise<AdminUser> {
+    if (!isSupabaseConfigured()) {
+      throw new Error('پیکربندی Supabase انجام نشده است. لطفاً فایل .env.local را تنظیم فرمایید.');
+    }
+
+    const email = usernameOrEmail.includes('@')
+      ? usernameOrEmail
+      : `${usernameOrEmail.trim().toLowerCase()}@auravibe.ir`;
+
+    const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (authError || !authResult.user) {
+      throw new Error(authError?.message || 'نام کاربری یا رمز عبور نامعتبر است.');
+    }
+
+    const { data: adminData, error: adminErr } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('auth_user_id', authResult.user.id)
+      .eq('status', 'active')
+      .single();
+
+    if (adminErr || !adminData) {
+      await supabase.auth.signOut();
+      throw new Error('این حساب کاربری دسترسی معتبر ادمین در سیستم ندارد.');
+    }
+
+    const admin = rowToAdmin(adminData);
+
+    // Update last_login
+    await supabase
+      .from('admin_users')
+      .update({ last_login: 'هم‌اکنون' })
+      .eq('id', admin.id);
+
+    this.addAuditLog({
+      adminId: admin.id,
+      adminName: `${admin.firstName} ${admin.lastName}`,
+      action: 'Admin Login',
+      module: 'Security',
+      target: admin.username,
+      details: 'ورود موفقیت‌آمیز به پیشخوان مدیریتی'
+    }).catch(console.error);
+
+    this.notify();
+    return admin;
   }
 
-  public saveAdmin(adminData: Partial<AdminUser>, currentSuperAdmin: { id: number; name: string; role: AdminRole }): AdminUser {
+  public async adminLogout(): Promise<void> {
+    if (isSupabaseConfigured()) {
+      await supabase.auth.signOut();
+    }
+    this.notify();
+  }
+
+  public async saveAdmin(
+    adminData: Partial<AdminUser> & { password?: string; passwordHash?: string },
+    currentSuperAdmin: { id: number; name: string; role: AdminRole }
+  ): Promise<AdminUser> {
     if (currentSuperAdmin.role !== 'SUPER_ADMIN') {
       throw new Error('فقط مدیر اصلی (SUPER_ADMIN) مجاز به مدیریت حساب ادمین‌ها می‌باشد.');
     }
-    const admins = this.getAdmins();
-    let saved: AdminUser;
+
+    const row = adminToRow(adminData);
+
     if (adminData.id) {
-      const idx = admins.findIndex((a) => a.id === adminData.id);
-      saved = { ...admins[idx], ...adminData } as AdminUser;
-      admins[idx] = saved;
+      // Edit existing application record
+      const { data, error } = await supabase
+        .from('admin_users')
+        .update(row)
+        .eq('id', adminData.id)
+        .select()
+        .single();
+      if (error) throw error;
+      const saved = rowToAdmin(data);
       this.addAuditLog({
         adminId: currentSuperAdmin.id,
         adminName: currentSuperAdmin.name,
@@ -1426,50 +1165,81 @@ class DatabaseService {
         module: 'Admins',
         target: saved.username,
         details: `نقش: ${saved.role}`
-      });
+      }).catch(console.error);
+      this.notify();
+      return saved;
     } else {
-      saved = {
-        id: Date.now(),
-        adminCode: `ADM-${Math.floor(100 + Math.random() * 899)}`,
-        firstName: adminData.firstName || 'ادمین',
-        lastName: adminData.lastName || 'جدید',
-        username: adminData.username || `admin_${Date.now()}`,
-        passwordHash: adminData.passwordHash || 'admin123',
-        role: adminData.role || 'MANAGER',
-        customPermissions: adminData.customPermissions || ['manage_products', 'manage_orders'],
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        lastLogin: 'هرگز'
-      };
-      admins.push(saved);
-      this.addAuditLog({
-        adminId: currentSuperAdmin.id,
-        adminName: currentSuperAdmin.name,
-        action: 'Admin Created',
-        module: 'Admins',
-        target: saved.username,
-        details: `نقش اختصاص یافته: ${saved.role}`
+      // Create new admin
+      const rawPassword = adminData.password || adminData.passwordHash || 'admin123';
+      const email = `${(adminData.username || `admin_${Date.now()}`).trim().toLowerCase()}@auravibe.ir`;
+
+      // Try RPC if defined
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_admin_user', {
+        p_username: adminData.username || `admin_${Date.now()}`,
+        p_email: email,
+        p_password: rawPassword,
+        p_first_name: adminData.firstName || 'ادمین',
+        p_last_name: adminData.lastName || 'جدید',
+        p_role: adminData.role || 'MANAGER',
+        p_permissions: adminData.customPermissions || ['manage_products', 'manage_orders']
       });
+
+      if (!rpcError && rpcResult?.user_id) {
+        const admins = await this.getAdmins();
+        const saved = admins.find((a) => a.username === adminData.username) || {
+          id: Date.now(),
+          adminCode: `ADM-${Math.floor(100 + Math.random() * 899)}`,
+          firstName: adminData.firstName || 'ادمین',
+          lastName: adminData.lastName || 'جدید',
+          username: adminData.username || 'admin',
+          role: adminData.role || 'MANAGER',
+          customPermissions: adminData.customPermissions || [],
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          lastLogin: 'هرگز'
+        };
+        this.notify();
+        return saved;
+      }
+
+      // Direct fallback insert if RLS permits
+      row.id = Date.now();
+      row.admin_code = `ADM-${Math.floor(100 + Math.random() * 899)}`;
+      row.auth_user_id = row.auth_user_id || crypto.randomUUID();
+      const { data, error } = await supabase.from('admin_users').insert(row).select().single();
+      if (error) {
+        console.error('[AuraVibe DB] Error creating admin:', error);
+        throw error;
+      }
+      const saved = rowToAdmin(data);
+      this.notify();
+      return saved;
     }
-    this.set('aura_admins', admins);
-    return saved;
   }
 
-  // --- SUPPORT TICKETS / REAL CHAT ---
-  public getTickets(): SupportTicket[] {
-    return this.get<SupportTicket[]>('aura_tickets');
+  // --- SUPPORT TICKETS ---
+  public async getTickets(): Promise<SupportTicket[]> {
+    if (!isSupabaseConfigured()) return this.cachedTickets;
+    try {
+      const { data, error } = await supabase
+        .from('support_tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      this.cachedTickets = (data || []).map(rowToTicket);
+      return this.cachedTickets;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching tickets:', err);
+      return this.cachedTickets;
+    }
   }
 
-  /**
-   * Unread conversations count for Admin sidebar badge:
-   * Number of conversations with unread admin messages and not closed
-   */
-  public getUnreadSupportConversationsCount(): number {
-    const tickets = this.getTickets();
+  public async getUnreadSupportConversationsCount(): Promise<number> {
+    const tickets = await this.getTickets();
     return tickets.filter((t) => (t.unreadAdminCount ?? 0) > 0 && t.status !== 'Closed').length;
   }
 
-  public createTicket(payload: {
+  public async createTicket(payload: {
     userId?: number;
     customerName: string;
     customerPhone: string;
@@ -1479,8 +1249,7 @@ class DatabaseService {
     initialMessage: string;
     mediaUrl?: string;
     mediaType?: 'text' | 'image' | 'video' | 'audio';
-  }): SupportTicket {
-    const tickets = this.getTickets();
+  }): Promise<SupportTicket> {
     const ticketNum = `TCK-${Math.floor(1000 + Math.random() * 8999)}`;
     const now = new Date();
 
@@ -1514,12 +1283,18 @@ class DatabaseService {
       updatedAt: now.toISOString()
     };
 
-    tickets.unshift(newTicket);
-    this.set('aura_tickets', tickets);
-    return newTicket;
+    const row = ticketToRow(newTicket);
+    const { data, error } = await supabase.from('support_tickets').insert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error creating ticket:', error);
+      throw error;
+    }
+    const saved = rowToTicket(data);
+    this.notify();
+    return saved;
   }
 
-  public replyTicket(
+  public async replyTicket(
     ticketId: string,
     message: string,
     sender: 'customer' | 'admin',
@@ -1528,14 +1303,12 @@ class DatabaseService {
     newStatus?: TicketStatus,
     mediaType: 'text' | 'image' | 'video' | 'audio' = 'text',
     mediaUrl?: string
-  ) {
-    const tickets = this.getTickets();
-    const idx = tickets.findIndex((t) => t.id === ticketId);
-    if (idx === -1) return;
+  ): Promise<void> {
+    const tickets = await this.getTickets();
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
 
-    const ticket = tickets[idx];
     const now = new Date();
-
     ticket.messages.push({
       id: `msg-${Date.now()}`,
       sender,
@@ -1560,166 +1333,263 @@ class DatabaseService {
     }
 
     ticket.updatedAt = now.toISOString();
-    tickets[idx] = ticket;
-    this.set('aura_tickets', tickets);
+    const row = ticketToRow(ticket);
+    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    if (error) {
+      console.error('[AuraVibe DB] Error replying ticket:', error);
+      throw error;
+    }
+    this.notify();
   }
 
-  public markTicketAsReadByAdmin(ticketId: string) {
-    const tickets = this.getTickets();
-    const idx = tickets.findIndex((t) => t.id === ticketId);
-    if (idx === -1) return;
+  public async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
+    const tickets = await this.getTickets();
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
 
-    const ticket = tickets[idx];
     ticket.unreadAdminCount = 0;
     ticket.messages.forEach((m) => {
       if (m.sender === 'customer') m.readByAdmin = true;
     });
-    tickets[idx] = ticket;
-    this.set('aura_tickets', tickets);
+
+    const row = ticketToRow(ticket);
+    await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    this.notify();
   }
 
-  public markTicketAsReadByUser(ticketId: string) {
-    const tickets = this.getTickets();
-    const idx = tickets.findIndex((t) => t.id === ticketId);
-    if (idx === -1) return;
+  public async markTicketAsReadByUser(ticketId: string): Promise<void> {
+    const tickets = await this.getTickets();
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
 
-    const ticket = tickets[idx];
     ticket.unreadUserCount = 0;
     ticket.messages.forEach((m) => {
       if (m.sender === 'admin') m.readByUser = true;
     });
-    tickets[idx] = ticket;
-    this.set('aura_tickets', tickets);
+
+    const row = ticketToRow(ticket);
+    await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    this.notify();
   }
 
-  public updateTicketState(
+  public async updateTicketState(
     ticketId: string,
     updates: Partial<Pick<SupportTicket, 'status' | 'isPinned' | 'isBlocked'>>
-  ) {
-    const tickets = this.getTickets();
-    const idx = tickets.findIndex((t) => t.id === ticketId);
-    if (idx === -1) return;
+  ): Promise<void> {
+    const row: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (updates.status !== undefined) row.status = updates.status;
+    if (updates.isPinned !== undefined) row.is_pinned = updates.isPinned;
+    if (updates.isBlocked !== undefined) row.is_blocked = updates.isBlocked;
 
-    tickets[idx] = { ...tickets[idx], ...updates, updatedAt: new Date().toISOString() };
-    this.set('aura_tickets', tickets);
+    const { error } = await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    if (error) {
+      console.error('[AuraVibe DB] Error updating ticket state:', error);
+      throw error;
+    }
+    this.notify();
   }
 
-  public deleteMessageFromTicket(ticketId: string, messageId: string) {
-    const tickets = this.getTickets();
-    const idx = tickets.findIndex((t) => t.id === ticketId);
-    if (idx === -1) return;
+  public async deleteMessageFromTicket(ticketId: string, messageId: string): Promise<void> {
+    const tickets = await this.getTickets();
+    const ticket = tickets.find((t) => t.id === ticketId);
+    if (!ticket) return;
 
-    tickets[idx].messages = tickets[idx].messages.filter((m) => m.id !== messageId);
-    tickets[idx].updatedAt = new Date().toISOString();
-    this.set('aura_tickets', tickets);
+    ticket.messages = ticket.messages.filter((m) => m.id !== messageId);
+    ticket.updatedAt = new Date().toISOString();
+
+    const row = ticketToRow(ticket);
+    await supabase.from('support_tickets').update(row).eq('id', ticketId);
+    this.notify();
   }
 
   // --- ARTICLES / MAGAZINE ---
-  public getArticles(): Article[] {
-    return this.get<Article[]>('aura_articles');
+  public async getArticles(): Promise<Article[]> {
+    if (!isSupabaseConfigured()) return this.cachedArticles;
+    try {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (error) throw error;
+      this.cachedArticles = (data || []).map(rowToArticle);
+      return this.cachedArticles;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching articles:', err);
+      return this.cachedArticles;
+    }
   }
 
-  public saveArticle(articleData: Partial<Article>, adminUser: { id: number; name: string }): Article {
-    const articles = this.getArticles();
-    let saved: Article;
-    const nowIso = new Date().toISOString();
+  public async saveArticle(articleData: Partial<Article>, adminUser?: { id: number; name: string }): Promise<Article> {
+    const row = articleToRow(articleData);
+    if (!row.id) {
+      row.id = Date.now();
+      if (!row.slug) row.slug = `article-${Date.now()}`;
+    }
 
-    if (articleData.id) {
-      const idx = articles.findIndex((a) => a.id === articleData.id);
-      saved = { ...articles[idx], ...articleData } as Article;
-      articles[idx] = saved;
+    const { data, error } = await supabase.from('articles').upsert(row).select().single();
+    if (error) {
+      console.error('[AuraVibe DB] Error saving article:', error);
+      throw error;
+    }
+    const saved = rowToArticle(data);
+
+    if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
         adminName: adminUser.name,
-        action: 'Article Edited',
+        action: articleData.id ? 'Article Edited' : 'Article Created',
         module: 'Content',
         target: saved.title,
         details: `وضعیت: ${saved.status}`
-      });
-    } else {
-      saved = {
-        id: Date.now(),
-        title: articleData.title || 'عنوان مقاله جدید',
-        subtitle: articleData.subtitle,
-        fullArticleTitle: articleData.fullArticleTitle,
-        slug: articleData.slug || `article-${Date.now()}`,
-        digest: articleData.digest || 'چکیده مقاله...',
-        content: articleData.content || 'متن کامل مقاله...',
-        tag: articleData.tag || 'ترند فصل',
-        category: articleData.category || 'راهنمای استایل',
-        author: articleData.author || adminUser.name,
-        keywords: articleData.keywords || [],
-        image: articleData.image || satinImage,
-        status: articleData.status || 'published',
-        createdAt: nowIso,
-        publishedAt: nowIso,
-        seo: articleData.seo || {}
-      };
-      articles.unshift(saved);
-      this.addAuditLog({
-        adminId: adminUser.id,
-        adminName: adminUser.name,
-        action: 'Article Created',
-        module: 'Content',
-        target: saved.title,
-        details: `انتشار در مجله`
-      });
+      }).catch(console.error);
     }
-    this.set('aura_articles', articles);
+
+    this.notify();
     return saved;
   }
 
   // --- SEO & SETTINGS ---
-  public getGlobalSEO(): GlobalSEO {
-    return this.get<GlobalSEO>('aura_global_seo');
+  public async getGlobalSEO(): Promise<GlobalSEO> {
+    if (!isSupabaseConfigured()) return this.cachedSEO;
+    try {
+      const { data, error } = await supabase.from('global_seo').select('*').eq('id', 1).maybeSingle();
+      if (error || !data) return this.cachedSEO;
+      this.cachedSEO = rowToGlobalSEO(data);
+      return this.cachedSEO;
+    } catch {
+      return this.cachedSEO;
+    }
   }
 
-  public updateGlobalSEO(seoData: Partial<GlobalSEO>, adminUser: { id: number; name: string }) {
-    const current = this.getGlobalSEO();
-    const updated = { ...current, ...seoData };
-    this.set('aura_global_seo', updated);
-    this.addAuditLog({
-      adminId: adminUser.id,
-      adminName: adminUser.name,
-      action: 'Global SEO Updated',
-      module: 'Settings',
-      target: 'موتورهای جستجو',
-      details: 'تنظیمات کلی SEO ذخیره گردید'
-    });
+  public async updateGlobalSEO(seoData: Partial<GlobalSEO>, adminUser?: { id: number; name: string }): Promise<void> {
+    const row = globalSeoToRow(seoData);
+    const { error } = await supabase.from('global_seo').upsert(row);
+    if (error) {
+      console.error('[AuraVibe DB] Error updating global SEO:', error);
+      throw error;
+    }
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Global SEO Updated',
+        module: 'Settings',
+        target: 'موتورهای جستجو',
+        details: 'تنظیمات کلی SEO ذخیره گردید'
+      }).catch(console.error);
+    }
+    this.notify();
   }
 
-  public getGeneralSettings(): GeneralSettings {
-    return this.get<GeneralSettings>('aura_settings');
+  public async getGeneralSettings(): Promise<GeneralSettings> {
+    if (!isSupabaseConfigured()) return this.cachedSettings;
+    try {
+      const { data, error } = await supabase.from('general_settings').select('*').eq('id', 1).maybeSingle();
+      if (error || !data) return this.cachedSettings;
+      this.cachedSettings = rowToGeneralSettings(data);
+      return this.cachedSettings;
+    } catch {
+      return this.cachedSettings;
+    }
   }
 
-  public updateGeneralSettings(settings: Partial<GeneralSettings>, adminUser: { id: number; name: string }) {
-    const current = this.getGeneralSettings();
-    const updated = { ...current, ...settings };
-    this.set('aura_settings', updated);
-    this.addAuditLog({
-      adminId: adminUser.id,
-      adminName: adminUser.name,
-      action: 'General Settings Updated',
-      module: 'Settings',
-      target: 'تنظیمات عمومی سایت',
-      details: 'اطلاعات هدر، فوتر و ارتباطات آپدیت شد'
-    });
+  public async updateGeneralSettings(settings: Partial<GeneralSettings>, adminUser?: { id: number; name: string }): Promise<void> {
+    const row = generalSettingsToRow(settings);
+    const { error } = await supabase.from('general_settings').upsert(row);
+    if (error) {
+      console.error('[AuraVibe DB] Error updating general settings:', error);
+      throw error;
+    }
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'General Settings Updated',
+        module: 'Settings',
+        target: 'تنظیمات عمومی سایت',
+        details: 'اطلاعات هدر، فوتر و ارتباطات آپدیت شد'
+      }).catch(console.error);
+    }
+    this.notify();
+  }
+
+  // --- REDIRECTS ---
+  public async getRedirects(): Promise<RedirectRule[]> {
+    if (!isSupabaseConfigured()) return this.cachedRedirects;
+    try {
+      const { data, error } = await supabase.from('redirects').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      this.cachedRedirects = (data || []).map(rowToRedirect);
+      return this.cachedRedirects;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching redirects:', err);
+      return this.cachedRedirects;
+    }
+  }
+
+  public async saveRedirect(redirect: Partial<RedirectRule>, adminUser?: { id: number; name: string }): Promise<RedirectRule> {
+    const row = redirectToRow(redirect);
+    if (!row.id) row.id = String(Date.now());
+    const { data, error } = await supabase.from('redirects').upsert(row).select().single();
+    if (error) throw error;
+    const saved = rowToRedirect(data);
+
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Redirect Saved',
+        module: 'Settings',
+        target: saved.sourceUrl,
+        details: `ریدایرکت به ${saved.destinationUrl}`
+      }).catch(console.error);
+    }
+    this.notify();
+    return saved;
+  }
+
+  public async deleteRedirect(id: string, adminUser?: { id: number; name: string }): Promise<void> {
+    const { error } = await supabase.from('redirects').delete().eq('id', id);
+    if (error) throw error;
+    if (adminUser) {
+      this.addAuditLog({
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        action: 'Redirect Deleted',
+        module: 'Settings',
+        target: id,
+        details: `ریدایرکت ${id} حذف شد`
+      }).catch(console.error);
+    }
+    this.notify();
   }
 
   // --- AUDIT LOGS ---
-  public getAuditLogs(): AuditLog[] {
-    return this.get<AuditLog[]>('aura_audit_logs');
+  public async getAuditLogs(): Promise<AuditLog[]> {
+    if (!isSupabaseConfigured()) return this.cachedAuditLogs;
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      this.cachedAuditLogs = (data || []).map(rowToAuditLog);
+      return this.cachedAuditLogs;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching audit logs:', err);
+      return this.cachedAuditLogs;
+    }
   }
 
-  public addAuditLog(entry: {
+  public async addAuditLog(entry: {
     adminId: number;
     adminName: string;
     action: string;
     module: AuditLog['module'];
     target: string;
     details: string;
-  }) {
-    const logs = this.getAuditLogs();
+  }): Promise<void> {
     const now = new Date();
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -1735,26 +1605,47 @@ class DatabaseService {
       device: 'Admin Panel Web',
       details: entry.details
     };
-    logs.unshift(newLog);
-    this.set('aura_audit_logs', logs.slice(0, 100)); // Keep last 100 logs
+
+    if (isSupabaseConfigured()) {
+      const row = auditLogToRow(newLog);
+      await supabase.from('audit_logs').insert(row);
+    } else {
+      this.cachedAuditLogs.unshift(newLog);
+    }
   }
 
   // --- NOTIFICATIONS ---
-  public getNotifications(role: 'admin' | 'user', userId?: number): AppNotification[] {
-    const all = this.get<AppNotification[]>('aura_notifications');
-    return all.filter((n) => n.targetRole === role && (!userId || n.userId === userId));
+  public async getNotifications(role: 'admin' | 'user', userId?: number): Promise<AppNotification[]> {
+    if (!isSupabaseConfigured()) {
+      return this.cachedNotifications.filter((n) => n.targetRole === role && (!userId || n.userId === userId));
+    }
+    try {
+      let query = supabase.from('notifications').select('*').eq('target_role', role);
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      this.cachedNotifications = (data || []).map(rowToNotification);
+      return this.cachedNotifications;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching notifications:', err);
+      return this.cachedNotifications;
+    }
   }
 
-  public addNotification(notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>) {
-    const all = this.get<AppNotification[]>('aura_notifications');
+  public async addNotification(notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): Promise<void> {
     const newNotif: AppNotification = {
       ...notif,
       id: `notif-${Date.now()}`,
       read: false,
       createdAt: new Date().toISOString()
     };
-    all.unshift(newNotif);
-    this.set('aura_notifications', all);
+    if (isSupabaseConfigured()) {
+      const row = notificationToRow(newNotif);
+      await supabase.from('notifications').insert(row);
+    }
+    this.notify();
   }
 }
 

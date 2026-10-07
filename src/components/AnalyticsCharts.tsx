@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react';
 import { db, Order } from '../services/db';
 
@@ -22,6 +22,27 @@ export function AnalyticsCharts({
   setCompareMode
 }: AnalyticsChartsProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [validOrders, setValidOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const vo = await db.getValidOrders();
+        if (active) setValidOrders(vo);
+      } catch (err) {
+        console.error('Failed to load orders in charts:', err);
+      }
+    };
+    load();
+    const unsub = db.subscribe(() => {
+      load();
+    });
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
 
   const now = new Date();
 
@@ -35,8 +56,6 @@ export function AnalyticsCharts({
 
   const currentStartTime = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
   const previousStartTime = new Date(now.getTime() - 2 * periodDays * 24 * 60 * 60 * 1000);
-
-  const validOrders = db.getValidOrders();
 
   // Filter current period orders
   const currentOrders = validOrders.filter((o) => {

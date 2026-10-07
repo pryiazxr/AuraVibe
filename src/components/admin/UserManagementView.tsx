@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Shield,
@@ -18,8 +18,8 @@ type UserManagementViewProps = {
 };
 
 export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
-  const [users, setUsers] = useState<User[]>(() => db.getUsers());
-  const [admins, setAdmins] = useState<AdminUser[]>(() => db.getAdmins());
+  const [users, setUsers] = useState<User[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [activeTab, setActiveTab] = useState<'users' | 'admins'>('users');
 
   // Block User Modal
@@ -40,39 +40,52 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
   const [aPassword, setAPassword] = useState('');
   const [aRole, setARole] = useState<AdminRole>('MANAGER');
 
-  const refreshData = () => {
-    setUsers(db.getUsers());
-    setAdmins(db.getAdmins());
+  const refreshData = async () => {
+    try {
+      const [u, a] = await Promise.all([db.getUsers(), db.getAdmins()]);
+      setUsers(u);
+      setAdmins(a);
+    } catch (err) {
+      console.error('Failed to load users and admins:', err);
+    }
   };
 
-  const handleBlockUser = (e: React.FormEvent) => {
+  useEffect(() => {
+    refreshData();
+    const unsub = db.subscribe(() => {
+      refreshData();
+    });
+    return () => unsub();
+  }, []);
+
+  const handleBlockUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!blockModal.user) return;
-    db.blockUser(blockModal.user.id, blockReason || 'تخلف در سفارشات', {
+    await db.blockUser(blockModal.user.id, blockReason || 'تخلف در سفارشات', {
       id: currentAdmin.id,
       name: `${currentAdmin.firstName} ${currentAdmin.lastName}`
     });
-    refreshData();
+    await refreshData();
     setBlockModal({ open: false, user: null });
   };
 
-  const handleUnblockUser = (userId: number) => {
-    db.unblockUser(userId, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
-    refreshData();
+  const handleUnblockUser = async (userId: number) => {
+    await db.unblockUser(userId, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+    await refreshData();
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uFirstName || !uPhone) return;
-    db.saveUser(
+    await db.saveUser(
       { firstName: uFirstName, lastName: uLastName, phone: uPhone },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
-    refreshData();
+    await refreshData();
     setAddUserModal(false);
   };
 
-  const handleCreateAdmin = (e: React.FormEvent) => {
+  const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentAdmin.role !== 'SUPER_ADMIN') {
       alert('فقط مدیر ارشد کل (SUPER_ADMIN) مجاز به تعریف ادمین جدید می‌باشد.');
@@ -80,7 +93,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
     }
     if (!aUsername || !aPassword) return;
 
-    db.saveAdmin(
+    await db.saveAdmin(
       {
         firstName: aFirstName,
         lastName: aLastName,
@@ -96,7 +109,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
       }
     );
 
-    refreshData();
+    await refreshData();
     setAdminModal(false);
   };
 

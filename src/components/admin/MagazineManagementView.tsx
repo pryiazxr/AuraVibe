@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Power, Image as ImageIcon, X, Paperclip, Lock, Eye } from 'lucide-react';
 import { Article, db, AdminUser, getJalaliDateString } from '../../services/db';
 import { satinImage } from '../../data';
@@ -8,7 +8,8 @@ type MagazineManagementViewProps = {
 };
 
 export function MagazineManagementView({ currentAdmin }: MagazineManagementViewProps) {
-  const [articles, setArticles] = useState<Article[]>(() => db.getArticles());
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Form Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -25,9 +26,22 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
   // Inline images state for rich block editor
   const [inlineImages, setInlineImages] = useState<string[]>([]);
 
-  const refreshList = () => {
-    setArticles(db.getArticles());
+  const refreshList = async () => {
+    try {
+      const list = await db.getArticles();
+      setArticles(list);
+    } catch (err) {
+      console.error('Failed to load articles:', err);
+    }
   };
+
+  useEffect(() => {
+    refreshList();
+    const unsub = db.subscribe(() => {
+      refreshList();
+    });
+    return () => unsub();
+  }, []);
 
   const openForm = (art: Article | null = null) => {
     if (art) {
@@ -51,35 +65,39 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
     setModalOpen(true);
   };
 
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) setABanner(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        setUploading(true);
+        const url = await db.uploadFile('products', file);
+        setABanner(url);
+      } catch (err) {
+        console.error('Failed to upload article banner:', err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
-  const handleInlineImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) {
-          const imgUrl = reader.result as string;
-          setInlineImages((prev) => [...prev, imgUrl]);
-          // Append clean image node marker instead of raw Base64 string in text
-          const cleanMarker = `\n\n[تصویر ${inlineImages.length + 1}]\n\n`;
-          setABody((prev) => prev + cleanMarker);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        setUploading(true);
+        const imgUrl = await db.uploadFile('products', file);
+        setInlineImages((prev) => [...prev, imgUrl]);
+        const cleanMarker = `\n\n[تصویر ${inlineImages.length + 1}]\n\n`;
+        setABody((prev) => prev + cleanMarker);
+      } catch (err) {
+        console.error('Failed to upload inline image:', err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aTitle) return;
 
@@ -91,7 +109,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       finalContent = finalContent.replace(marker, markdownImg);
     });
 
-    db.saveArticle(
+    await db.saveArticle(
       {
         id: editingArticle ? editingArticle.id : undefined,
         title: aTitle,
@@ -105,24 +123,23 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
 
-    refreshList();
+    await refreshList();
     setModalOpen(false);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('آیا از حذف این مقاله اطمینان دارید؟')) {
-      const updated = articles.filter((a) => a.id !== id);
-      localStorage.setItem('aura_articles', JSON.stringify(updated));
-      refreshList();
+      await db.deleteArticle(id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+      await refreshList();
     }
   };
 
-  const handleToggleStatus = (art: Article) => {
-    db.saveArticle(
+  const handleToggleStatus = async (art: Article) => {
+    await db.saveArticle(
       { id: art.id, status: art.status === 'published' ? 'draft' : 'published' },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
-    refreshList();
+    await refreshList();
   };
 
   return (

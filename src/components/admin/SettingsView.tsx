@@ -7,9 +7,28 @@ type SettingsViewProps = {
 };
 
 export function SettingsView({ currentAdmin }: SettingsViewProps) {
-  const [settings, setSettings] = useState<GeneralSettings>(() => db.getGeneralSettings());
-  const [categories, setCategories] = useState<CategoryItem[]>(() => db.getCategories());
-  const [badges, setBadges] = useState<ProductBadgeItem[]>(() => db.getBadges());
+  const [settings, setSettings] = useState<GeneralSettings>({
+    siteName: 'AuraVibe',
+    logoUrl: '',
+    faviconUrl: '',
+    contactEmail: '',
+    contactPhone: '',
+    address: '',
+    workingHours: '',
+    socialLinks: {},
+    timezone: 'Asia/Tehran',
+    language: 'fa',
+    headerLinks: [],
+    footerDescription: '',
+    notifications: {
+      newOrder: true,
+      newUser: true,
+      newTicket: true,
+      securityAlert: true
+    }
+  });
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [badges, setBadges] = useState<ProductBadgeItem[]>([]);
 
   // Modal State for Adding / Editing Category
   const [catModalOpen, setCatModalOpen] = useState(false);
@@ -22,28 +41,52 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
   const [editingBadge, setEditingBadge] = useState<ProductBadgeItem | null>(null);
   const [badgeTitle, setBadgeTitle] = useState('');
 
+  const [siteName, setSiteName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [workingHours, setWorkingHours] = useState('');
+  const [footerDesc, setFooterDesc] = useState('');
+
+  const [notifOrder, setNotifOrder] = useState(true);
+  const [notifUser, setNotifUser] = useState(true);
+  const [notifTicket, setNotifTicket] = useState(true);
+
+  const refreshAll = async () => {
+    try {
+      const [s, c, b] = await Promise.all([
+        db.getGeneralSettings(),
+        db.getCategories(),
+        db.getBadges()
+      ]);
+      setSettings(s);
+      setCategories(c);
+      setBadges(b);
+      setSiteName(s.siteName);
+      setContactEmail(s.contactEmail);
+      setContactPhone(s.contactPhone);
+      setAddress(s.address);
+      setWorkingHours(s.workingHours);
+      setFooterDesc(s.footerDescription);
+      setNotifOrder(s.notifications.newOrder);
+      setNotifUser(s.notifications.newUser);
+      setNotifTicket(s.notifications.newTicket);
+    } catch (err) {
+      console.error('Failed to load settings:', err);
+    }
+  };
+
   useEffect(() => {
+    refreshAll();
     const unsub = db.subscribe(() => {
-      setCategories(db.getCategories());
-      setBadges(db.getBadges());
+      refreshAll();
     });
     return () => unsub();
   }, []);
 
-  const [siteName, setSiteName] = useState(settings.siteName);
-  const [contactEmail, setContactEmail] = useState(settings.contactEmail);
-  const [contactPhone, setContactPhone] = useState(settings.contactPhone);
-  const [address, setAddress] = useState(settings.address);
-  const [workingHours, setWorkingHours] = useState(settings.workingHours);
-  const [footerDesc, setFooterDesc] = useState(settings.footerDescription);
-
-  const [notifOrder, setNotifOrder] = useState(settings.notifications.newOrder);
-  const [notifUser, setNotifUser] = useState(settings.notifications.newUser);
-  const [notifTicket, setNotifTicket] = useState(settings.notifications.newTicket);
-
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    db.updateGeneralSettings(
+    await db.updateGeneralSettings(
       {
         siteName,
         contactEmail,
@@ -60,7 +103,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
-    setSettings(db.getGeneralSettings());
+    await refreshAll();
     alert('تنظیمات عمومی سایت با موفقیت ذخیره شد.');
   };
 
@@ -114,9 +157,10 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm(`آیا از حذف برچسب «${b.title}» اطمینان دارید؟`)) {
-                        db.deleteBadge(b.id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+                        await db.deleteBadge(b.id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+                        await refreshAll();
                       }
                     }}
                     className="p-1 text-rose-600 hover:text-rose-800"
@@ -178,9 +222,10 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm(`آیا از حذف دسته‌بندی «${cat.name}» اطمینان دارید؟`)) {
-                        db.deleteCategory(cat.id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+                        await db.deleteCategory(cat.id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+                        await refreshAll();
                       }
                     }}
                     className="p-1.5 rounded-lg bg-white text-rose-600 border border-rose-200 hover:bg-rose-50 transition"
@@ -356,18 +401,19 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!badgeTitle.trim()) {
                     alert('لطفاً عنوان برچسب را وارد کنید.');
                     return;
                   }
-                  db.saveBadge(
+                  await db.saveBadge(
                     {
                       id: editingBadge?.id,
                       title: badgeTitle.trim()
                     },
                     { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
                   );
+                  await refreshAll();
                   setBadgeModalOpen(false);
                 }}
                 className="flex-1 py-3 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold shadow-md"
@@ -426,14 +472,20 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            if (reader.result) setCatImage(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
+                          try {
+                            const url = await db.uploadFile('products', file);
+                            setCatImage(url);
+                          } catch (err) {
+                            console.error('Failed to upload category image to Supabase:', err);
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (reader.result) setCatImage(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
                         }
                       }}
                     />
@@ -465,12 +517,12 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!catName.trim() || !catImage.trim()) {
                     alert('لطفاً نام دسته‌بندی و تصویر کاور را وارد کنید.');
                     return;
                   }
-                  db.saveCategory(
+                  await db.saveCategory(
                     {
                       id: editingCategory?.id,
                       name: catName.trim(),
@@ -478,6 +530,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                     },
                     { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
                   );
+                  await refreshAll();
                   setCatModalOpen(false);
                 }}
                 className="flex-1 py-3 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold shadow-md"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart3,
   ShoppingBag,
@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { db } from '../../services/db';
+import { db, Product, Banner, Order, AuditLog } from '../../services/db';
 
 type AdminDashboardViewProps = {
   navigateToTab: (tab: any) => void;
@@ -21,10 +21,42 @@ type AdminDashboardViewProps = {
 };
 
 export function AdminDashboardView({ navigateToTab, openProductModal, openBannerModal }: AdminDashboardViewProps) {
-  const products = db.getProducts();
-  const banners = db.getBanners();
-  const orders = db.getOrders();
-  const auditLogs = db.getAuditLogs().slice(0, 5);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const loadData = async () => {
+      try {
+        const [prods, bans, ords, logs] = await Promise.all([
+          db.getProducts(),
+          db.getBanners(),
+          db.getOrders(),
+          db.getAuditLogs()
+        ]);
+        if (active) {
+          setProducts(prods);
+          setBanners(bans);
+          setOrders(ords);
+          setAuditLogs(logs.slice(0, 5));
+        }
+      } catch (err) {
+        console.error('Failed to load admin dashboard data:', err);
+      }
+    };
+
+    loadData();
+    const unsub = db.subscribe(() => {
+      loadData();
+    });
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
 
   const totalRevenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
   const activeBannersCount = banners.filter((b) => b.active).length;

@@ -19,7 +19,7 @@ import {
   Bell,
   Search
 } from 'lucide-react';
-import { AdminUser, db } from '../../services/db';
+import { AdminUser, AppNotification, db } from '../../services/db';
 
 type AdminTab =
   | 'dashboard'
@@ -39,25 +39,44 @@ type AdminLayoutProps = {
   activeTab: AdminTab;
   setActiveTab: (tab: AdminTab) => void;
   goHome: () => void;
+  onLogout?: () => void;
   children: React.ReactNode;
 };
 
-export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, children }: AdminLayoutProps) {
+export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, onLogout, children }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const [unreadSupportCount, setUnreadSupportCount] = useState<number>(() =>
-    db.getUnreadSupportConversationsCount()
-  );
+  const [unreadSupportCount, setUnreadSupportCount] = useState<number>(0);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [count, notifs] = await Promise.all([
+          db.getUnreadSupportConversationsCount(),
+          db.getNotifications('admin')
+        ]);
+        if (active) {
+          setUnreadSupportCount(count);
+          setNotifications(notifs);
+        }
+      } catch (err) {
+        console.error('Error loading AdminLayout counts:', err);
+      }
+    };
+
+    load();
     const unsub = db.subscribe(() => {
-      setUnreadSupportCount(db.getUnreadSupportConversationsCount());
+      load();
     });
-    return () => unsub();
+    return () => {
+      active = false;
+      unsub();
+    };
   }, []);
 
-  const notifications = db.getNotifications('admin');
   const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
   const navItems = [
@@ -156,6 +175,16 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, chi
 
         {/* Footer Actions */}
         <div className="p-3 border-t border-[#37192c]/10 space-y-2">
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 py-2.5 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+              title="خروج از حساب مدیریت"
+            >
+              <LogOut size={16} />
+              {!sidebarCollapsed && <span>خروج از حساب</span>}
+            </button>
+          )}
           <button
             onClick={goHome}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FFF3C5] py-2.5 text-xs font-black text-[#37192C] hover:bg-[#ffe79a] transition shadow-xs"

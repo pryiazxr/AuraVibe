@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Edit,
@@ -20,7 +20,8 @@ type BannerManagementViewProps = {
 };
 
 export function BannerManagementView({ currentAdmin }: BannerManagementViewProps) {
-  const [banners, setBanners] = useState<Banner[]>(() => db.getBanners());
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -35,9 +36,22 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
   const [bImage, setBImage] = useState('');
   const [bActive, setBActive] = useState(true);
 
-  const refreshList = () => {
-    setBanners(db.getBanners());
+  const refreshList = async () => {
+    try {
+      const list = await db.getBanners();
+      setBanners(list);
+    } catch (err) {
+      console.error('Failed to load banners:', err);
+    }
   };
+
+  useEffect(() => {
+    refreshList();
+    const unsub = db.subscribe(() => {
+      refreshList();
+    });
+    return () => unsub();
+  }, []);
 
   const openForm = (banner: Banner | null = null) => {
     if (banner) {
@@ -62,11 +76,11 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
     setModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bTitle || !bInternalName) return;
 
-    db.saveBanner(
+    await db.saveBanner(
       {
         id: editingBanner ? editingBanner.id : undefined,
         internalName: bInternalName,
@@ -80,26 +94,26 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
 
-    refreshList();
+    await refreshList();
     setModalOpen(false);
   };
 
-  const handleToggleActive = (banner: Banner) => {
-    db.saveBanner(
+  const handleToggleActive = async (banner: Banner) => {
+    await db.saveBanner(
       { id: banner.id, active: !banner.active },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
-    refreshList();
+    await refreshList();
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('آیا از حذف این بنر از اسلایدر اصلی اطمینان دارید؟')) {
-      db.deleteBanner(id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
-      refreshList();
+      await db.deleteBanner(id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+      await refreshList();
     }
   };
 
-  const handleMove = (index: number, direction: 'up' | 'down') => {
+  const handleMove = async (index: number, direction: 'up' | 'down') => {
     const list = [...banners];
     const targetIdx = direction === 'up' ? index - 1 : index + 1;
     if (targetIdx < 0 || targetIdx >= list.length) return;
@@ -108,20 +122,22 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
     list[index] = list[targetIdx];
     list[targetIdx] = temp;
 
-    db.reorderBanners(list, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
-    refreshList();
+    await db.reorderBanners(list, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+    await refreshList();
   };
 
-  const handleBannerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) {
-          setBImage(reader.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        setUploading(true);
+        const url = await db.uploadFile('banners', file);
+        setBImage(url);
+      } catch (err) {
+        console.error('Failed to upload banner image to storage:', err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 

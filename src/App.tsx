@@ -108,12 +108,12 @@ function App() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   // Real-time Database Subscription States
-  const [categories, setCategories] = useState<CategoryItem[]>(() => db.getCategories());
-  const [products, setProducts] = useState<Product[]>(() => db.getProducts());
-  const [banners, setBanners] = useState<Banner[]>(() => db.getActiveBanners());
-  const [orders, setOrders] = useState<Order[]>(() => db.getOrders());
-  const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
-  const [articles] = useState<Article[]>(() => db.getArticles());
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [articles, setArticles] = useState<Article[]>([]);
 
   // Active View State
   const [activeView, setActiveView] = useState<string>('home');
@@ -138,7 +138,11 @@ function App() {
     orderCount: 3
   });
 
-  const [currentAdmin] = useState<AdminUser>(() => db.getAdmins()[0]);
+  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
+  const [adminLoginUsername, setAdminLoginUsername] = useState('superadmin');
+  const [adminLoginPassword, setAdminLoginPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
 
   const [authModal, setAuthModal] = useState<{ open: boolean; mode: 'login' | 'register'; pendingAction?: () => void }>({
     open: false,
@@ -148,14 +152,36 @@ function App() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [checkoutModal, setCheckoutModal] = useState(false);
 
+  const refreshAllAppData = async () => {
+    try {
+      const [c, p, b, o, t, a, admin] = await Promise.all([
+        db.getCategories(),
+        db.getProducts(),
+        db.getActiveBanners(),
+        db.getOrders(),
+        db.getTickets(),
+        db.getArticles(),
+        db.getCurrentAdmin()
+      ]);
+      setCategories(c);
+      setProducts(p);
+      setBanners(b);
+      setOrders(o);
+      setTickets(t);
+      setArticles(a);
+      if (admin && !currentAdmin) {
+        setCurrentAdmin(admin);
+      }
+    } catch (err) {
+      console.error('Failed to load initial app data:', err);
+    }
+  };
+
   // Subscribe to central DB updates
   useEffect(() => {
+    refreshAllAppData();
     const unsubscribe = db.subscribe(() => {
-      setCategories(db.getCategories());
-      setProducts(db.getProducts());
-      setBanners(db.getActiveBanners());
-      setOrders(db.getOrders());
-      setTickets(db.getTickets());
+      refreshAllAppData();
     });
     return () => unsubscribe();
   }, []);
@@ -313,30 +339,119 @@ function App() {
 
       {/* RENDER ADMIN DASHBOARD IF ACTIVE VIEW IS 'admin' */}
       {activeView === 'admin' ? (
-        <AdminLayout
-          currentAdmin={currentAdmin}
-          activeTab={adminTab}
-          setActiveTab={setAdminTab}
-          goHome={() => handleNavClick('home')}
-        >
-          {adminTab === 'dashboard' && (
-            <AdminDashboardView
-              navigateToTab={(tab) => setAdminTab(tab)}
-              openProductModal={() => setAdminTab('products')}
-              openBannerModal={() => setAdminTab('banners')}
-            />
-          )}
-          {adminTab === 'products' && <ProductManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'banners' && <BannerManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'orders' && <OrderManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'analytics' && <AnalyticsView currentAdmin={currentAdmin} />}
-          {adminTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
-          {adminTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
-          {adminTab === 'audit' && <AuditLogsView currentAdmin={currentAdmin} />}
-        </AdminLayout>
+        currentAdmin ? (
+          <AdminLayout
+            currentAdmin={currentAdmin}
+            activeTab={adminTab}
+            setActiveTab={setAdminTab}
+            goHome={() => handleNavClick('home')}
+            onLogout={async () => {
+              await db.adminLogout();
+              setCurrentAdmin(null);
+            }}
+          >
+            {adminTab === 'dashboard' && (
+              <AdminDashboardView
+                navigateToTab={(tab) => setAdminTab(tab)}
+                openProductModal={() => setAdminTab('products')}
+                openBannerModal={() => setAdminTab('banners')}
+              />
+            )}
+            {adminTab === 'products' && <ProductManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'banners' && <BannerManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'orders' && <OrderManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'analytics' && <AnalyticsView currentAdmin={currentAdmin} />}
+            {adminTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
+            {adminTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
+            {adminTab === 'audit' && <AuditLogsView currentAdmin={currentAdmin} />}
+          </AdminLayout>
+        ) : (
+          <div className="min-h-screen flex items-center justify-center bg-[#fffaf0] p-4 font-vazir text-right">
+            <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-xl space-y-6">
+              <div className="text-center space-y-2">
+                <div className="brand-font text-3xl font-black text-[#37192C]">AuraVibe</div>
+                <h2 className="text-lg font-black text-[#37192C]">ورود به پیشخوان مدیریت ۳۶۰</h2>
+                <p className="text-xs text-[#8b627e] font-semibold">برای دسترسی به پنل مدیریت، اطلاعات ادمین را وارد نمایید</p>
+              </div>
+
+              {adminLoginError && (
+                <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">
+                  {adminLoginError}
+                </div>
+              )}
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setAdminLoginError('');
+                  setAdminLoginLoading(true);
+                  try {
+                    const loggedAdmin = await db.adminLogin(adminLoginUsername.trim(), adminLoginPassword);
+                    if (loggedAdmin) {
+                      setCurrentAdmin(loggedAdmin);
+                    } else {
+                      setAdminLoginError('نام کاربری یا رمز عبور نامعتبر است.');
+                    }
+                  } catch (err: any) {
+                    setAdminLoginError(err?.message || 'خطا در احراز هویت ادمین');
+                  } finally {
+                    setAdminLoginLoading(false);
+                  }
+                }}
+                className="space-y-4 text-xs font-bold"
+              >
+                <div>
+                  <label className="block text-[#37192C] mb-1.5">نام کاربری ادمین</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminLoginUsername}
+                    onChange={(e) => setAdminLoginUsername(e.target.value)}
+                    placeholder="مثال: superadmin"
+                    className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#37192C] mb-1.5">کلمه عبور اختصاصی</label>
+                  <input
+                    type="password"
+                    required
+                    value={adminLoginPassword}
+                    onChange={(e) => setAdminLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
+                  />
+                </div>
+
+                <div className="pt-2 flex flex-col gap-3">
+                  <button
+                    type="submit"
+                    disabled={adminLoginLoading}
+                    className="w-full rounded-full bg-[#37192C] py-3.5 text-xs font-black text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md disabled:opacity-50"
+                  >
+                    {adminLoginLoading ? 'در حال احراز هویت...' : 'ورود به پیشخوان مدیریت'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleNavClick('home')}
+                    className="w-full rounded-full border border-[#37192c]/20 py-3 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0] transition"
+                  >
+                    بازگشت به فروشگاه
+                  </button>
+                </div>
+
+                <div className="rounded-xl bg-[#FFF3C5]/40 border border-[#37192c]/10 p-3 text-center text-[11px] text-[#37192C]/80">
+                  اطلاعات پیش‌فرض: نام کاربری <span className="font-mono font-black">superadmin</span> | رمز <span className="font-mono font-black">superadmin123</span>
+                </div>
+              </form>
+            </div>
+          </div>
+        )
       ) : (
         <>
           {/* STOREFRONT HEADER */}
@@ -559,7 +674,7 @@ function App() {
               total={cartTotal}
               user={currentUser}
               close={() => setCheckoutModal(false)}
-              onPaymentComplete={() => {
+              onPaymentComplete={async () => {
                 const itemsSnapshot: OrderItemSnapshot[] = cart.map((p) => ({
                   productId: p.id,
                   productCode: p.productCode,
@@ -571,7 +686,7 @@ function App() {
                   lineTotal: p.price
                 }));
 
-                const newOrder = db.createOrder({
+                await db.createOrder({
                   customer: {
                     userId: currentUser.id,
                     firstName: currentUser.firstName,
@@ -593,7 +708,8 @@ function App() {
 
                 setCart([]);
                 setCheckoutModal(false);
-                setAccountView({ tab: 'orders' });
+                setAccountTab('orders');
+                setActiveView('account');
               }}
             />
           )}
@@ -1701,14 +1817,24 @@ function RelatedProductsSection({
 }
 
 function SupportModal({ close, user, openProfile }: { close: () => void; user?: User; openProfile?: () => void }) {
-  const [tickets, setTickets] = useState<SupportTicket[]>(() => db.getTickets());
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [inputText, setInputText] = useState('');
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'text' | 'image' | 'video' | 'audio'>('text');
 
+  const refreshTickets = async () => {
+    try {
+      const t = await db.getTickets();
+      setTickets(t);
+    } catch (e) {
+      console.error('Failed to load tickets:', e);
+    }
+  };
+
   useEffect(() => {
+    refreshTickets();
     const unsub = db.subscribe(() => {
-      setTickets(db.getTickets());
+      refreshTickets();
     });
     return () => unsub();
   }, []);
@@ -1726,25 +1852,32 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
     return Boolean(user && user.firstName && user.lastName && user.phone);
   }, [user]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
       const isVideo = file.type.startsWith('video/');
       const isAudio = file.type.startsWith('audio/');
-      reader.onload = () => {
-        if (reader.result) {
-          setMediaUrl(reader.result as string);
-          if (isVideo) setMediaType('video');
-          else if (isAudio) setMediaType('audio');
-          else setMediaType('image');
-        }
-      };
-      reader.readAsDataURL(file);
+      if (isVideo) setMediaType('video');
+      else if (isAudio) setMediaType('audio');
+      else setMediaType('image');
+
+      try {
+        const url = await db.uploadFile('support-media', file);
+        setMediaUrl(url);
+      } catch (err) {
+        console.error('Failed to upload file to Supabase:', err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            setMediaUrl(reader.result as string);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isProfileComplete) return;
     if (!inputText.trim() && !mediaUrl) return;
@@ -1752,7 +1885,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
     const senderName = user ? `${user.firstName} ${user.lastName}` : 'کاربر آورا';
 
     if (!userTicket) {
-      db.createTicket({
+      await db.createTicket({
         userId: user?.id,
         customerName: senderName,
         customerPhone: user?.phone || '۰۹۱۲۰۰۰۰۰۰۰',
@@ -1764,7 +1897,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
         mediaType: mediaType
       });
     } else {
-      db.replyTicket(
+      await db.replyTicket(
         userTicket.id,
         inputText.trim() || (mediaType === 'image' ? '[تصویر]' : mediaType === 'video' ? '[ویدیو]' : '[وویس]'),
         'customer',
@@ -1779,6 +1912,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
     setInputText('');
     setMediaUrl(null);
     setMediaType('text');
+    await refreshTickets();
   };
 
   return (
@@ -2003,26 +2137,39 @@ function ProfilePageView({
 
   const [postalError, setPostalError] = useState('');
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setFormData((prev) => ({ ...prev, avatar: result }));
+      try {
+        const url = await db.uploadFile('avatars', file);
+        setFormData((prev) => ({ ...prev, avatar: url }));
         if (setUser) {
           setUser((prev: User) => {
-            const updated = { ...prev, avatar: result };
+            const updated = { ...prev, avatar: url };
             db.saveUser(updated, { id: 1, name: 'کاربر' });
             return updated;
           });
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Failed to upload avatar to Supabase:', err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          setFormData((prev) => ({ ...prev, avatar: result }));
+          if (setUser) {
+            setUser((prev: User) => {
+              const updated = { ...prev, avatar: result };
+              db.saveUser(updated, { id: 1, name: 'کاربر' });
+              return updated;
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.postalCode && !/^\d{10}$/.test(formData.postalCode)) {
       setPostalError('کد پستی باید ۱۰ رقم عدد باشد');
@@ -2031,11 +2178,9 @@ function ProfilePageView({
     setPostalError('');
 
     if (setUser) {
-      setUser((prev: User) => {
-        const updated = { ...prev, ...formData };
-        db.saveUser(updated, { id: 1, name: 'کاربر' });
-        return updated;
-      });
+      const updated = { ...user, ...formData };
+      await db.saveUser(updated, { id: 1, name: 'کاربر' });
+      setUser(updated);
     }
     setEditing(false);
   };

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, ShoppingBag, ShieldAlert } from 'lucide-react';
 import { AnalyticsCharts, DateRangeKey } from '../AnalyticsCharts';
-import { db, AdminUser, Product } from '../../services/db';
+import { db, AdminUser, Product, Order } from '../../services/db';
 
 type AnalyticsViewProps = {
   currentAdmin: AdminUser;
@@ -12,6 +12,37 @@ export function AnalyticsView({ currentAdmin, onSelectProduct }: AnalyticsViewPr
   const [dateRange, setDateRange] = useState<DateRangeKey>('30days');
   const [customDays, setCustomDays] = useState<number>(30);
   const [compareMode, setCompareMode] = useState<boolean>(true);
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [validOrders, setValidOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [prods, vo] = await Promise.all([
+          db.getProducts(),
+          db.getValidOrders()
+        ]);
+        if (active) {
+          setProducts(prods);
+          setValidOrders(vo);
+        }
+      } catch (err) {
+        console.error('Failed to load analytics data:', err);
+      }
+    };
+
+    load();
+    const unsub = db.subscribe(() => {
+      load();
+    });
+
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
 
   // SUPER ADMIN RESTRICTION
   if (currentAdmin.role !== 'SUPER_ADMIN') {
@@ -27,9 +58,6 @@ export function AnalyticsView({ currentAdmin, onSelectProduct }: AnalyticsViewPr
       </div>
     );
   }
-
-  const products = db.getProducts();
-  const validOrders = db.getValidOrders();
 
   const now = new Date();
 

@@ -1,3 +1,8 @@
 node_modules
 dist
 .vite
+.env
+.env.local
+.env.*.local
+supabase-db-pass
+*.pass

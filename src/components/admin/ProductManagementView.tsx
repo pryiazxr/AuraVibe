@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Search,
@@ -16,8 +16,9 @@ type ProductManagementViewProps = {
 };
 
 export function ProductManagementView({ currentAdmin }: ProductManagementViewProps) {
-  const [products, setProducts] = useState<Product[]>(() => db.getProducts());
-  const [dbBadges, setDbBadges] = useState<ProductBadgeItem[]>(() => db.getBadges());
+  const [products, setProducts] = useState<Product[]>([]);
+  const [dbBadges, setDbBadges] = useState<ProductBadgeItem[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('همه');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
@@ -48,9 +49,26 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const [pRelatedIds, setPRelatedIds] = useState<number[]>([]);
   const [relatedSearch, setRelatedSearch] = useState('');
 
-  const refreshList = () => {
-    setProducts(db.getProducts());
+  const refreshList = async () => {
+    try {
+      const [prods, badges] = await Promise.all([
+        db.getProducts(),
+        db.getBadges()
+      ]);
+      setProducts(prods);
+      setDbBadges(badges);
+    } catch (err) {
+      console.error('Failed to load products:', err);
+    }
   };
+
+  useEffect(() => {
+    refreshList();
+    const unsub = db.subscribe(() => {
+      refreshList();
+    });
+    return () => unsub();
+  }, []);
 
   const openForm = (prod: Product | null = null) => {
     if (prod) {
@@ -88,11 +106,11 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
     setModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pName || !pPrice || !pCode) return;
 
-    db.saveProduct(
+    await db.saveProduct(
       {
         id: editingProduct ? editingProduct.id : undefined,
         productCode: pCode,
@@ -112,14 +130,14 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
     );
 
-    refreshList();
+    await refreshList();
     setModalOpen(false);
   };
 
-  const handleDelete = (id: number, name: string) => {
+  const handleDelete = async (id: number, name: string) => {
     if (confirm(`آیا از حذف دائم محصول "${name}" اطمینان دارید؟`)) {
-      db.deleteProduct(id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
-      refreshList();
+      await db.deleteProduct(id, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
+      await refreshList();
     }
   };
 
@@ -130,29 +148,35 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
     if (mainImgIdx >= updated.length) setMainImgIdx(0);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      Array.from(files).forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result) {
-            setPImages((prev) => [...prev, reader.result as string]);
-          }
-        };
-        reader.readAsDataURL(file);
-      });
+      try {
+        setUploading(true);
+        for (const file of Array.from(files)) {
+          const url = await db.uploadFile('products', file);
+          setPImages((prev) => [...prev, url]);
+        }
+      } catch (err) {
+        console.error('Failed to upload product image to storage:', err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result) setPVideoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        setUploading(true);
+        const url = await db.uploadFile('products', file);
+        setPVideoUrl(url);
+      } catch (err) {
+        console.error('Failed to upload product video to storage:', err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 

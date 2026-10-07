@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   Eye,
@@ -14,7 +14,7 @@ type OrderManagementViewProps = {
 };
 
 export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) {
-  const [orders, setOrders] = useState<Order[]>(() => db.getOrders());
+  const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -29,9 +29,22 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
   const [statusNote, setStatusNote] = useState('');
   const [shippingMethodKey, setShippingMethodKey] = useState<ShippingMethodKey>('POST');
 
-  const refreshList = () => {
-    setOrders(db.getOrders());
+  const refreshList = async () => {
+    try {
+      const list = await db.getOrders();
+      setOrders(list);
+    } catch (err) {
+      console.error('Failed to load orders:', err);
+    }
   };
+
+  useEffect(() => {
+    refreshList();
+    const unsub = db.subscribe(() => {
+      refreshList();
+    });
+    return () => unsub();
+  }, []);
 
   const openDetails = (order: Order) => {
     setSelectedOrder(order);
@@ -40,11 +53,11 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
     setStatusNote('');
   };
 
-  const handleUpdateOrder = (e: React.FormEvent) => {
+  const handleUpdateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    db.updateOrderStatus(
+    await db.updateOrderStatus(
       selectedOrder.id,
       newStatus,
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` },
@@ -52,7 +65,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
       shippingMethodKey
     );
 
-    refreshList();
+    await refreshList();
     setSelectedOrder(null);
   };
 
