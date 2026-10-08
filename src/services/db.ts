@@ -342,6 +342,15 @@ export type AppNotification = {
   createdAt: string;
 };
 
+export type CartItem = {
+  id?: number;
+  userId?: number;
+  productId: number;
+  product: Product;
+  quantity: number;
+  color?: string;
+};
+
 // --- HELPER UTILS ---
 
 export function getJalaliDateString(isoString: string): string {
@@ -393,7 +402,9 @@ class DatabaseService {
         'product_badges',
         'orders',
         'support_tickets',
-        'general_settings'
+        'general_settings',
+        'user_carts',
+        'user_wishlists'
       ];
 
       this.realtimeChannel = getClient().channel('auravibe-table-sync');
@@ -1785,6 +1796,254 @@ class DatabaseService {
       console.warn('[AuraVibe DB] Warning inserting notification:', error.message);
     }
     this.notify();
+  }
+
+  // --- WISHLIST ---
+  public async getUserWishlist(userId: number): Promise<Product[]> {
+    try {
+      const { data, error } = await getClient()
+        .from('user_wishlists')
+        .select('product_id')
+        .eq('user_id', userId);
+
+      if (error || !data || data.length === 0) return [];
+
+      const productIds = data.map((item) => item.product_id);
+      const allProducts = await this.getProducts();
+      return allProducts.filter((p) => productIds.includes(p.id));
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching user wishlist:', err);
+      return [];
+    }
+  }
+
+  public async addToWishlist(userId: number, productId: number): Promise<void> {
+    try {
+      const { error } = await getClient()
+        .from('user_wishlists')
+        .upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
+      if (error) {
+        console.error('[AuraVibe DB] Error adding to wishlist:', error);
+      }
+      this.notify();
+    } catch (err) {
+      console.error('[AuraVibe DB] Error adding to wishlist:', err);
+    }
+  }
+
+  public async removeFromWishlist(userId: number, productId: number): Promise<void> {
+    try {
+      const { error } = await getClient()
+        .from('user_wishlists')
+        .delete()
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+      if (error) {
+        console.error('[AuraVibe DB] Error removing from wishlist:', error);
+      }
+      this.notify();
+    } catch (err) {
+      console.error('[AuraVibe DB] Error removing from wishlist:', err);
+    }
+  }
+
+  public async toggleWishlist(userId: number, productId: number): Promise<boolean> {
+    try {
+      const { data, error } = await getClient()
+        .from('user_wishlists')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+      if (!error && data) {
+        await this.removeFromWishlist(userId, productId);
+        return false;
+      } else {
+        await this.addToWishlist(userId, productId);
+        return true;
+      }
+    } catch (err) {
+      console.error('[AuraVibe DB] Error toggling wishlist:', err);
+      return false;
+    }
+  }
+
+  // --- CART ---
+  public async getUserCart(userId: number): Promise<CartItem[]> {
+    try {
+      const { data, error } = await getClient()
+        .from('user_carts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('id', { ascending: true });
+
+      if (error || !data) return [];
+
+      const allProducts = await this.getProducts();
+      const items: CartItem[] = [];
+
+      for (const row of data) {
+        const product = allProducts.find((p) => p.id === row.product_id);
+        if (product) {
+          items.push({
+            id: row.id,
+            userId: row.user_id,
+            productId: row.product_id,
+            product,
+            quantity: row.quantity,
+            color: row.color
+          });
+        }
+      }
+      return items;
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching user cart:', err);
+      return [];
+    }
+  }
+
+  public async addToCart(
+    userId: number,
+    productId: number,
+    quantity = 1,
+    color?: string
+  ): Promise<CartItem[]> {
+    try {
+      let query = getClient()
+        .from('user_carts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+
+      if (color) {
+        query = query.eq('color', color);
+      } else {
+        query = query.is('color', null);
+      }
+
+      const { data: existing, error: fetchErr } = await query.maybeSingle();
+
+      if (!fetchErr && existing) {
+        const newQty = existing.quantity + quantity;
+        await getClient()
+          .from('user_carts')
+          .update({ quantity: newQty, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+      } else {
+        await getClient().from('user_carts').insert({
+          user_id: userId,
+          product_id: productId,
+          quantity,
+          color: color || null
+        });
+      }
+
+      this.notify();
+      return await this.getUserCart(userId);
+    } catch (err) {
+      console.error('[AuraVibe DB] Error adding to cart:', err);
+      return await this.getUserCart(userId);
+    }
+  }
+
+  public async updateCartItemQuantity(
+    userId: number,
+    productId: number,
+    quantity: number,
+    color?: string
+  ): Promise<CartItem[]> {
+    try {
+      if (quantity <= 0) {
+        return await this.removeFromCart(userId, productId, color);
+      }
+
+      let query = getClient()
+        .from('user_carts')
+        .update({ quantity, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+
+      if (color) {
+        query = query.eq('color', color);
+      } else {
+        query = query.is('color', null);
+      }
+
+      const { error } = await query;
+      if (error) {
+        console.error('[AuraVibe DB] Error updating cart quantity:', error);
+      }
+
+      this.notify();
+      return await this.getUserCart(userId);
+    } catch (err) {
+      console.error('[AuraVibe DB] Error updating cart quantity:', err);
+      return await this.getUserCart(userId);
+    }
+  }
+
+  public async removeFromCart(
+    userId: number,
+    productId: number,
+    color?: string
+  ): Promise<CartItem[]> {
+    try {
+      let query = getClient()
+        .from('user_carts')
+        .delete()
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+
+      if (color) {
+        query = query.eq('color', color);
+      } else {
+        query = query.is('color', null);
+      }
+
+      const { error } = await query;
+      if (error) {
+        console.error('[AuraVibe DB] Error removing from cart:', error);
+      }
+
+      this.notify();
+      return await this.getUserCart(userId);
+    } catch (err) {
+      console.error('[AuraVibe DB] Error removing from cart:', err);
+      return await this.getUserCart(userId);
+    }
+  }
+
+  public async clearCart(userId: number): Promise<void> {
+    try {
+      const { error } = await getClient().from('user_carts').delete().eq('user_id', userId);
+      if (error) {
+        console.error('[AuraVibe DB] Error clearing cart:', error);
+      }
+      this.notify();
+    } catch (err) {
+      console.error('[AuraVibe DB] Error clearing cart:', err);
+    }
+  }
+
+  public async mergeGuestCartAndWishlist(
+    userId: number,
+    guestCart: CartItem[],
+    guestWishlist: Product[]
+  ): Promise<{ cart: CartItem[]; wishlist: Product[] }> {
+    try {
+      for (const item of guestWishlist) {
+        await this.addToWishlist(userId, item.id);
+      }
+      for (const item of guestCart) {
+        await this.addToCart(userId, item.product.id, item.quantity, item.color);
+      }
+    } catch (err) {
+      console.error('[AuraVibe DB] Error merging guest cart & wishlist:', err);
+    }
+    const cart = await this.getUserCart(userId);
+    const wishlist = await this.getUserWishlist(userId);
+    return { cart, wishlist };
   }
 }
 

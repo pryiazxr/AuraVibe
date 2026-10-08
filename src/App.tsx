@@ -82,7 +82,8 @@ import {
   Article,
   ShippingMethodKey,
   OrderItemSnapshot,
-  CategoryItem
+  CategoryItem,
+  CartItem
 } from './services/db';
 
 import { CustomerAuthModal } from './components/CustomerAuthModal';
@@ -101,12 +102,45 @@ import { AuditLogsView } from './components/admin/AuditLogsView';
 
 const money = (value: number) => new Intl.NumberFormat('fa-IR').format(value);
 
+const GUEST_CART_KEY = 'auravibe_guest_cart';
+const GUEST_WISHLIST_KEY = 'auravibe_guest_wishlist';
+
+function getGuestCart(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(GUEST_CART_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestCart(items: CartItem[]) {
+  try {
+    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+  } catch {}
+}
+
+function getGuestWishlist(): Product[] {
+  try {
+    const raw = localStorage.getItem(GUEST_WISHLIST_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestWishlist(items: Product[]) {
+  try {
+    localStorage.setItem(GUEST_WISHLIST_KEY, JSON.stringify(items));
+  } catch {}
+}
+
 function App() {
   const [intro, setIntro] = useState(isSupabaseConfigured());
   const [followModal, setFollowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [cart, setCart] = useState<Product[]>([]);
-  const [wishlist, setWishlist] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(getGuestCart());
+  const [wishlist, setWishlist] = useState<Product[]>(getGuestWishlist());
   const [bannerIndex, setBannerIndex] = useState(0);
   const [supportOpen, setSupportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -145,6 +179,24 @@ function App() {
   const [checkoutModal, setCheckoutModal] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
+  const loadCartAndWishlist = async (user: User | null) => {
+    if (user) {
+      try {
+        const [dbCart, dbWishlist] = await Promise.all([
+          db.getUserCart(user.id),
+          db.getUserWishlist(user.id)
+        ]);
+        setCart(dbCart);
+        setWishlist(dbWishlist);
+      } catch (err) {
+        console.error('[AuraVibe Cart/Wishlist] Error loading from DB:', err);
+      }
+    } else {
+      setCart(getGuestCart());
+      setWishlist(getGuestWishlist());
+    }
+  };
+
   // Restore active Supabase Auth session for customer on mount
   useEffect(() => {
     if (!isSupabaseConfigured() || !supabase) return;
@@ -159,6 +211,7 @@ function App() {
           }
           if (profile) {
             setCurrentUser(profile);
+            await loadCartAndWishlist(profile);
           }
         }
       } catch (err) {
@@ -176,9 +229,12 @@ function App() {
         }
         if (profile) {
           setCurrentUser(profile);
+          await loadCartAndWishlist(profile);
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
+        setCart(getGuestCart());
+        setWishlist(getGuestWishlist());
       }
     });
 
@@ -205,6 +261,16 @@ function App() {
       if (admin && !currentAdmin) {
         setCurrentAdmin(admin);
       }
+
+      if (currentUser) {
+        const [userCart, userWish] = await Promise.all([
+          db.getUserCart(currentUser.id),
+          db.getUserWishlist(currentUser.id)
+        ]);
+        setCart(userCart);
+        setWishlist(userWish);
+      }
+
       setBackendError(null);
     } catch (err: any) {
       console.error('Failed to load initial app data from Supabase:', err);
@@ -241,19 +307,90 @@ function App() {
     return () => window.clearInterval(timer);
   }, [banners.length]);
 
-  const cartTotal = useMemo(() => cart.reduce((sum, product) => sum + product.price, 0), [cart]);
+  const cartTotal = useMemo(
+    () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [cart]
+  );
 
-  const addToCart = (product: Product) => {
-    setCart((current) => [...current, product]);
+  const cartCount = useMemo(
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
+    [cart]
+  );
+
+  const addToCart = async (product: Product, quantity = 1, color?: string) => {
+    if (currentUser) {
+      const updated = await db.addToCart(currentUser.id, product.id, quantity, color);
+      setCart(updated);
+    } else {
+      const currentGuestCart = getGuestCart();
+      const existingIdx = currentGuestCart.findIndex(
+        (item) => item.productId === product.id && (color ? item.color === color : !item.color)
+      );
+      let updatedGuestCart: CartItem[];
+      if (existingIdx >= 0) {
+        updatedGuestCart = currentGuestCart.map((item, idx) =>
+          idx === existingIdx ? { ...item, quantity: item.quantity + quantity } : item
+        );
+      } else {
+        updatedGuestCart = [
+          ...currentGuestCart,
+          { productId: product.id, product, quantity, color }
+        ];
+      }
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
+    }
     setSelectedProduct(null);
   };
 
-  const toggleWishlist = (product: Product) => {
-    setWishlist((current) => {
-      const exists = current.some((item) => item.id === product.id);
-      if (exists) return current.filter((item) => item.id !== product.id);
-      return [...current, product];
-    });
+  const updateCartQuantity = async (productId: number, quantity: number, color?: string) => {
+    if (currentUser) {
+      const updated = await db.updateCartItemQuantity(currentUser.id, productId, quantity, color);
+      setCart(updated);
+    } else {
+      if (quantity <= 0) {
+        await removeFromCart(productId, color);
+        return;
+      }
+      const currentGuestCart = getGuestCart();
+      const updatedGuestCart = currentGuestCart.map((item) =>
+        item.productId === productId && (color ? item.color === color : !item.color)
+          ? { ...item, quantity }
+          : item
+      );
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
+    }
+  };
+
+  const removeFromCart = async (productId: number, color?: string) => {
+    if (currentUser) {
+      const updated = await db.removeFromCart(currentUser.id, productId, color);
+      setCart(updated);
+    } else {
+      const currentGuestCart = getGuestCart();
+      const updatedGuestCart = currentGuestCart.filter(
+        (item) => !(item.productId === productId && (color ? item.color === color : !item.color))
+      );
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
+    }
+  };
+
+  const toggleWishlist = async (product: Product) => {
+    if (currentUser) {
+      await db.toggleWishlist(currentUser.id, product.id);
+      const updatedWishlist = await db.getUserWishlist(currentUser.id);
+      setWishlist(updatedWishlist);
+    } else {
+      const currentGuestWish = getGuestWishlist();
+      const exists = currentGuestWish.some((item) => item.id === product.id);
+      const updatedGuestWish = exists
+        ? currentGuestWish.filter((item) => item.id !== product.id)
+        : [...currentGuestWish, product];
+      saveGuestWishlist(updatedGuestWish);
+      setWishlist(updatedGuestWish);
+    }
   };
 
   const menuSections = [
@@ -505,9 +642,9 @@ function App() {
                       }}
                     >
                       <ShoppingBag size={20} />
-                      {cart.length > 0 && (
+                      {cartCount > 0 && (
                         <span className="absolute -end-0 -top-0 grid size-5 place-items-center rounded-full bg-[#37192C] text-[10px] text-white font-bold">
-                          {cart.length}
+                          {cartCount}
                         </span>
                       )}
                     </button>
@@ -532,6 +669,8 @@ function App() {
               openProduct={openProductModal}
               openHome={() => handleNavClick('home')}
               openAuthModal={(mode: 'login' | 'register') => setAuthModal({ open: true, mode })}
+              updateCartQuantity={updateCartQuantity}
+              removeFromCart={removeFromCart}
             />
           ) : activeView === 'home' ? (
             <>
@@ -689,15 +828,16 @@ function App() {
                   return;
                 }
 
-                const itemsSnapshot: OrderItemSnapshot[] = cart.map((p) => ({
-                  productId: p.id,
-                  productCode: p.productCode,
-                  productName: p.name,
-                  productImage: p.images[0],
-                  originalPrice: p.oldPrice || p.price,
-                  finalPrice: p.price,
-                  quantity: 1,
-                  lineTotal: p.price
+                const itemsSnapshot: OrderItemSnapshot[] = cart.map((item) => ({
+                  productId: item.product.id,
+                  productCode: item.product.productCode,
+                  productName: item.product.name,
+                  productImage: item.product.images[0],
+                  originalPrice: item.product.oldPrice || item.product.price,
+                  finalPrice: item.product.price,
+                  quantity: item.quantity,
+                  color: item.color,
+                  lineTotal: item.product.price * item.quantity
                 }));
 
                 await db.createOrder({
@@ -720,6 +860,10 @@ function App() {
                   }
                 });
 
+                if (currentUser) {
+                  await db.clearCart(currentUser.id);
+                }
+                localStorage.removeItem(GUEST_CART_KEY);
                 setCart([]);
                 setCheckoutModal(false);
                 setAccountTab('orders');
@@ -733,11 +877,19 @@ function App() {
               open={authModal.open}
               initialMode={authModal.mode}
               close={() => setAuthModal({ ...authModal, open: false })}
-              onSuccess={(loggedUser) => {
+              onSuccess={async (loggedUser) => {
+                const gCart = getGuestCart();
+                const gWish = getGuestWishlist();
+                if (gCart.length > 0 || gWish.length > 0) {
+                  const merged = await db.mergeGuestCartAndWishlist(loggedUser.id, gCart, gWish);
+                  localStorage.removeItem(GUEST_CART_KEY);
+                  localStorage.removeItem(GUEST_WISHLIST_KEY);
+                  setCart(merged.cart);
+                  setWishlist(merged.wishlist);
+                } else {
+                  await loadCartAndWishlist(loggedUser);
+                }
                 setCurrentUser(loggedUser);
-                // Explicitly preserve and merge Guest cart & wishlist items with user session
-                setCart((prevCart) => [...prevCart]);
-                setWishlist((prevWishlist) => [...prevWishlist]);
                 setAuthModal({ ...authModal, open: false });
                 if (authModal.pendingAction) {
                   authModal.pendingAction();
@@ -2341,7 +2493,9 @@ function ProfilePageView({
   openOrderDetails,
   openProduct,
   openHome,
-  openAuthModal
+  openAuthModal,
+  updateCartQuantity,
+  removeFromCart
 }: any) {
   const [editing, setEditing] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
@@ -2840,21 +2994,46 @@ function ProfilePageView({
           ) : (
             <>
               <div className="space-y-3">
-                {cart.map((item: Product, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-[#fffaf0] rounded-2xl border border-[#37192c]/10 text-xs font-bold">
+                {cart.map((item: CartItem, idx: number) => (
+                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#fffaf0] rounded-2xl border border-[#37192c]/10 text-xs font-bold gap-3">
                     <div className="flex items-center gap-3">
-                      <img src={item.images[0]} alt={item.name} className="size-14 rounded-xl object-cover" />
+                      <img src={item.product.images[0]} alt={item.product.name} className="size-14 rounded-xl object-cover shrink-0" />
                       <div>
-                        <span className="block text-sm text-[#37192C]">{item.name}</span>
-                        <span className="text-xs text-[#8b627e]">{item.category}</span>
+                        <span className="block text-sm text-[#37192C]">{item.product.name}</span>
+                        <span className="text-xs text-[#8b627e]">{item.product.category} {item.color ? `| رنگ: ${item.color}` : ''}</span>
+                        <span className="block mt-1 text-xs text-[#37192C]/80">{money(item.product.price)} تومان</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm font-black text-[#37192C]">{money(item.price)} تومان</span>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                      {/* Quantity Controls */}
+                      <div className="flex items-center border border-[#37192c]/20 bg-white rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, item.color)}
+                          className="px-2.5 py-1.5 hover:bg-[#FFF3C5] transition text-[#37192C]"
+                          title="کاهش تعداد"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="px-3 font-black text-xs text-[#37192C]">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, item.color)}
+                          className="px-2.5 py-1.5 hover:bg-[#FFF3C5] transition text-[#37192C]"
+                          title="افزایش تعداد"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+
+                      <span className="text-sm font-black text-[#37192C]">{money(item.product.price * item.quantity)} تومان</span>
+
                       <button
-                        onClick={() => setCart((prev: Product[]) => prev.filter((_, i) => i !== idx))}
+                        type="button"
+                        onClick={() => removeFromCart(item.product.id, item.color)}
                         className="text-rose-500 hover:bg-rose-50 p-2 rounded-full transition"
-                        title="حذف"
+                        title="حذف از سبد"
                       >
                         <Trash2 size={18} />
                       </button>
