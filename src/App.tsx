@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -228,7 +229,6 @@ function App() {
   };
 
   const menuSections = [
-    { id: 'admin', label: '⚡ پیشخوان مدیریتی (Admin Dashboard)' },
     { id: 'home', label: 'صفحه اصلی سایت' },
     ...categories.slice(0, 6).map((c) => ({ id: c.name, label: c.name })),
     { id: 'جدیدترین‌ها', label: 'تازه رسیده‌ها' },
@@ -394,183 +394,84 @@ function App() {
           </button>
         </div>
       )}
-      {intro && <Intro />}
-      {followModal && <FollowModal close={() => setFollowModal(false)} />}
+      <Routes>
+        {/* REAL INDEPENDENT ADMIN ROUTE */}
+        <Route
+          path="/admin/*"
+          element={
+            <AdminContainer
+              currentAdmin={currentAdmin}
+              setCurrentAdmin={setCurrentAdmin}
+              adminLoginUsername={adminLoginUsername}
+              setAdminLoginUsername={setAdminLoginUsername}
+              adminLoginPassword={adminLoginPassword}
+              setAdminLoginPassword={setAdminLoginPassword}
+              adminLoginError={adminLoginError}
+              setAdminLoginError={setAdminLoginError}
+              adminLoginLoading={adminLoginLoading}
+              setAdminLoginLoading={setAdminLoginLoading}
+            />
+          }
+        />
 
-      {/* RENDER ADMIN DASHBOARD IF ACTIVE VIEW IS 'admin' */}
-      {activeView === 'admin' ? (
-        currentAdmin ? (
-          <AdminLayout
-            currentAdmin={currentAdmin}
-            activeTab={adminTab}
-            setActiveTab={setAdminTab}
-            goHome={() => handleNavClick('home')}
-            onLogout={async () => {
-              await db.adminLogout();
-              setCurrentAdmin(null);
-            }}
-          >
-            {adminTab === 'dashboard' && (
-              <AdminDashboardView
-                navigateToTab={(tab) => setAdminTab(tab)}
-                openProductModal={() => setAdminTab('products')}
-                openBannerModal={() => setAdminTab('banners')}
-              />
-            )}
-            {adminTab === 'products' && <ProductManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'banners' && <BannerManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'orders' && <OrderManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'analytics' && <AnalyticsView currentAdmin={currentAdmin} />}
-            {adminTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
-            {adminTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
-            {adminTab === 'audit' && <AuditLogsView currentAdmin={currentAdmin} />}
-          </AdminLayout>
-        ) : (
-          <div className="min-h-screen flex items-center justify-center bg-[#fffaf0] p-4 font-vazir text-right">
-            <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-xl space-y-6">
-              <div className="text-center space-y-2">
-                <div className="brand-font text-3xl font-black text-[#37192C]">AuraVibe</div>
-                <h2 className="text-lg font-black text-[#37192C]">ورود به پیشخوان مدیریت ۳۶۰</h2>
-                <p className="text-xs text-[#8b627e] font-semibold">برای دسترسی به پنل مدیریت، اطلاعات ادمین را وارد نمایید</p>
-              </div>
-
-              {adminLoginError && (
-                <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">
-                  {adminLoginError}
-                </div>
-              )}
-
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setAdminLoginError('');
-                  setAdminLoginLoading(true);
-                  try {
-                    const loggedAdmin = await db.adminLogin(adminLoginUsername.trim(), adminLoginPassword);
-                    if (loggedAdmin) {
-                      setCurrentAdmin(loggedAdmin);
-                    } else {
-                      setAdminLoginError('نام کاربری یا رمز عبور نامعتبر است.');
-                    }
-                  } catch (err: any) {
-                    setAdminLoginError(err?.message || 'خطا در احراز هویت ادمین');
-                  } finally {
-                    setAdminLoginLoading(false);
-                  }
-                }}
-                className="space-y-4 text-xs font-bold"
-              >
-                <div>
-                  <label className="block text-[#37192C] mb-1.5">نام کاربری ادمین</label>
-                  <input
-                    type="text"
-                    required
-                    value={adminLoginUsername}
-                    onChange={(e) => setAdminLoginUsername(e.target.value)}
-                    placeholder="مثال: superadmin"
-                    className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[#37192C] mb-1.5">کلمه عبور اختصاصی</label>
-                  <input
-                    type="password"
-                    required
-                    value={adminLoginPassword}
-                    onChange={(e) => setAdminLoginPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
-                  />
-                </div>
-
-                <div className="pt-2 flex flex-col gap-3">
+        {/* PUBLIC FRONTEND STOREFRONT ROUTE */}
+        <Route
+          path="*"
+          element={
+            <>
+              {intro && <Intro />}
+              {followModal && <FollowModal close={() => setFollowModal(false)} />}
+              {/* STOREFRONT HEADER */}
+              <header className="sticky top-0 z-30 border-b border-[#37192c]/8 bg-[#fffaf0]/90 backdrop-blur-xl">
+                <div className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                   <button
-                    type="submit"
-                    disabled={adminLoginLoading}
-                    className="w-full rounded-full bg-[#37192C] py-3.5 text-xs font-black text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md disabled:opacity-50"
+                    className="grid size-11 place-items-center rounded-full hover:bg-[#37192c]/7 md:hidden"
+                    aria-label="منو"
+                    onClick={() => openMenuDrawer(true)}
                   >
-                    {adminLoginLoading ? 'در حال احراز هویت...' : 'ورود به پیشخوان مدیریت'}
+                    <Menu size={21} />
+                  </button>
+                  <button onClick={() => handleNavClick('home')} className="brand-font text-2xl tracking-[.08em] sm:text-3xl text-[#37192C]">
+                    AuraVibe
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleNavClick('home')}
-                    className="w-full rounded-full border border-[#37192c]/20 py-3 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0] transition"
-                  >
-                    بازگشت به فروشگاه
-                  </button>
+                  <nav className="hidden items-center gap-6 text-xs font-bold md:flex">
+                    <button onClick={() => handleNavClick('home')} className={'hover:text-[#8b627e] ' + (activeView === 'home' ? 'text-[#8b627e] underline' : '')}>
+                      صفحه اصلی
+                    </button>
+                    <button onClick={() => handleNavClick('جدیدترین‌ها')} className="hover:text-[#8b627e]">
+                      جدیدترین‌ها
+                    </button>
+                    <button onClick={() => handleNavClick('پرفروش‌ترین‌ها')} className="hover:text-[#8b627e]">
+                      پرفروش‌ترین‌ها
+                    </button>
+                    <button onClick={() => handleNavClick('تخفیف ویژه')} className="hover:text-[#8b627e]">
+                      تخفیف ویژه
+                    </button>
+                    <button onClick={() => handleNavClick('journal')} className="hover:text-[#8b627e]">
+                      مجله استایل
+                    </button>
+                  </nav>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="icon-button relative"
+                      aria-label="سبد خرید"
+                      onClick={() => {
+                        setAccountTab('cart');
+                        setActiveView('account');
+                      }}
+                    >
+                      <ShoppingBag size={20} />
+                      {cart.length > 0 && (
+                        <span className="absolute -end-0 -top-0 grid size-5 place-items-center rounded-full bg-[#37192C] text-[10px] text-white font-bold">
+                          {cart.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
-
-                <div className="rounded-xl bg-[#FFF3C5]/40 border border-[#37192c]/10 p-3 text-center text-[11px] text-[#37192C]/80">
-                  اطلاعات پیش‌فرض: نام کاربری <span className="font-mono font-black">superadmin</span> | رمز <span className="font-mono font-black">superadmin123</span>
-                </div>
-              </form>
-            </div>
-          </div>
-        )
-      ) : (
-        <>
-          {/* STOREFRONT HEADER */}
-          <header className="sticky top-0 z-30 border-b border-[#37192c]/8 bg-[#fffaf0]/90 backdrop-blur-xl">
-            <div className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-              <button
-                className="grid size-11 place-items-center rounded-full hover:bg-[#37192c]/7 md:hidden"
-                aria-label="منو"
-                onClick={() => openMenuDrawer(true)}
-              >
-                <Menu size={21} />
-              </button>
-              <button onClick={() => handleNavClick('home')} className="brand-font text-2xl tracking-[.08em] sm:text-3xl text-[#37192C]">
-                AuraVibe
-              </button>
-
-              <nav className="hidden items-center gap-6 text-xs font-bold md:flex">
-                <button
-                  onClick={() => handleNavClick('admin')}
-                  className="rounded-full bg-[#37192C] px-3.5 py-1.5 text-[#FFF3C5] hover:bg-[#5a2548] transition flex items-center gap-1.5 shadow-xs"
-                >
-                  <LayoutDashboard size={14} /> پیشخوان مدیریتی
-                </button>
-                <button onClick={() => handleNavClick('home')} className={'hover:text-[#8b627e] ' + (activeView === 'home' ? 'text-[#8b627e] underline' : '')}>
-                  صفحه اصلی
-                </button>
-                <button onClick={() => handleNavClick('جدیدترین‌ها')} className="hover:text-[#8b627e]">
-                  جدیدترین‌ها
-                </button>
-                <button onClick={() => handleNavClick('پرفروش‌ترین‌ها')} className="hover:text-[#8b627e]">
-                  پرفروش‌ترین‌ها
-                </button>
-                <button onClick={() => handleNavClick('تخفیف ویژه')} className="hover:text-[#8b627e]">
-                  تخفیف ویژه
-                </button>
-                <button onClick={() => handleNavClick('journal')} className="hover:text-[#8b627e]">
-                  مجله استایل
-                </button>
-              </nav>
-
-              <div className="flex items-center gap-1">
-                <button
-                  className="icon-button relative"
-                  aria-label="سبد خرید"
-                  onClick={() => {
-                    setAccountTab('cart');
-                    setActiveView('account');
-                  }}
-                >
-                  <ShoppingBag size={20} />
-                  {cart.length > 0 && (
-                    <span className="absolute -end-0 -top-0 grid size-5 place-items-center rounded-full bg-[#37192C] text-[10px] text-white font-bold">
-                      {cart.length}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </header>
+              </header>
 
           {/* MAIN STOREFRONT VIEWS */}
           {activeView === 'account' ? (
@@ -786,9 +687,6 @@ function App() {
             <button className="bottom-nav-item" onClick={() => openSearchModal(true)} aria-label="جستجو">
               <Search size={22} />
             </button>
-            <button className="bottom-nav-item" onClick={() => handleNavClick('admin')} aria-label="مدیریت">
-              <LayoutDashboard size={22} />
-            </button>
             <button
               className="bottom-nav-item"
               onClick={() => {
@@ -801,8 +699,182 @@ function App() {
             </button>
           </nav>
         </>
+      }
+    />
+  </Routes>
+</main>
+);
+}
+
+// ----------------------------------------------------------------------
+// ADMIN CONTAINER WITH ROUTE GUARD & REAL ROUTING
+// ----------------------------------------------------------------------
+
+function AdminContainer({
+  currentAdmin,
+  setCurrentAdmin,
+  adminLoginUsername,
+  setAdminLoginUsername,
+  adminLoginPassword,
+  setAdminLoginPassword,
+  adminLoginError,
+  setAdminLoginError,
+  adminLoginLoading,
+  setAdminLoginLoading
+}: {
+  currentAdmin: AdminUser | null;
+  setCurrentAdmin: (admin: AdminUser | null) => void;
+  adminLoginUsername: string;
+  setAdminLoginUsername: (val: string) => void;
+  adminLoginPassword: string;
+  setAdminLoginPassword: (val: string) => void;
+  adminLoginError: string;
+  setAdminLoginError: (val: string) => void;
+  adminLoginLoading: boolean;
+  setAdminLoginLoading: (val: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Parse subpath from /admin/*
+  const subPath = location.pathname.replace(/^\/admin\/?/, '').split('/')[0];
+  const activeTab = (subPath || 'dashboard') as
+    | 'dashboard'
+    | 'products'
+    | 'banners'
+    | 'orders'
+    | 'users'
+    | 'support'
+    | 'magazine'
+    | 'analytics'
+    | 'seo'
+    | 'settings'
+    | 'audit';
+
+  const handleSelectTab = (tab: string) => {
+    navigate(`/admin/${tab === 'dashboard' ? '' : tab}`);
+  };
+
+  const handleGoHome = () => {
+    navigate('/');
+  };
+
+  if (!currentAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#fffaf0] p-4 font-vazir text-right">
+        <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="brand-font text-3xl font-black text-[#37192C]">AuraVibe</div>
+            <h2 className="text-lg font-black text-[#37192C]">ورود به پیشخوان مدیریت ۳۶۰</h2>
+            <p className="text-xs text-[#8b627e] font-semibold">برای دسترسی به پنل مدیریت، اطلاعات ادمین را وارد نمایید</p>
+          </div>
+
+          {adminLoginError && (
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-bold text-rose-700">
+              {adminLoginError}
+            </div>
+          )}
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setAdminLoginError('');
+              setAdminLoginLoading(true);
+              try {
+                const loggedAdmin = await db.adminLogin(adminLoginUsername.trim(), adminLoginPassword);
+                if (loggedAdmin) {
+                  setCurrentAdmin(loggedAdmin);
+                } else {
+                  setAdminLoginError('نام کاربری یا رمز عبور نامعتبر است.');
+                }
+              } catch (err: any) {
+                setAdminLoginError(err?.message || 'خطا در احراز هویت ادمین');
+              } finally {
+                setAdminLoginLoading(false);
+              }
+            }}
+            className="space-y-4 text-xs font-bold"
+          >
+            <div>
+              <label className="block text-[#37192C] mb-1.5">نام کاربری ادمین</label>
+              <input
+                type="text"
+                required
+                value={adminLoginUsername}
+                onChange={(e) => setAdminLoginUsername(e.target.value)}
+                placeholder="مثال: superadmin"
+                className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[#37192C] mb-1.5">کلمه عبور اختصاصی</label>
+              <input
+                type="password"
+                required
+                value={adminLoginPassword}
+                onChange={(e) => setAdminLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
+              />
+            </div>
+
+            <div className="pt-2 flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={adminLoginLoading}
+                className="w-full rounded-full bg-[#37192C] py-3.5 text-xs font-black text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md disabled:opacity-50"
+              >
+                {adminLoginLoading ? 'در حال احراز هویت...' : 'ورود به پیشخوان مدیریت'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGoHome}
+                className="w-full rounded-full border border-[#37192c]/20 py-3 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0] transition"
+              >
+                بازگشت به فروشگاه
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-[#FFF3C5]/40 border border-[#37192c]/10 p-3 text-center text-[11px] text-[#37192C]/80">
+              اطلاعات پیش‌فرض: نام کاربری <span className="font-mono font-black">superadmin</span> | رمز <span className="font-mono font-black">superadmin123</span>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AdminLayout
+      currentAdmin={currentAdmin}
+      activeTab={activeTab}
+      setActiveTab={handleSelectTab}
+      goHome={handleGoHome}
+      onLogout={async () => {
+        await db.adminLogout();
+        setCurrentAdmin(null);
+      }}
+    >
+      {activeTab === 'dashboard' && (
+        <AdminDashboardView
+          navigateToTab={(tab) => handleSelectTab(tab)}
+          openProductModal={() => handleSelectTab('products')}
+          openBannerModal={() => handleSelectTab('banners')}
+        />
       )}
-    </main>
+      {activeTab === 'products' && <ProductManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'banners' && <BannerManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'orders' && <OrderManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'users' && <UserManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'support' && <TicketManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'magazine' && <MagazineManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'analytics' && <AnalyticsView currentAdmin={currentAdmin} />}
+      {activeTab === 'seo' && <SEOManagementView currentAdmin={currentAdmin} />}
+      {activeTab === 'settings' && <SettingsView currentAdmin={currentAdmin} />}
+      {activeTab === 'audit' && <AuditLogsView currentAdmin={currentAdmin} />}
+    </AdminLayout>
   );
 }
 
