@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useSearchParams, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -66,7 +66,8 @@ import {
   satinImage,
   jewelryImage,
   necklaceImage,
-  watchImage
+  watchImage,
+  IRAN_PROVINCES_AND_CITIES
 } from './data';
 
 import {
@@ -102,14 +103,9 @@ const money = (value: number) => new Intl.NumberFormat('fa-IR').format(value);
 function App() {
   const [intro, setIntro] = useState(isSupabaseConfigured());
   const [followModal, setFollowModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cart, setCart] = useState<Product[]>([]);
   const [wishlist, setWishlist] = useState<Product[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
-  const [supportOpen, setSupportOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [accountTab, setAccountTab] = useState<'profile' | 'orders' | 'fav' | 'cart'>('profile');
-  const [searchOpen, setSearchOpen] = useState(false);
 
   // Real-time Database Subscription States
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -118,12 +114,6 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
-
-  // Active View State
-  const [activeView, setActiveView] = useState<string>('home');
-  const [adminTab, setAdminTab] = useState<
-    'dashboard' | 'products' | 'banners' | 'orders' | 'users' | 'support' | 'magazine' | 'analytics' | 'seo' | 'settings' | 'audit'
-  >('dashboard');
 
   // Logged-in Customer & Current Admin User
   const [currentUser, setCurrentUser] = useState<User>({
@@ -148,13 +138,6 @@ function App() {
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
 
-  const [authModal, setAuthModal] = useState<{ open: boolean; mode: 'login' | 'register'; pendingAction?: () => void }>({
-    open: false,
-    mode: 'login'
-  });
-
-  const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
-  const [checkoutModal, setCheckoutModal] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
   const refreshAllAppData = async () => {
@@ -217,7 +200,6 @@ function App() {
 
   const addToCart = (product: Product) => {
     setCart((current) => [...current, product]);
-    setSelectedProduct(null);
   };
 
   const toggleWishlist = (product: Product) => {
@@ -227,121 +209,6 @@ function App() {
       return [...current, product];
     });
   };
-
-  const menuSections = [
-    { id: 'home', label: 'صفحه اصلی سایت' },
-    ...categories.slice(0, 6).map((c) => ({ id: c.name, label: c.name })),
-    { id: 'جدیدترین‌ها', label: 'تازه رسیده‌ها' },
-    { id: 'پرفروش‌ترین‌ها', label: 'پرطرفدارها' },
-    { id: 'تخفیف ویژه', label: 'فرصت‌های خوش‌رنگ' },
-    { id: 'ساعت', label: 'کالکشن ساعت' },
-    { id: 'journal', label: 'مجله استایل' },
-  ];
-
-  const openProductModal = (product: Product | null) => {
-    if (product) {
-      window.history.pushState({ view: activeView, modal: 'product', productId: product.id }, '', window.location.href);
-    }
-    setSelectedProduct(product);
-  };
-
-  const openSearchModal = (open: boolean) => {
-    if (open) {
-      window.history.pushState({ view: activeView, modal: 'search' }, '', window.location.href);
-    }
-    setSearchOpen(open);
-  };
-
-  const openSupportModal = (open: boolean) => {
-    if (open) {
-      window.history.pushState({ view: activeView, modal: 'support' }, '', window.location.href);
-    }
-    setSupportOpen(open);
-  };
-
-  const openMenuDrawer = (open: boolean) => {
-    if (open) {
-      window.history.pushState({ view: activeView, modal: 'menu' }, '', window.location.href);
-    }
-    setMenuOpen(open);
-  };
-
-  const openCheckoutModalFunc = (open: boolean) => {
-    if (open) {
-      window.history.pushState({ view: activeView, modal: 'checkout' }, '', window.location.href);
-    }
-    setCheckoutModal(open);
-  };
-
-  const openOrderDetailsModalFunc = (order: Order | null) => {
-    if (order) {
-      window.history.pushState({ view: activeView, modal: 'orderDetails', orderId: order.id }, '', window.location.href);
-    }
-    setSelectedOrderDetails(order);
-  };
-
-  const navigateToView = (viewId: string, pushHistory = true) => {
-    setActiveView(viewId);
-    setMenuOpen(false);
-    setSelectedProduct(null);
-    setSearchOpen(false);
-    setCheckoutModal(false);
-    setSelectedOrderDetails(null);
-    setSupportOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    if (pushHistory) {
-      window.history.pushState({ view: viewId }, '', window.location.href);
-    }
-  };
-
-  const handleNavClick = (viewId: string) => {
-    navigateToView(viewId, true);
-  };
-
-  // Handle browser / mobile back button via popstate
-  useEffect(() => {
-    // Ensure initial history state is set
-    if (!window.history.state || !window.history.state.view) {
-      window.history.replaceState({ view: 'home' }, '', window.location.href);
-    }
-
-    const handlePopState = (e: PopStateEvent) => {
-      setSelectedProduct(null);
-      setSearchOpen(false);
-      setSupportOpen(false);
-      setMenuOpen(false);
-      setCheckoutModal(false);
-      setSelectedOrderDetails(null);
-
-      const targetView = e.state?.view || 'home';
-      setActiveView(targetView);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Section collections dynamically sliced from real db based on badges and categories
-  const productsNewest = useMemo(() => {
-    const matched = products.filter((p) => p.badge === 'جدیدترین‌ها' || p.badge === 'جدید');
-    return matched.length >= 10 ? matched : products.slice(0, 10);
-  }, [products]);
-
-  const productsBestSellers = useMemo(() => {
-    const matched = products.filter((p) => p.badge === 'پرفروش‌ترین‌ها' || p.badge === 'پرفروش');
-    return matched.length >= 10 ? matched : products.slice(10, 20);
-  }, [products]);
-
-  const productsSpecial = useMemo(() => {
-    const matched = products.filter((p) => p.badge === 'تخفیف ویژه' || (p.oldPrice && p.oldPrice > p.price));
-    return matched.length >= 10 ? matched : products.filter((p) => p.oldPrice && p.oldPrice > p.price).concat(products).slice(0, 10);
-  }, [products]);
-
-  const productsWatches = useMemo(() => {
-    const matched = products.filter((p) => p.category === 'ساعت' || p.badge === 'ساعت');
-    return matched.length >= 10 ? matched : products.filter((p) => p.category === 'ساعت');
-  }, [products]);
 
   if (!isSupabaseConfigured()) {
     return (
@@ -418,66 +285,235 @@ function App() {
         <Route
           path="*"
           element={
-            <>
-              {intro && <Intro />}
-              {followModal && <FollowModal close={() => setFollowModal(false)} />}
-              {/* STOREFRONT HEADER */}
-              <header className="sticky top-0 z-30 border-b border-[#37192c]/8 bg-[#fffaf0]/90 backdrop-blur-xl">
-                <div className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-                  <button
-                    className="grid size-11 place-items-center rounded-full hover:bg-[#37192c]/7 md:hidden"
-                    aria-label="منو"
-                    onClick={() => openMenuDrawer(true)}
-                  >
-                    <Menu size={21} />
-                  </button>
-                  <button onClick={() => handleNavClick('home')} className="brand-font text-2xl tracking-[.08em] sm:text-3xl text-[#37192C]">
-                    AuraVibe
-                  </button>
+            <Storefront
+              intro={intro}
+              followModal={followModal}
+              setFollowModal={setFollowModal}
+              categories={categories}
+              products={products}
+              banners={banners}
+              orders={orders}
+              articles={articles}
+              cart={cart}
+              setCart={setCart}
+              wishlist={wishlist}
+              bannerIndex={bannerIndex}
+              setBannerIndex={setBannerIndex}
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
+              addToCart={addToCart}
+              toggleWishlist={toggleWishlist}
+              cartTotal={cartTotal}
+            />
+          }
+        />
+      </Routes>
+    </main>
+  );
+}
 
-                  <nav className="hidden items-center gap-6 text-xs font-bold md:flex">
-                    <button onClick={() => handleNavClick('home')} className={'hover:text-[#8b627e] ' + (activeView === 'home' ? 'text-[#8b627e] underline' : '')}>
-                      صفحه اصلی
-                    </button>
-                    <button onClick={() => handleNavClick('جدیدترین‌ها')} className="hover:text-[#8b627e]">
-                      جدیدترین‌ها
-                    </button>
-                    <button onClick={() => handleNavClick('پرفروش‌ترین‌ها')} className="hover:text-[#8b627e]">
-                      پرفروش‌ترین‌ها
-                    </button>
-                    <button onClick={() => handleNavClick('تخفیف ویژه')} className="hover:text-[#8b627e]">
-                      تخفیف ویژه
-                    </button>
-                    <button onClick={() => handleNavClick('journal')} className="hover:text-[#8b627e]">
-                      مجله استایل
-                    </button>
-                  </nav>
+// ----------------------------------------------------------------------
+// STOREFRONT ROUTER & NAVIGATION CONTROLLER
+// ----------------------------------------------------------------------
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      className="icon-button relative"
-                      aria-label="سبد خرید"
-                      onClick={() => {
-                        setAccountTab('cart');
-                        setActiveView('account');
-                      }}
-                    >
-                      <ShoppingBag size={20} />
-                      {cart.length > 0 && (
-                        <span className="absolute -end-0 -top-0 grid size-5 place-items-center rounded-full bg-[#37192C] text-[10px] text-white font-bold">
-                          {cart.length}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </header>
+function Storefront({
+  intro,
+  followModal,
+  setFollowModal,
+  categories,
+  products,
+  banners,
+  orders,
+  articles,
+  cart,
+  setCart,
+  wishlist,
+  bannerIndex,
+  setBannerIndex,
+  currentUser,
+  setCurrentUser,
+  addToCart,
+  toggleWishlist,
+  cartTotal
+}: {
+  intro: boolean;
+  followModal: boolean;
+  setFollowModal: (open: boolean) => void;
+  categories: CategoryItem[];
+  products: Product[];
+  banners: Banner[];
+  orders: Order[];
+  articles: Article[];
+  cart: Product[];
+  setCart: React.Dispatch<React.SetStateAction<Product[]>>;
+  wishlist: Product[];
+  bannerIndex: number;
+  setBannerIndex: React.Dispatch<React.SetStateAction<number>>;
+  currentUser: User;
+  setCurrentUser: React.Dispatch<React.SetStateAction<User>>;
+  addToCart: (product: Product) => void;
+  toggleWishlist: (product: Product) => void;
+  cartTotal: number;
+}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-          {/* MAIN STOREFRONT VIEWS */}
-          {activeView === 'account' ? (
+  // Active Overlay States driven by URL query parameters
+  const productId = searchParams.get('product');
+  const selectedProduct = useMemo(
+    () => (productId ? products.find((p) => String(p.id) === productId) || null : null),
+    [productId, products]
+  );
+
+  const searchOpen = searchParams.get('search') === 'true';
+  const supportOpen = searchParams.get('support') === 'true';
+  const menuOpen = searchParams.get('menu') === 'true';
+  const checkoutModal = searchParams.get('checkout') === 'true';
+
+  const orderId = searchParams.get('orderId');
+  const selectedOrderDetails = useMemo(
+    () => (orderId ? orders.find((o) => String(o.id) === orderId) || null : null),
+    [orderId, orders]
+  );
+
+  // Helper function to push overlay modal state to query params (enables Back button to close modal)
+  const openOverlay = (paramKey: string, paramValue: string = 'true') => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set(paramKey, paramValue);
+    navigate({ pathname: location.pathname, search: newParams.toString() }, { preventScrollReset: true });
+  };
+
+  // Helper function to close overlay modal cleanly
+  const closeOverlay = (paramKey: string) => {
+    if (searchParams.has(paramKey)) {
+      if (window.history.length > 1 && location.key !== 'default') {
+        navigate(-1);
+      } else {
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete(paramKey);
+        navigate({ pathname: location.pathname, search: newParams.toString() }, { replace: true, preventScrollReset: true });
+      }
+    }
+  };
+
+  // Open product directly from search modal safely without navigation race condition
+  const handleOpenProductFromSearch = (product: Product) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('search');
+    newParams.set('product', String(product.id));
+    navigate({ pathname: location.pathname, search: newParams.toString() }, { preventScrollReset: true });
+  };
+
+  const menuSections = [
+    { id: 'home', label: 'صفحه اصلی سایت', path: '/' },
+    ...categories.slice(0, 6).map((c) => ({ id: c.name, label: c.name, path: `/category/${encodeURIComponent(c.name)}` })),
+    { id: 'جدیدترین‌ها', label: 'تازه رسیده‌ها', path: `/category/${encodeURIComponent('جدیدترین‌ها')}` },
+    { id: 'پرفروش‌ترین‌ها', label: 'پرطرفدارها', path: `/category/${encodeURIComponent('پرفروش‌ترین‌ها')}` },
+    { id: 'تخفیف ویژه', label: 'فرصت‌های خوش‌رنگ', path: `/category/${encodeURIComponent('تخفیف ویژه')}` },
+    { id: 'ساعت', label: 'کالکشن ساعت', path: `/category/${encodeURIComponent('ساعت')}` },
+    { id: 'journal', label: 'مجله استایل', path: '/journal' },
+  ];
+
+  const handleNavClick = (targetPath: string) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate(targetPath);
+  };
+
+  const handleCategoryNav = (categoryName: string) => {
+    handleNavClick(`/category/${encodeURIComponent(categoryName)}`);
+  };
+
+  return (
+    <>
+      {intro && <Intro />}
+      {followModal && <FollowModal close={() => setFollowModal(false)} />}
+
+      {/* STOREFRONT HEADER */}
+      <header className="sticky top-0 z-30 border-b border-[#37192c]/8 bg-[#fffaf0]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <button
+            className="grid size-11 place-items-center rounded-full hover:bg-[#37192c]/7 md:hidden cursor-pointer"
+            aria-label="منو"
+            onClick={() => openOverlay('menu')}
+          >
+            <Menu size={21} />
+          </button>
+          <button onClick={() => handleNavClick('/')} className="brand-font text-2xl tracking-[.08em] sm:text-3xl text-[#37192C] cursor-pointer">
+            AuraVibe
+          </button>
+
+          <nav className="hidden items-center gap-6 text-xs font-bold md:flex">
+            <button onClick={() => handleNavClick('/')} className={'cursor-pointer hover:text-[#8b627e] ' + (location.pathname === '/' ? 'text-[#8b627e] underline' : '')}>
+              صفحه اصلی
+            </button>
+            <button onClick={() => handleCategoryNav('جدیدترین‌ها')} className="cursor-pointer hover:text-[#8b627e]">
+              جدیدترین‌ها
+            </button>
+            <button onClick={() => handleCategoryNav('پرفروش‌ترین‌ها')} className="cursor-pointer hover:text-[#8b627e]">
+              پرفروش‌ترین‌ها
+            </button>
+            <button onClick={() => handleCategoryNav('تخفیف ویژه')} className="cursor-pointer hover:text-[#8b627e]">
+              تخفیف ویژه
+            </button>
+            <button onClick={() => handleNavClick('/journal')} className="cursor-pointer hover:text-[#8b627e]">
+              مجله استایل
+            </button>
+          </nav>
+
+          <div className="flex items-center gap-1">
+            <button
+              className="icon-button relative cursor-pointer"
+              aria-label="سبد خرید"
+              onClick={() => handleNavClick('/account?tab=cart')}
+            >
+              <ShoppingBag size={20} />
+              {cart.length > 0 && (
+                <span className="absolute -end-0 -top-0 grid size-5 place-items-center rounded-full bg-[#37192C] text-[10px] text-white font-bold">
+                  {cart.length}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* STOREFRONT ROUTES */}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <HomePageView
+              categories={categories}
+              banners={banners}
+              products={products}
+              articles={articles}
+              bannerIndex={bannerIndex}
+              setBannerIndex={setBannerIndex}
+              openProduct={(p) => openOverlay('product', String(p.id))}
+              onCategoryClick={handleCategoryNav}
+              onJournalClick={() => handleNavClick('/journal')}
+            />
+          }
+        />
+        <Route
+          path="/category/:categoryName"
+          element={
+            <CategoryRouteWrapper
+              products={products}
+              openProduct={(p) => openOverlay('product', String(p.id))}
+              backToHome={() => handleNavClick('/')}
+            />
+          }
+        />
+        <Route
+          path="/journal"
+          element={<JournalPageView articles={articles} openHome={() => handleNavClick('/')} />}
+        />
+        <Route
+          path="/account"
+          element={
             <ProfilePageView
-              tab={accountTab}
-              setTab={setAccountTab}
               cart={cart}
               setCart={setCart}
               total={cartTotal}
@@ -485,225 +521,306 @@ function App() {
               user={currentUser}
               setUser={setCurrentUser}
               orders={orders}
-              openCheckout={() => openCheckoutModalFunc(true)}
-              openOrderDetails={(order: Order) => openOrderDetailsModalFunc(order)}
-              openProduct={openProductModal}
-              openHome={() => handleNavClick('home')}
+              openCheckout={() => openOverlay('checkout')}
+              openOrderDetails={(order) => openOverlay('orderId', String(order.id))}
+              openProduct={(p) => openOverlay('product', String(p.id))}
+              openHome={() => handleNavClick('/')}
             />
-          ) : activeView === 'home' ? (
-            <>
-              {/* Category Story Circles */}
-              <section className="mx-auto w-full max-w-7xl px-4 pt-7 sm:px-6 lg:px-8">
-                <div>
-                  <p className="label">انتخاب کن، بدرخش</p>
-                  <h1 className="mt-1 text-2xl font-black sm:text-3xl">دسته‌بندی‌های محبوب</h1>
-                </div>
-                <div className="story-row mt-5">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id || cat.name}
-                      onClick={() => handleNavClick(cat.name)}
-                      className="group w-[105px] shrink-0 text-center"
-                    >
-                      <span className="story-ring">
-                        <img src={cat.image} alt={cat.name} />
-                      </span>
-                      <span className="mt-2 block text-xs font-semibold leading-5 text-[#37192C]">{cat.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
+          }
+        />
+      </Routes>
 
-              {/* Banner Carousel */}
-              {banners.length > 0 && (
-                <BannerCarousel
-                  banners={banners}
-                  bannerIndex={bannerIndex}
-                  setBannerIndex={setBannerIndex}
-                  onNavClick={handleNavClick}
-                />
-              )}
-
-              {/* Collections Grid */}
-              <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های آورا استایل" items={productsNewest} open={openProductModal} onViewMore={() => handleNavClick('جدیدترین‌ها')} testid="new-products" />
-                <ProductSection title="پرفروش‌ترین‌ها" intro="محبوب‌ترین انتخاب‌های کاربران" items={productsBestSellers} open={openProductModal} onViewMore={() => handleNavClick('پرفروش‌ترین‌ها')} testid="best-sellers" />
-                <ProductSection title="تخفیف ویژه" intro="پیشنهادهای استثنایی و محدود" items={productsSpecial} open={openProductModal} onViewMore={() => handleNavClick('تخفیف ویژه')} testid="special-offers" />
-                <ProductSection title="ساعت" intro="کالکشن ساعت‌های ظریف و خاص" items={productsWatches} open={openProductModal} onViewMore={() => handleNavClick('ساعت')} testid="watches" />
-              </div>
-
-              {/* Social Banner */}
-              <section className="mx-auto my-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <SocialBanner />
-              </section>
-
-              {/* FAQ Section */}
-              <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <FaqSection />
-              </section>
-
-              {/* Trust Section */}
-              <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <TrustSectionHorizontal />
-              </section>
-
-              {/* Journal Section */}
-              <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <JournalSection articles={articles.slice(0, 4)} onViewMore={() => handleNavClick('journal')} />
-              </section>
-            </>
-          ) : activeView === 'journal' ? (
-            <JournalPageView articles={articles} openHome={() => handleNavClick('home')} />
-          ) : (
-            <CategoryPageView
-              categoryName={activeView}
-              products={products.filter((p) => p.category === activeView || activeView === 'جدیدترین‌ها')}
-              openProduct={openProductModal}
-              backToHome={() => handleNavClick('home')}
-            />
-          )}
-
-          {/* STOREFRONT FOOTER */}
-          <footer className="mt-16 bg-[#FFF3C5] border-t border-[#37192c]/10 py-12 text-[#37192C]">
-            <div className="mx-auto grid w-full max-w-7xl gap-9 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
-              <div>
-                <div className="brand-font text-3xl font-black">AuraVibe</div>
-                <p className="mt-4 text-xs leading-7 text-[#37192C]/80">
-                  فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.
-                </p>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm">خرید و کالکشن‌ها</h3>
-                <div className="mt-4 space-y-2.5 text-xs font-semibold">
-                  <button onClick={() => handleNavClick('جدیدترین‌ها')} className="block hover:underline">جدیدترین‌ها</button>
-                  <button onClick={() => handleNavClick('پرفروش‌ترین‌ها')} className="block hover:underline">پرفروش‌ترین‌ها</button>
-                  <button onClick={() => handleNavClick('تخفیف ویژه')} className="block hover:underline">تخفیف ویژه</button>
-                  <button onClick={() => handleNavClick('ساعت')} className="block hover:underline">ساعت</button>
-                </div>
-              </div>
-              <div>
-                <h3 className="font-bold text-sm">راهنما و مجله</h3>
-                <div className="mt-4 space-y-2.5 text-xs font-semibold">
-                  <button onClick={() => handleNavClick('journal')} className="block hover:underline">مجله استایل آورا</button>
-                  <button onClick={() => setSupportOpen(true)} className="block hover:underline">پشتیبانی آنلاین</button>
-                </div>
-              </div>
-              <div>
-                <h3 className="font-bold text-base">ارتباط با ما</h3>
-                <a className="mt-4 block text-sm font-semibold" href="tel:02100000000">پشتیبانی: ۰۲۱-۸۸۸۸۹۹۹۹</a>
-                <a className="mt-2 block text-sm font-semibold" href="mailto:hello@auravibe.ir">ایمیل: hello@auravibe.ir</a>
-              </div>
+      {/* STOREFRONT FOOTER */}
+      <footer className="mt-16 bg-[#FFF3C5] border-t border-[#37192c]/10 py-12 text-[#37192C]">
+        <div className="mx-auto grid w-full max-w-7xl gap-9 px-4 sm:grid-cols-2 sm:px-6 lg:px-8">
+          <div>
+            <div className="brand-font text-3xl font-black">AuraVibe</div>
+            <p className="mt-4 text-xs leading-7 text-[#37192C]/80">
+              فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-bold text-sm">خرید و کالکشن‌ها</h3>
+            <div className="mt-4 space-y-2.5 text-xs font-semibold">
+              <button onClick={() => handleCategoryNav('جدیدترین‌ها')} className="block hover:underline cursor-pointer">جدیدترین‌ها</button>
+              <button onClick={() => handleCategoryNav('پرفروش‌ترین‌ها')} className="block hover:underline cursor-pointer">پرفروش‌ترین‌ها</button>
+              <button onClick={() => handleCategoryNav('تخفیف ویژه')} className="block hover:underline cursor-pointer">تخفیف ویژه</button>
+              <button onClick={() => handleCategoryNav('ساعت')} className="block hover:underline cursor-pointer">ساعت</button>
             </div>
-          </footer>
+          </div>
+          <div>
+            <h3 className="font-bold text-sm">راهنما و مجله</h3>
+            <div className="mt-4 space-y-2.5 text-xs font-semibold">
+              <button onClick={() => handleNavClick('/journal')} className="block hover:underline cursor-pointer">مجله استایل آورا</button>
+              <button onClick={() => openOverlay('support')} className="block hover:underline cursor-pointer">پشتیبانی آنلاین</button>
+            </div>
+          </div>
+          <div>
+            <h3 className="font-bold text-base">ارتباط با ما</h3>
+            <a className="mt-4 block text-sm font-semibold" href="tel:02100000000">پشتیبانی: ۰۲۱-۸۸۸۸۹۹۹۹</a>
+            <a className="mt-2 block text-sm font-semibold" href="mailto:hello@auravibe.ir">ایمیل: hello@auravibe.ir</a>
+          </div>
+        </div>
+      </footer>
 
-          {/* Support Floating Button */}
-          <button className="support-button" onClick={() => openSupportModal(true)} aria-label="پشتیبانی">
-            <Headphones size={22} />
-          </button>
+      {/* Floating Support Button */}
+      <button className="support-button cursor-pointer" onClick={() => openOverlay('support')} aria-label="پشتیبانی">
+        <Headphones size={22} />
+      </button>
 
-          {/* Modals */}
-          {supportOpen && (
-            <SupportModal
-              close={() => setSupportOpen(false)}
-              user={currentUser}
-              openProfile={() => {
-                setAccountTab('profile');
-                setActiveView('account');
-              }}
-            />
-          )}
+      {/* OVERLAY MODALS AND DRAWERS */}
+      {supportOpen && (
+        <SupportModal
+          close={() => closeOverlay('support')}
+          user={currentUser}
+          openProfile={() => {
+            closeOverlay('support');
+            handleNavClick('/account?tab=profile');
+          }}
+        />
+      )}
 
-          {selectedProduct && (
-            <ProductModal
-              product={selectedProduct}
-              close={() => setSelectedProduct(null)}
-              add={addToCart}
-              toggleWish={toggleWishlist}
-              isWished={wishlist.some((w) => w.id === selectedProduct.id)}
-              allProducts={products}
-              openProduct={openProductModal}
-            />
-          )}
+      {selectedProduct && (
+        <ProductModal
+          product={selectedProduct}
+          close={() => closeOverlay('product')}
+          add={(p: Product) => {
+            addToCart(p);
+            closeOverlay('product');
+          }}
+          toggleWish={toggleWishlist}
+          isWished={wishlist.some((w) => w.id === selectedProduct.id)}
+          allProducts={products}
+          openProduct={(p: Product) => openOverlay('product', String(p.id))}
+        />
+      )}
 
-          {menuOpen && <SectionMenu sections={menuSections} close={() => setMenuOpen(false)} go={handleNavClick} />}
-          {searchOpen && <SearchModal close={() => setSearchOpen(false)} openProduct={openProductModal} products={products} />}
+      {menuOpen && (
+        <SectionMenu
+          sections={menuSections}
+          close={() => closeOverlay('menu')}
+          go={(path: string) => {
+            closeOverlay('menu');
+            handleNavClick(path);
+          }}
+        />
+      )}
 
+      {searchOpen && (
+        <SearchModal
+          close={() => closeOverlay('search')}
+          openProduct={handleOpenProductFromSearch}
+          products={products}
+        />
+      )}
 
-          {checkoutModal && (
-            <CheckoutInvoiceModal
-              cart={cart}
-              total={cartTotal}
-              user={currentUser}
-              close={() => setCheckoutModal(false)}
-              onPaymentComplete={async () => {
-                const itemsSnapshot: OrderItemSnapshot[] = cart.map((p) => ({
-                  productId: p.id,
-                  productCode: p.productCode,
-                  productName: p.name,
-                  productImage: p.images[0],
-                  originalPrice: p.oldPrice || p.price,
-                  finalPrice: p.price,
-                  quantity: 1,
-                  lineTotal: p.price
-                }));
+      {checkoutModal && (
+        <CheckoutInvoiceModal
+          cart={cart}
+          total={cartTotal}
+          user={currentUser}
+          close={() => closeOverlay('checkout')}
+          onPaymentComplete={async () => {
+            const itemsSnapshot: OrderItemSnapshot[] = cart.map((p) => ({
+              productId: p.id,
+              productCode: p.productCode,
+              productName: p.name,
+              productImage: p.images[0],
+              originalPrice: p.oldPrice || p.price,
+              finalPrice: p.price,
+              quantity: 1,
+              lineTotal: p.price
+            }));
 
-                await db.createOrder({
-                  customer: {
-                    userId: currentUser.id,
-                    firstName: currentUser.firstName,
-                    lastName: currentUser.lastName,
-                    phone: currentUser.phone,
-                    province: currentUser.province || 'تهران',
-                    city: currentUser.city || 'تهران',
-                    fullAddress: currentUser.address || 'تهران، خیابان اصلی',
-                    postalCode: currentUser.postalCode || '1234567890'
-                  },
-                  items: itemsSnapshot,
-                  shippingMethod: {
-                    key: 'POST',
-                    title: 'پست پیشتاز',
-                    subtitle: 'ارسال به سراسر کشور',
-                    costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
-                  }
-                });
+            await db.createOrder({
+              customer: {
+                userId: currentUser.id,
+                firstName: currentUser.firstName,
+                lastName: currentUser.lastName,
+                phone: currentUser.phone,
+                province: currentUser.province || 'تهران',
+                city: currentUser.city || 'تهران',
+                fullAddress: currentUser.address || 'تهران، خیابان اصلی',
+                postalCode: currentUser.postalCode || '1234567890'
+              },
+              items: itemsSnapshot,
+              shippingMethod: {
+                key: 'POST',
+                title: 'پست پیشتاز',
+                subtitle: 'ارسال به سراسر کشور',
+                costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
+              }
+            });
 
-                setCart([]);
-                setCheckoutModal(false);
-                setAccountTab('orders');
-                setActiveView('account');
-              }}
-            />
-          )}
+            setCart([]);
+            closeOverlay('checkout');
+            handleNavClick('/account?tab=orders');
+          }}
+        />
+      )}
 
-          {selectedOrderDetails && (
-            <OrderDetailsModal order={selectedOrderDetails} close={() => setSelectedOrderDetails(null)} />
-          )}
+      {selectedOrderDetails && (
+        <OrderDetailsModal order={selectedOrderDetails} close={() => closeOverlay('orderId')} />
+      )}
 
-          {/* Bottom Nav */}
-          <nav className="bottom-nav" dir="ltr">
-            <button className="bottom-nav-item" onClick={() => handleNavClick('home')} aria-label="خانه">
-              <Home size={22} />
-            </button>
-            <button className="bottom-nav-item" onClick={() => openSearchModal(true)} aria-label="جستجو">
-              <Search size={22} />
-            </button>
+      {/* Bottom Nav */}
+      <nav className="bottom-nav" dir="ltr">
+        <button className="bottom-nav-item cursor-pointer" onClick={() => handleNavClick('/')} aria-label="خانه">
+          <Home size={22} />
+        </button>
+        <button className="bottom-nav-item cursor-pointer" onClick={() => openOverlay('search')} aria-label="جستجو">
+          <Search size={22} />
+        </button>
+        <button
+          className="bottom-nav-item cursor-pointer"
+          onClick={() => handleNavClick('/account?tab=profile')}
+          aria-label="حساب کاربری"
+        >
+          <UserRound size={22} />
+        </button>
+      </nav>
+    </>
+  );
+}
+
+// ----------------------------------------------------------------------
+// HOME PAGE VIEW
+// ----------------------------------------------------------------------
+
+function HomePageView({
+  categories,
+  banners,
+  products,
+  articles,
+  bannerIndex,
+  setBannerIndex,
+  openProduct,
+  onCategoryClick,
+  onJournalClick
+}: {
+  categories: CategoryItem[];
+  banners: Banner[];
+  products: Product[];
+  articles: Article[];
+  bannerIndex: number;
+  setBannerIndex: React.Dispatch<React.SetStateAction<number>>;
+  openProduct: (p: Product) => void;
+  onCategoryClick: (cat: string) => void;
+  onJournalClick: () => void;
+}) {
+  const productsNewest = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'جدیدترین‌ها' || p.badge === 'جدید');
+    return matched.length >= 10 ? matched : products.slice(0, 10);
+  }, [products]);
+
+  const productsBestSellers = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'پرفروش‌ترین‌ها' || p.badge === 'پرفروش');
+    return matched.length >= 10 ? matched : products.slice(10, 20);
+  }, [products]);
+
+  const productsSpecial = useMemo(() => {
+    const matched = products.filter((p) => p.badge === 'تخفیف ویژه' || (p.oldPrice && p.oldPrice > p.price));
+    return matched.length >= 10 ? matched : products.filter((p) => p.oldPrice && p.oldPrice > p.price).concat(products).slice(0, 10);
+  }, [products]);
+
+  const productsWatches = useMemo(() => {
+    const matched = products.filter((p) => p.category === 'ساعت' || p.badge === 'ساعت');
+    return matched.length >= 10 ? matched : products.filter((p) => p.category === 'ساعت');
+  }, [products]);
+
+  return (
+    <>
+      {/* Category Story Circles */}
+      <section className="mx-auto w-full max-w-7xl px-4 pt-7 sm:px-6 lg:px-8">
+        <div>
+          <p className="label">انتخاب کن، بدرخش</p>
+          <h1 className="mt-1 text-2xl font-black sm:text-3xl">دسته‌بندی‌های محبوب</h1>
+        </div>
+        <div className="story-row mt-5">
+          {categories.map((cat) => (
             <button
-              className="bottom-nav-item"
-              onClick={() => {
-                setAccountTab('profile');
-                setActiveView('account');
-              }}
-              aria-label="حساب کاربری"
+              key={cat.id || cat.name}
+              onClick={() => onCategoryClick(cat.name)}
+              className="group w-[105px] shrink-0 text-center cursor-pointer"
             >
-              <UserRound size={22} />
+              <span className="story-ring">
+                <img src={cat.image} alt={cat.name} />
+              </span>
+              <span className="mt-2 block text-xs font-semibold leading-5 text-[#37192C]">{cat.name}</span>
             </button>
-          </nav>
-        </>
-      }
+          ))}
+        </div>
+      </section>
+
+      {/* Banner Carousel */}
+      {banners.length > 0 && (
+        <BannerCarousel
+          banners={banners}
+          bannerIndex={bannerIndex}
+          setBannerIndex={setBannerIndex}
+          onNavClick={onCategoryClick}
+        />
+      )}
+
+      {/* Collections Grid */}
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های آورا استایل" items={productsNewest} open={openProduct} onViewMore={() => onCategoryClick('جدیدترین‌ها')} />
+        <ProductSection title="پرفروش‌ترین‌ها" intro="محبوب‌ترین انتخاب‌های کاربران" items={productsBestSellers} open={openProduct} onViewMore={() => onCategoryClick('پرفروش‌ترین‌ها')} />
+        <ProductSection title="تخفیف ویژه" intro="پیشنهادهای استثنایی و محدود" items={productsSpecial} open={openProduct} onViewMore={() => onCategoryClick('تخفیف ویژه')} />
+        <ProductSection title="ساعت" intro="کالکشن ساعت‌های ظریف و خاص" items={productsWatches} open={openProduct} onViewMore={() => onCategoryClick('ساعت')} />
+      </div>
+
+      {/* Social Banner */}
+      <section className="mx-auto my-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <SocialBanner />
+      </section>
+
+      {/* FAQ Section */}
+      <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <FaqSection />
+      </section>
+
+      {/* Trust Section */}
+      <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <TrustSectionHorizontal />
+      </section>
+
+      {/* Journal Section */}
+      <section className="mx-auto mt-16 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <JournalSection articles={articles.slice(0, 4)} onViewMore={onJournalClick} />
+      </section>
+    </>
+  );
+}
+
+// Category Route Wrapper extracting :categoryName param
+function CategoryRouteWrapper({
+  products,
+  openProduct,
+  backToHome
+}: {
+  products: Product[];
+  openProduct: (p: Product) => void;
+  backToHome: () => void;
+}) {
+  const { categoryName } = useParams();
+  const decodedCategory = categoryName ? decodeURIComponent(categoryName) : 'همه محصولات';
+
+  const categoryProducts = useMemo(() => {
+    if (decodedCategory === 'جدیدترین‌ها' || decodedCategory === 'همه محصولات') {
+      return products;
+    }
+    return products.filter((p) => p.category === decodedCategory);
+  }, [products, decodedCategory]);
+
+  return (
+    <CategoryPageView
+      categoryName={decodedCategory}
+      products={categoryProducts}
+      openProduct={openProduct}
+      backToHome={backToHome}
     />
-  </Routes>
-</main>
-);
+  );
 }
 
 // ----------------------------------------------------------------------
@@ -823,7 +940,7 @@ function AdminContainer({
               <button
                 type="submit"
                 disabled={adminLoginLoading}
-                className="w-full rounded-full bg-[#37192C] py-3.5 text-xs font-black text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md disabled:opacity-50"
+                className="w-full rounded-full bg-[#37192C] py-3.5 text-xs font-black text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md disabled:opacity-50 cursor-pointer"
               >
                 {adminLoginLoading ? 'در حال احراز هویت...' : 'ورود به پیشخوان مدیریت'}
               </button>
@@ -831,7 +948,7 @@ function AdminContainer({
               <button
                 type="button"
                 onClick={handleGoHome}
-                className="w-full rounded-full border border-[#37192c]/20 py-3 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0] transition"
+                className="w-full rounded-full border border-[#37192c]/20 py-3 text-xs font-bold text-[#37192C] hover:bg-[#fffaf0] transition cursor-pointer"
               >
                 بازگشت به فروشگاه
               </button>
@@ -946,7 +1063,7 @@ function BannerCarousel({
               <p className="mt-4 max-w-md text-base leading-8 text-white/85">{banner.subtitle}</p>
               <button
                 onClick={() => onNavClick(banner.targetCategory || 'جدیدترین‌ها')}
-                className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[#FFF3C5] px-5 py-3 text-sm font-bold text-[#37192C] transition hover:scale-105"
+                className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[#FFF3C5] px-5 py-3 text-sm font-bold text-[#37192C] transition hover:scale-105 cursor-pointer"
               >
                 {banner.ctaText || 'دیدن کالکشن'} <ArrowLeft size={17} />
               </button>
@@ -956,14 +1073,14 @@ function BannerCarousel({
       </div>
       <button
         onClick={() => setBannerIndex((bannerIndex + banners.length - 1) % banners.length)}
-        className="carousel-arrow start-4"
+        className="carousel-arrow start-4 cursor-pointer"
         aria-label="بنر قبل"
       >
         <ChevronRight />
       </button>
       <button
         onClick={() => setBannerIndex((bannerIndex + 1) % banners.length)}
-        className="carousel-arrow end-4"
+        className="carousel-arrow end-4 cursor-pointer"
         aria-label="بنر بعد"
       >
         <ChevronLeft />
@@ -973,7 +1090,7 @@ function BannerCarousel({
           <button
             key={index}
             onClick={() => setBannerIndex(index)}
-            className={'h-2.5 rounded-full transition-all ' + (index === (bannerIndex % banners.length) ? 'w-7 bg-[#FFF3C5]' : 'w-2.5 bg-white/60')}
+            className={'h-2.5 rounded-full transition-all cursor-pointer ' + (index === (bannerIndex % banners.length) ? 'w-7 bg-[#FFF3C5]' : 'w-2.5 bg-white/60')}
             aria-label={`بنر ${index + 1}`}
           />
         ))}
@@ -1004,7 +1121,7 @@ function FollowModal({ close }: { close: () => void }) {
   return (
     <div className="modal-backdrop">
       <div className="follow-modal">
-        <button className="absolute end-5 top-5" onClick={close} aria-label="بستن">
+        <button className="absolute end-5 top-5 cursor-pointer" onClick={close} aria-label="بستن">
           <X size={20} />
         </button>
         <div className="mx-auto grid size-16 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
@@ -1022,7 +1139,7 @@ function FollowModal({ close }: { close: () => void }) {
             <Send size={22} />
           </a>
         </div>
-        <button onClick={close} className="mt-6 text-sm font-bold underline underline-offset-4 text-[#37192C]">
+        <button onClick={close} className="mt-6 text-sm font-bold underline underline-offset-4 text-[#37192C] cursor-pointer">
           فعلاً فقط می‌خوام فروشگاه را ببینم
         </button>
       </div>
@@ -1153,7 +1270,7 @@ function FaqSection() {
       <div className="mt-8 space-y-3 max-w-3xl mx-auto">
         {items.map((item, index) => (
           <div key={index} className="rounded-2xl bg-white border border-[#37192c]/10 overflow-hidden shadow-xs">
-            <button onClick={() => setOpenIndex(openIndex === index ? null : index)} className="flex w-full items-center justify-between p-5 text-right font-bold text-[#37192C]">
+            <button onClick={() => setOpenIndex(openIndex === index ? null : index)} className="flex w-full items-center justify-between p-5 text-right font-bold text-[#37192C] cursor-pointer">
               <span className="text-sm sm:text-base">{item.q}</span>
               <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[#37192C] text-[#FFF3C5]">
                 {openIndex === index ? <Minus size={16} /> : <Plus size={16} />}
@@ -1235,7 +1352,7 @@ function JournalSection({ articles, onViewMore }: { articles: Article[]; onViewM
       <div className="mt-8 text-center">
         <button
           onClick={onViewMore}
-          className="inline-flex items-center gap-2 rounded-full bg-[#37192C] px-6 py-3 text-xs sm:text-sm font-bold text-[#FFF3C5] transition hover:bg-[#5a2548] shadow-md"
+          className="inline-flex items-center gap-2 rounded-full bg-[#37192C] px-6 py-3 text-xs sm:text-sm font-bold text-[#FFF3C5] transition hover:bg-[#5a2548] shadow-md cursor-pointer"
         >
           مشاهده همه موارد <ArrowLeft size={16} />
         </button>
@@ -1252,7 +1369,7 @@ function JournalPageView({ articles, openHome }: { articles: Article[]; openHome
     <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 lg:px-8">
       <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
         <div>
-          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline cursor-pointer">
             <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل آورا</h1>
@@ -1272,7 +1389,7 @@ function JournalPageView({ articles, openHome }: { articles: Article[]; openHome
           <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedArticle(null)}
-              className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
+              className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -1322,7 +1439,7 @@ function ProductSection({ title, intro, items, open, onViewMore }: any) {
         </div>
         <button
           onClick={onViewMore}
-          className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-4 py-2 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs"
+          className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-4 py-2 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs cursor-pointer"
         >
           مشاهده همه موارد <ArrowLeft size={15} />
         </button>
@@ -1335,7 +1452,7 @@ function ProductSection({ title, intro, items, open, onViewMore }: any) {
         {/* End of Slider CTA Card */}
         <button
           onClick={onViewMore}
-          className="product-card shrink-0 flex flex-col items-center justify-center gap-3 rounded-[1.55rem] bg-[#FFF3C5]/60 hover:bg-[#FFF3C5] border border-[#37192c]/15 p-6 text-center transition group min-h-[220px]"
+          className="product-card shrink-0 flex flex-col items-center justify-center gap-3 rounded-[1.55rem] bg-[#FFF3C5]/60 hover:bg-[#FFF3C5] border border-[#37192c]/15 p-6 text-center transition group min-h-[220px] cursor-pointer"
         >
           <div className="grid size-12 place-items-center rounded-full bg-[#37192C] text-[#FFF3C5] group-hover:scale-110 transition">
             <ArrowLeft size={20} />
@@ -1348,7 +1465,7 @@ function ProductSection({ title, intro, items, open, onViewMore }: any) {
       <div className="mt-3 sm:hidden text-center">
         <button
           onClick={onViewMore}
-          className="inline-flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition"
+          className="inline-flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition cursor-pointer"
         >
           مشاهده همه موارد <ArrowLeft size={15} />
         </button>
@@ -1359,7 +1476,7 @@ function ProductSection({ title, intro, items, open, onViewMore }: any) {
 
 function ProductCard({ product, open }: { product: Product; open: (p: Product) => void }) {
   return (
-    <button onClick={() => open(product)} className="product-card group text-right">
+    <button onClick={() => open(product)} className="product-card group text-right cursor-pointer">
       <div className="relative aspect-[.83] overflow-hidden rounded-[1.55rem] bg-[#f1e4c8]">
         <img src={product.images[0]} alt={product.name} className="size-full object-cover transition duration-500 group-hover:scale-105" />
         {product.badge && (
@@ -1378,43 +1495,30 @@ function ProductCard({ product, open }: { product: Product; open: (p: Product) =
 }
 
 function CategoryPageView({ categoryName, products, openProduct, backToHome }: any) {
-  const getInitialFilters = () => {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      minPrice: params.get('minPrice') ? Number(params.get('minPrice')) : undefined,
-      maxPrice: params.get('maxPrice') ? Number(params.get('maxPrice')) : undefined,
-      inStockOnly: params.get('inStock') === 'true',
-      sort: params.get('sort') || 'newest',
-      colors: params.get('colors') ? params.get('colors')!.split(',') : [],
-      badges: params.get('badges') ? params.get('badges')!.split(',') : [],
-    };
-  };
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [filters, setFilters] = useState(getInitialFilters);
+  const filters = useMemo(() => {
+    return {
+      minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined,
+      maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined,
+      inStockOnly: searchParams.get('inStock') === 'true',
+      sort: searchParams.get('sort') || 'newest',
+      colors: searchParams.get('colors') ? searchParams.get('colors')!.split(',') : [],
+      badges: searchParams.get('badges') ? searchParams.get('badges')!.split(',') : [],
+    };
+  }, [searchParams]);
+
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Sync state with URL without full-page reloads
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (filters.minPrice !== undefined) params.set('minPrice', filters.minPrice.toString());
-    if (filters.maxPrice !== undefined) params.set('maxPrice', filters.maxPrice.toString());
-    if (filters.inStockOnly) params.set('inStock', 'true');
-    if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort);
-    if (filters.colors.length > 0) params.set('colors', filters.colors.join(','));
-    if (filters.badges.length > 0) params.set('badges', filters.badges.join(','));
-
-    const queryStr = params.toString();
-    const newUrl = queryStr ? `${window.location.pathname}?${queryStr}` : window.location.pathname;
-    window.history.replaceState(null, '', newUrl);
-  }, [filters]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setFilters(getInitialFilters());
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  const updateFilterParam = (key: string, value: string | undefined) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (value !== undefined && value !== '') {
+      newParams.set(key, value);
+    } else {
+      newParams.delete(key);
+    }
+    setSearchParams(newParams, { replace: true });
+  };
 
   const categoryPrices = products.map((p: Product) => p.price);
   const minCategoryPrice = categoryPrices.length ? Math.min(...categoryPrices) : 0;
@@ -1458,14 +1562,9 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
   }, [products, filters]);
 
   const clearAllFilters = () => {
-    setFilters({
-      minPrice: undefined,
-      maxPrice: undefined,
-      inStockOnly: false,
-      sort: 'newest',
-      colors: [],
-      badges: []
-    });
+    const newParams = new URLSearchParams(searchParams);
+    ['minPrice', 'maxPrice', 'inStock', 'sort', 'colors', 'badges'].forEach((k) => newParams.delete(k));
+    setSearchParams(newParams, { replace: true });
   };
 
   const hasActiveFilters =
@@ -1477,21 +1576,15 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
     filters.sort !== 'newest';
 
   const toggleColor = (col: string) => {
-    setFilters(prev => ({
-      ...prev,
-      colors: prev.colors.includes(col)
-        ? prev.colors.filter(c => c !== col)
-        : [...prev.colors, col]
-    }));
+    const current = filters.colors;
+    const next = current.includes(col) ? current.filter((c) => c !== col) : [...current, col];
+    updateFilterParam('colors', next.length ? next.join(',') : undefined);
   };
 
   const toggleBadge = (badge: string) => {
-    setFilters(prev => ({
-      ...prev,
-      badges: prev.badges.includes(badge)
-        ? prev.badges.filter(b => b !== badge)
-        : [...prev.badges, badge]
-    }));
+    const current = filters.badges;
+    const next = current.includes(badge) ? current.filter((b) => b !== badge) : [...current, badge];
+    updateFilterParam('badges', next.length ? next.join(',') : undefined);
   };
 
   const renderFilterControls = () => (
@@ -1508,7 +1601,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               type="number"
               placeholder={minCategoryPrice ? money(minCategoryPrice) : '۰'}
               value={filters.minPrice ?? ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, minPrice: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => updateFilterParam('minPrice', e.target.value || undefined)}
               className="w-full p-2 rounded-xl border bg-[#fffaf0] font-bold text-xs"
             />
           </div>
@@ -1518,7 +1611,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               type="number"
               placeholder={maxCategoryPrice ? money(maxCategoryPrice) : '۱,۰۰۰,۰۰۰'}
               value={filters.maxPrice ?? ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => updateFilterParam('maxPrice', e.target.value || undefined)}
               className="w-full p-2 rounded-xl border bg-[#fffaf0] font-bold text-xs"
             />
           </div>
@@ -1537,7 +1630,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
           <input
             type="checkbox"
             checked={filters.inStockOnly}
-            onChange={(e) => setFilters(prev => ({ ...prev, inStockOnly: e.target.checked }))}
+            onChange={(e) => updateFilterParam('inStock', e.target.checked ? 'true' : undefined)}
             className="size-4 rounded accent-[#37192C]"
           />
           <span>فقط کالاهای موجود</span>
@@ -1555,7 +1648,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
                 <button
                   key={col}
                   onClick={() => toggleColor(col)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition cursor-pointer ${
                     selected ? 'bg-[#37192C] text-[#FFF3C5] border-[#37192C]' : 'bg-[#fffaf0] text-[#37192C] border-[#37192c]/20 hover:border-[#37192C]'
                   }`}
                 >
@@ -1579,7 +1672,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
                 <button
                   key={badge}
                   onClick={() => toggleBadge(badge)}
-                  className={`px-3 py-1.5 rounded-full border text-xs font-bold transition ${
+                  className={`px-3 py-1.5 rounded-full border text-xs font-bold transition cursor-pointer ${
                     selected ? 'bg-[#37192C] text-[#FFF3C5] border-[#37192C]' : 'bg-[#fffaf0] text-[#37192C] border-[#37192c]/20 hover:border-[#37192C]'
                   }`}
                 >
@@ -1595,7 +1688,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
       {hasActiveFilters && (
         <button
           onClick={clearAllFilters}
-          className="w-full py-2.5 rounded-2xl border border-rose-300 text-rose-600 font-bold bg-rose-50 hover:bg-rose-100 transition flex items-center justify-center gap-1.5"
+          className="w-full py-2.5 rounded-2xl border border-rose-300 text-rose-600 font-bold bg-rose-50 hover:bg-rose-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <RotateCcw size={15} /> حذف همه فیلترها
         </button>
@@ -1608,7 +1701,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
       {/* Header & Breadcrumb */}
       <div className="border-b border-[#37192c]/10 pb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <button onClick={backToHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+          <button onClick={backToHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline cursor-pointer">
             <ArrowLeft size={14} className="rotate-180" /> صفحه اصلی
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">دسته‌بندی: {categoryName}</h1>
@@ -1623,7 +1716,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
         {/* Mobile Filter Trigger */}
         <button
           onClick={() => setMobileFilterOpen(true)}
-          className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-xl bg-[#37192C] text-[#FFF3C5] font-bold text-xs"
+          className="lg:hidden flex items-center gap-2 px-4 py-2 rounded-xl bg-[#37192C] text-[#FFF3C5] font-bold text-xs cursor-pointer"
         >
           <SlidersHorizontal size={16} /> فیلترها {hasActiveFilters && '(فعال)'}
         </button>
@@ -1633,7 +1726,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
           <span className="text-xs font-bold text-[#8b627e]">مرتب‌سازی:</span>
           <select
             value={filters.sort}
-            onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+            onChange={(e) => updateFilterParam('sort', e.target.value !== 'newest' ? e.target.value : undefined)}
             className="p-2 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] font-bold text-xs text-[#37192C] outline-none cursor-pointer"
           >
             <option value="newest">جدیدترین</option>
@@ -1650,34 +1743,34 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
             {filters.minPrice !== undefined && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 از {money(filters.minPrice)} تومان
-                <button onClick={() => setFilters(prev => ({ ...prev, minPrice: undefined }))}><X size={12} /></button>
+                <button onClick={() => updateFilterParam('minPrice', undefined)} className="cursor-pointer"><X size={12} /></button>
               </span>
             )}
             {filters.maxPrice !== undefined && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 تا {money(filters.maxPrice)} تومان
-                <button onClick={() => setFilters(prev => ({ ...prev, maxPrice: undefined }))}><X size={12} /></button>
+                <button onClick={() => updateFilterParam('maxPrice', undefined)} className="cursor-pointer"><X size={12} /></button>
               </span>
             )}
             {filters.inStockOnly && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 موجود
-                <button onClick={() => setFilters(prev => ({ ...prev, inStockOnly: false }))}><X size={12} /></button>
+                <button onClick={() => updateFilterParam('inStock', undefined)} className="cursor-pointer"><X size={12} /></button>
               </span>
             )}
-            {filters.colors.map(c => (
+            {filters.colors.map((c) => (
               <span key={c} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 رنگ
-                <button onClick={() => toggleColor(c)}><X size={12} /></button>
+                <button onClick={() => toggleColor(c)} className="cursor-pointer"><X size={12} /></button>
               </span>
             ))}
-            {filters.badges.map(b => (
+            {filters.badges.map((b) => (
               <span key={b} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 {b}
-                <button onClick={() => toggleBadge(b)}><X size={12} /></button>
+                <button onClick={() => toggleBadge(b)} className="cursor-pointer"><X size={12} /></button>
               </span>
             ))}
-            <button onClick={clearAllFilters} className="text-xs text-rose-600 font-bold underline mr-2">
+            <button onClick={clearAllFilters} className="text-xs text-rose-600 font-bold underline mr-2 cursor-pointer">
               حذف فیلترها
             </button>
           </div>
@@ -1698,7 +1791,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               <p className="text-base font-bold text-[#37192C]">محصولی با فیلترهای انتخابی یافت نشد.</p>
               <button
                 onClick={clearAllFilters}
-                className="mt-4 px-5 py-2.5 rounded-full bg-[#37192C] text-[#FFF3C5] text-xs font-bold"
+                className="mt-4 px-5 py-2.5 rounded-full bg-[#37192C] text-[#FFF3C5] text-xs font-bold cursor-pointer"
               >
                 پاک کردن فیلترها
               </button>
@@ -1724,14 +1817,14 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               <h2 className="text-base font-black text-[#37192C] flex items-center gap-2">
                 <Filter size={18} /> فیلتر محصولات
               </h2>
-              <button onClick={() => setMobileFilterOpen(false)} className="grid size-8 place-items-center rounded-full bg-white">
+              <button onClick={() => setMobileFilterOpen(false)} className="grid size-8 place-items-center rounded-full bg-white cursor-pointer">
                 <X size={16} />
               </button>
             </div>
             {renderFilterControls()}
             <button
               onClick={() => setMobileFilterOpen(false)}
-              className="mt-6 w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs shadow-md"
+              className="mt-6 w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs shadow-md cursor-pointer"
             >
               مشاهده {filteredProducts.length} محصول
             </button>
@@ -1764,7 +1857,7 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
     <div className="modal-backdrop p-3" onClick={close}>
       <div className="product-modal max-h-[92vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
         <button
-          className="absolute end-5 top-5 z-20 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C]"
+          className="absolute end-5 top-5 z-20 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C] cursor-pointer"
           onClick={close}
         >
           <X size={20} />
@@ -1794,7 +1887,7 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
                     setActiveImgIdx(idx);
                     setShowVideo(false);
                   }}
-                  className={`size-12 rounded-xl overflow-hidden border-2 transition ${
+                  className={`size-12 rounded-xl overflow-hidden border-2 transition cursor-pointer ${
                     !showVideo && activeImgIdx === idx ? 'border-[#37192C] scale-105' : 'border-white/60 opacity-70'
                   }`}
                 >
@@ -1805,7 +1898,7 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
               {product.videoUrl && (
                 <button
                   onClick={() => setShowVideo(true)}
-                  className={`px-3 py-2 rounded-xl border-2 font-bold text-xs flex items-center gap-1 transition ${
+                  className={`px-3 py-2 rounded-xl border-2 font-bold text-xs flex items-center gap-1 transition cursor-pointer ${
                     showVideo ? 'bg-[#37192C] text-[#FFF3C5] border-[#37192C]' : 'bg-white text-[#37192C] border-white'
                   }`}
                 >
@@ -1848,14 +1941,14 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <button
                   onClick={() => add(product)}
-                  className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2"
+                  className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <ShoppingBag size={18} /> افزودن به سبد خرید
                 </button>
 
                 <button
                   onClick={() => toggleWish(product)}
-                  className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-bold border transition flex items-center justify-center gap-2 ${
+                  className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
                     isWished
                       ? 'bg-rose-500 text-white border-rose-500'
                       : 'bg-[#FFF3C5] border-[#37192c]/15 text-[#37192C] hover:bg-[#ffe79a]'
@@ -1867,7 +1960,7 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
 
                 <button
                   onClick={handleShare}
-                  className="grid size-12 place-items-center rounded-full bg-[#fffaf0] border border-[#37192c]/15 text-[#37192C] hover:bg-[#FFF3C5] transition shrink-0 self-center sm:self-auto"
+                  className="grid size-12 place-items-center rounded-full bg-[#fffaf0] border border-[#37192c]/15 text-[#37192C] hover:bg-[#FFF3C5] transition shrink-0 self-center sm:self-auto cursor-pointer"
                   title="اشتراک‌گذاری"
                 >
                   <Send size={18} />
@@ -1930,7 +2023,7 @@ function RelatedProductsSection({
           <button
             key={p.id}
             onClick={() => openProduct(p)}
-            className="group shrink-0 w-40 sm:w-48 text-right bg-white p-3 rounded-2xl border border-[#37192c]/10 shadow-2xs hover:border-[#37192C] transition flex flex-col justify-between"
+            className="group shrink-0 w-40 sm:w-48 text-right bg-white p-3 rounded-2xl border border-[#37192c]/10 shadow-2xs hover:border-[#37192C] transition flex flex-col justify-between cursor-pointer"
           >
             <div>
               <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-[#f1e4c8] mb-2">
@@ -2055,7 +2148,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
           <div className="size-3 rounded-full bg-emerald-500 animate-pulse" />
           <h2 className="text-sm font-black text-[#37192C]">پشتیبانی آنلاین آورا (Aura Chat)</h2>
         </div>
-        <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
+        <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] cursor-pointer">
           <X size={16} />
         </button>
       </div>
@@ -2109,7 +2202,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
       {mediaUrl && (
         <div className="mb-2 p-2 bg-[#fffaf0] rounded-xl border flex items-center justify-between text-xs font-bold">
           <span>فایل پیوست شده</span>
-          <button onClick={() => setMediaUrl(null)} className="text-rose-600 font-bold"><X size={14} /></button>
+          <button onClick={() => setMediaUrl(null)} className="text-rose-600 font-bold cursor-pointer"><X size={14} /></button>
         </div>
       )}
 
@@ -2125,7 +2218,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
                 close();
                 openProfile();
               }}
-              className="px-4 py-2 rounded-full bg-[#37192C] text-[#FFF3C5] text-xs font-bold shadow-xs hover:bg-[#5a2548] transition"
+              className="px-4 py-2 rounded-full bg-[#37192C] text-[#FFF3C5] text-xs font-bold shadow-xs hover:bg-[#5a2548] transition cursor-pointer"
             >
               ورود و تکمیل اطلاعات حساب
             </button>
@@ -2146,7 +2239,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
             className="flex-1 bg-white border rounded-xl px-3 py-2 text-xs font-bold outline-none text-[#37192C]"
           />
 
-          <button type="submit" className="grid size-9 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5]">
+          <button type="submit" className="grid size-9 place-items-center rounded-xl bg-[#37192C] text-[#FFF3C5] cursor-pointer">
             <Send size={16} />
           </button>
         </form>
@@ -2181,12 +2274,12 @@ function SearchModal({ close, openProduct, products }: any) {
               className="w-full font-bold outline-none text-sm bg-transparent"
             />
             {q && (
-              <button onClick={() => setQ('')} className="text-[#8b627e] hover:text-[#37192C]">
+              <button onClick={() => setQ('')} className="text-[#8b627e] hover:text-[#37192C] cursor-pointer">
                 <X size={16} />
               </button>
             )}
           </div>
-          <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
+          <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] cursor-pointer">
             <X size={18} />
           </button>
         </div>
@@ -2210,9 +2303,8 @@ function SearchModal({ close, openProduct, products }: any) {
                   key={p.id}
                   onClick={() => {
                     openProduct(p);
-                    close();
                   }}
-                  className="flex items-center gap-3 p-2.5 border rounded-2xl text-right hover:border-[#37192C]/40 hover:bg-[#fffaf0] transition"
+                  className="flex items-center gap-3 p-2.5 border rounded-2xl text-right hover:border-[#37192C]/40 hover:bg-[#fffaf0] transition cursor-pointer"
                 >
                   <img src={p.images[0]} alt={p.name} className="size-16 object-cover rounded-xl shrink-0" />
                   <div className="overflow-hidden">
@@ -2232,11 +2324,7 @@ function SearchModal({ close, openProduct, products }: any) {
   );
 }
 
-import { IRAN_PROVINCES_AND_CITIES } from './data';
-
 function ProfilePageView({
-  tab,
-  setTab,
   cart,
   setCart,
   total,
@@ -2249,6 +2337,15 @@ function ProfilePageView({
   openProduct,
   openHome
 }: any) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = (searchParams.get('tab') as 'profile' | 'orders' | 'fav' | 'cart') || 'profile';
+
+  const setTab = (newTab: 'profile' | 'orders' | 'fav' | 'cart') => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', newTab);
+    setSearchParams(newParams);
+  };
+
   const [editing, setEditing] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
   const [citySearch, setCitySearch] = useState('');
@@ -2332,14 +2429,14 @@ function ProfilePageView({
       {/* Header Breadcrumb */}
       <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
         <div>
-          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+          <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline cursor-pointer">
             <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
           </button>
           <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">حساب کاربری</h1>
         </div>
       </div>
 
-      {/* Profile Header (Instagram inspired) */}
+      {/* Profile Header */}
       <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs mb-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-right">
         <div className="relative group shrink-0">
           <div className="size-24 sm:size-28 rounded-full overflow-hidden border-4 border-[#FFF3C5] bg-[#37192C] grid place-items-center text-[#FFF3C5] font-black text-3xl shadow-md">
@@ -2367,7 +2464,7 @@ function ProfilePageView({
 
         <button
           onClick={() => setEditing(!editing)}
-          className="flex items-center gap-1.5 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs"
+          className="flex items-center gap-1.5 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs cursor-pointer"
         >
           <Edit size={16} /> {editing ? 'انصراف' : 'ویرایش اطلاعات'}
         </button>
@@ -2378,7 +2475,7 @@ function ProfilePageView({
         <button
           onClick={() => setTab('profile')}
           className={
-            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none cursor-pointer ' +
             (tab === 'profile'
               ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
               : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
@@ -2389,7 +2486,7 @@ function ProfilePageView({
         <button
           onClick={() => setTab('orders')}
           className={
-            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none cursor-pointer ' +
             (tab === 'orders'
               ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
               : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
@@ -2400,7 +2497,7 @@ function ProfilePageView({
         <button
           onClick={() => setTab('fav')}
           className={
-            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none cursor-pointer ' +
             (tab === 'fav'
               ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
               : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
@@ -2411,7 +2508,7 @@ function ProfilePageView({
         <button
           onClick={() => setTab('cart')}
           className={
-            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none ' +
+            'px-6 py-3 rounded-2xl font-black text-xs sm:text-sm transition flex-1 sm:flex-none cursor-pointer ' +
             (tab === 'cart'
               ? 'bg-[#37192C] text-[#FFF3C5] shadow-md'
               : 'bg-white text-[#37192C] hover:bg-[#FFF3C5]/50 border border-[#37192c]/10')
@@ -2571,7 +2668,7 @@ function ProfilePageView({
                 {postalError && <p className="mt-1 text-xs font-bold text-rose-600">{postalError}</p>}
               </div>
 
-              <button type="submit" className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-sm shadow-md hover:bg-[#5a2548] transition">
+              <button type="submit" className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-sm shadow-md hover:bg-[#5a2548] transition cursor-pointer">
                 ذخیره اطلاعات و آدرس در سیستم
               </button>
             </form>
@@ -2686,7 +2783,7 @@ function ProfilePageView({
                       <span className="text-sm font-black text-[#37192C]">{money(item.price)} تومان</span>
                       <button
                         onClick={() => setCart((prev: Product[]) => prev.filter((_, i) => i !== idx))}
-                        className="text-rose-500 hover:bg-rose-50 p-2 rounded-full transition"
+                        className="text-rose-500 hover:bg-rose-50 p-2 rounded-full transition cursor-pointer"
                         title="حذف"
                       >
                         <Trash2 size={18} />
@@ -2701,7 +2798,7 @@ function ProfilePageView({
               </div>
               <button
                 onClick={openCheckout}
-                className="mt-6 w-full rounded-full bg-[#37192C] py-4 text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md"
+                className="mt-6 w-full rounded-full bg-[#37192C] py-4 text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md cursor-pointer"
               >
                 تکمیل سفارش و پرداخت فاکتور
               </button>
@@ -2717,7 +2814,7 @@ function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
   return (
     <div className="modal-backdrop p-3">
       <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
-        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
+        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] cursor-pointer">
           <X size={16} />
         </button>
         <h3 className="text-lg font-black text-[#37192C]">فاکتور خرید آنلاین آورا</h3>
@@ -2726,7 +2823,7 @@ function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
           <span>{money(total)} تومان</span>
         </div>
         <p className="text-[11px] font-semibold text-rose-700">هزینه ارسال پس‌کرایه است و هنگام تحویل پرداخته می‌شود.</p>
-        <button onClick={onPaymentComplete} className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5]">
+        <button onClick={onPaymentComplete} className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] cursor-pointer">
           تایید و پرداخت فاکتور
         </button>
       </div>
@@ -2738,7 +2835,7 @@ function OrderDetailsModal({ order, close }: any) {
   return (
     <div className="modal-backdrop p-3">
       <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-3">
-        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
+        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] cursor-pointer">
           <X size={16} />
         </button>
         <h3 className="text-base font-black text-[#37192C]">سفارش {order.orderNumber}</h3>
@@ -2759,13 +2856,13 @@ function SectionMenu({ sections, close, go }: any) {
       <div className="menu-drawer">
         <div className="flex items-center justify-between pb-3 border-b border-[#37192c]/10">
           <span className="brand-font text-xl text-[#37192C]">AuraVibe Menu</span>
-          <button onClick={close} className="grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
+          <button onClick={close} className="grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] cursor-pointer">
             <X size={18} />
           </button>
         </div>
         <div className="mt-5 space-y-1.5">
           {sections.map((section: any) => (
-            <button key={section.id} onClick={() => go(section.id)} className="menu-link">
+            <button key={section.id} onClick={() => go(section.path)} className="menu-link cursor-pointer">
               <span>{section.label}</span>
               <ChevronLeft size={16} className="text-[#37192C]/40" />
             </button>
