@@ -72,6 +72,7 @@ import {
 import {
   db,
   isSupabaseConfigured,
+  supabase,
   Product,
   Banner,
   Order,
@@ -84,6 +85,7 @@ import {
   CategoryItem
 } from './services/db';
 
+import { CustomerAuthModal } from './components/CustomerAuthModal';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { ProductManagementView } from './components/admin/ProductManagementView';
@@ -126,21 +128,7 @@ function App() {
   >('dashboard');
 
   // Logged-in Customer & Current Admin User
-  const [currentUser, setCurrentUser] = useState<User>({
-    id: 1,
-    firstName: 'مریم',
-    lastName: 'احمدی',
-    phone: '۰۹۱۲۹۸۷۶۵۴۳',
-    email: 'maryam@gmail.com',
-    province: 'تهران',
-    city: 'تهران',
-    address: 'نیاوران، خیابان مژده، پلاک ۱۲، واحد ۳',
-    postalCode: '۱۹۸۷۶۵۴۳۲۱',
-    registrationDate: '۱۴۰۳/۰۱/۱۰',
-    lastLogin: 'هم‌اکنون',
-    status: 'active',
-    orderCount: 3
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
   const [adminLoginUsername, setAdminLoginUsername] = useState('');
@@ -156,6 +144,46 @@ function App() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [checkoutModal, setCheckoutModal] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+
+  // Restore active Supabase Auth session for customer on mount
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !supabase) return;
+
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          let profile = await db.getUserByAuthId(session.user.id);
+          if (!profile && session.user.phone) {
+            profile = await db.getUserByPhone(session.user.phone);
+          }
+          if (profile) {
+            setCurrentUser(profile);
+          }
+        }
+      } catch (err) {
+        console.error('[AuraVibe Auth] Session restoration error:', err);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        let profile = await db.getUserByAuthId(session.user.id);
+        if (!profile && session.user.phone) {
+          profile = await db.getUserByPhone(session.user.phone);
+        }
+        if (profile) {
+          setCurrentUser(profile);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const refreshAllAppData = async () => {
     try {
@@ -461,8 +489,19 @@ function App() {
                       className="icon-button relative"
                       aria-label="سبد خرید"
                       onClick={() => {
-                        setAccountTab('cart');
-                        setActiveView('account');
+                        if (!currentUser) {
+                          setAuthModal({
+                            open: true,
+                            mode: 'login',
+                            pendingAction: () => {
+                              setAccountTab('cart');
+                              setActiveView('account');
+                            }
+                          });
+                        } else {
+                          setAccountTab('cart');
+                          setActiveView('account');
+                        }
                       }}
                     >
                       <ShoppingBag size={20} />
@@ -492,6 +531,7 @@ function App() {
               openOrderDetails={(order: Order) => openOrderDetailsModalFunc(order)}
               openProduct={openProductModal}
               openHome={() => handleNavClick('home')}
+              openAuthModal={(mode: 'login' | 'register') => setAuthModal({ open: true, mode })}
             />
           ) : activeView === 'home' ? (
             <>
@@ -639,6 +679,16 @@ function App() {
               user={currentUser}
               close={() => setCheckoutModal(false)}
               onPaymentComplete={async () => {
+                if (!currentUser) {
+                  setCheckoutModal(false);
+                  setAuthModal({
+                    open: true,
+                    mode: 'login',
+                    pendingAction: () => setCheckoutModal(true)
+                  });
+                  return;
+                }
+
                 const itemsSnapshot: OrderItemSnapshot[] = cart.map((p) => ({
                   productId: p.id,
                   productCode: p.productCode,
@@ -678,6 +728,24 @@ function App() {
             />
           )}
 
+          {authModal.open && (
+            <CustomerAuthModal
+              open={authModal.open}
+              initialMode={authModal.mode}
+              close={() => setAuthModal({ ...authModal, open: false })}
+              onSuccess={(loggedUser) => {
+                setCurrentUser(loggedUser);
+                // Explicitly preserve and merge Guest cart & wishlist items with user session
+                setCart((prevCart) => [...prevCart]);
+                setWishlist((prevWishlist) => [...prevWishlist]);
+                setAuthModal({ ...authModal, open: false });
+                if (authModal.pendingAction) {
+                  authModal.pendingAction();
+                }
+              }}
+            />
+          )}
+
           {selectedOrderDetails && (
             <OrderDetailsModal order={selectedOrderDetails} close={() => setSelectedOrderDetails(null)} />
           )}
@@ -693,8 +761,19 @@ function App() {
             <button
               className="bottom-nav-item"
               onClick={() => {
-                setAccountTab('profile');
-                setActiveView('account');
+                if (!currentUser) {
+                  setAuthModal({
+                    open: true,
+                    mode: 'login',
+                    pendingAction: () => {
+                      setAccountTab('profile');
+                      setActiveView('account');
+                    }
+                  });
+                } else {
+                  setAccountTab('profile');
+                  setActiveView('account');
+                }
               }}
               aria-label="حساب کاربری"
             >
@@ -2261,7 +2340,8 @@ function ProfilePageView({
   openCheckout,
   openOrderDetails,
   openProduct,
-  openHome
+  openHome,
+  openAuthModal
 }: any) {
   const [editing, setEditing] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
@@ -2281,7 +2361,67 @@ function ProfilePageView({
     avatar: user?.avatar || ''
   });
 
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        province: user.province || '',
+        city: user.city || '',
+        address: user.address || '',
+        postalCode: user.postalCode || '',
+        avatar: user.avatar || ''
+      });
+    }
+  }, [user]);
+
   const [postalError, setPostalError] = useState('');
+
+  // If Guest User (user === null)
+  if (!user) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 pt-8 pb-12 sm:px-6 lg:px-8 text-right font-vazir">
+        <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
+          <div>
+            <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+              <ArrowLeft size={14} className="rotate-180" /> بازگشت به صفحه اصلی
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">حساب کاربری آورا وایب</h1>
+          </div>
+        </div>
+
+        <div className="rounded-[2.5rem] bg-white p-8 sm:p-12 border border-[#37192c]/10 shadow-lg text-center space-y-6">
+          <div className="mx-auto size-20 sm:size-24 rounded-full bg-[#FFF3C5] border-4 border-[#FFF3C5] grid place-items-center text-[#37192C] shadow-md">
+            <UserRound size={40} />
+          </div>
+
+          <div className="space-y-2 max-w-md mx-auto">
+            <h2 className="text-xl sm:text-2xl font-black text-[#37192C]">خوش آمدید!</h2>
+            <p className="text-xs sm:text-sm text-[#37192C]/80 leading-7 font-bold">
+              برای دسترسی به سبد خرید، پیگیری سفارشات و لیست علاقه‌مندی‌های خود وارد حساب کاربری شوید یا ثبت‌نام کنید.
+            </p>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 max-w-sm mx-auto">
+            <button
+              onClick={() => openAuthModal('register')}
+              className="w-full sm:flex-1 py-3.5 px-6 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition"
+            >
+              ثبت‌نام کاربر جدید
+            </button>
+            <button
+              onClick={() => openAuthModal('login')}
+              className="w-full sm:flex-1 py-3.5 px-6 rounded-full border-2 border-[#37192C] text-[#37192C] font-black text-xs sm:text-sm hover:bg-[#fffaf0] transition"
+            >
+              ورود با شماره همراه
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2292,7 +2432,7 @@ function ProfilePageView({
         if (setUser) {
           setUser((prev: User) => {
             const updated = { ...prev, avatar: url };
-            db.saveUser(updated, { id: 1, name: 'کاربر' });
+            db.saveUser(updated);
             return updated;
           });
         }
@@ -2305,7 +2445,7 @@ function ProfilePageView({
           if (setUser) {
             setUser((prev: User) => {
               const updated = { ...prev, avatar: result };
-              db.saveUser(updated, { id: 1, name: 'کاربر' });
+              db.saveUser(updated);
               return updated;
             });
           }
@@ -2325,7 +2465,7 @@ function ProfilePageView({
 
     if (setUser) {
       const updated = { ...user, ...formData };
-      await db.saveUser(updated, { id: 1, name: 'کاربر' });
+      await db.saveUser(updated);
       setUser(updated);
     }
     setEditing(false);
@@ -2353,7 +2493,7 @@ function ProfilePageView({
         </div>
       </div>
 
-      {/* Profile Header (Instagram inspired) */}
+      {/* Profile Header */}
       <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs mb-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-right">
         <div className="relative group shrink-0">
           <div className="size-24 sm:size-28 rounded-full overflow-hidden border-4 border-[#FFF3C5] bg-[#37192C] grid place-items-center text-[#FFF3C5] font-black text-3xl shadow-md">
@@ -2379,12 +2519,25 @@ function ProfilePageView({
           </p>
         </div>
 
-        <button
-          onClick={() => setEditing(!editing)}
-          className="flex items-center gap-1.5 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs"
-        >
-          <Edit size={16} /> {editing ? 'انصراف' : 'ویرایش اطلاعات'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setEditing(!editing)}
+            className="flex items-center gap-1.5 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-5 py-2.5 rounded-full hover:bg-[#37192C] hover:text-[#FFF3C5] transition shadow-xs"
+          >
+            <Edit size={16} /> {editing ? 'انصراف' : 'ویرایش اطلاعات'}
+          </button>
+
+          <button
+            onClick={async () => {
+              await db.userLogout();
+              setUser(null);
+            }}
+            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-full hover:bg-rose-100 transition shadow-xs"
+            title="خروج از حساب کاربری"
+          >
+            <LogOut size={16} /> خروج
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
