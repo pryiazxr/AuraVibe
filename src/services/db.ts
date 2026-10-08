@@ -3,6 +3,7 @@ import {
   rowToCategory, categoryToRow,
   rowToBadge, badgeToRow,
   rowToProduct, productToRow,
+  rowToReview, reviewToRow,
   rowToBanner, bannerToRow,
   rowToUser, userToRow,
   rowToAdmin, adminToRow,
@@ -46,6 +47,19 @@ export type ProductBadgeItem = {
   id: number;
   title: string;
   color?: string;
+};
+
+export type ProductReview = {
+  id: number;
+  productId: number;
+  userId?: number;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 1 to 5
+  comment: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Product = {
@@ -397,6 +411,7 @@ class DatabaseService {
     try {
       const tables = [
         'products',
+        'product_reviews',
         'banners',
         'categories',
         'product_badges',
@@ -1267,12 +1282,86 @@ class DatabaseService {
     }
   }
 
+  // --- PRODUCT REVIEWS ---
+  public async getProductReviews(productId: number): Promise<ProductReview[]> {
+    try {
+      const { data, error } = await getClient()
+        .from('product_reviews')
+        .select('*')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map(rowToReview);
+      }
+    } catch (err) {
+      console.error('[AuraVibe DB] Error fetching reviews for product:', err);
+    }
+    return [];
+  }
+
+  public async saveProductReview(reviewData: Partial<ProductReview>): Promise<ProductReview> {
+    const row = reviewToRow(reviewData);
+    let data: any;
+    let error: any;
+
+    if (!row.id) {
+      delete row.id;
+      const res = await getClient()
+        .from('product_reviews')
+        .insert(row)
+        .select()
+        .single();
+      data = res.data;
+      error = res.error;
+    } else {
+      const res = await getClient()
+        .from('product_reviews')
+        .update(row)
+        .eq('id', row.id)
+        .select()
+        .single();
+      data = res.data;
+      error = res.error;
+    }
+
+    if (error) {
+      console.error('[AuraVibe DB] Error saving review:', error);
+      throw error;
+    }
+
+    const saved = rowToReview(data);
+    this.notify();
+    return saved;
+  }
+
+  public async deleteProductReview(reviewId: number): Promise<void> {
+    const { error } = await getClient()
+      .from('product_reviews')
+      .delete()
+      .eq('id', reviewId);
+
+    if (error) {
+      console.error('[AuraVibe DB] Error deleting review:', error);
+      throw error;
+    }
+    this.notify();
+  }
+
   // --- SUPPORT TICKETS ---
-  public async getTickets(): Promise<SupportTicket[]> {
-    const { data, error } = await getClient()
-      .from('support_tickets')
-      .select('*')
-      .order('created_at', { ascending: false });
+  public async getTickets(filterUser?: { id?: number; phone?: string }): Promise<SupportTicket[]> {
+    let query = getClient().from('support_tickets').select('*');
+
+    if (filterUser) {
+      const conditions: string[] = [];
+      if (filterUser.id) conditions.push(`user_id.eq.${filterUser.id}`);
+      if (filterUser.phone) conditions.push(`customer_phone.eq.${filterUser.phone}`);
+      if (conditions.length > 0) {
+        query = query.or(conditions.join(','));
+      }
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (error) {
       console.error('[AuraVibe DB] Error fetching tickets:', error);
       throw error;
