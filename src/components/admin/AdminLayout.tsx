@@ -14,6 +14,7 @@ import {
   X,
   ArrowLeft,
   ChevronLeft,
+  ChevronRight,
   LogOut,
   ShieldCheck,
   Bell,
@@ -38,12 +39,13 @@ type AdminLayoutProps = {
   currentAdmin: AdminUser;
   activeTab: AdminTab;
   setActiveTab: (tab: AdminTab) => void;
+  onBack?: () => void;
   goHome: () => void;
   onLogout?: () => void;
   children: React.ReactNode;
 };
 
-export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, onLogout, children }: AdminLayoutProps) {
+export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goHome, onLogout, children }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -206,6 +208,18 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, goHome, onL
             >
               <Menu size={20} />
             </button>
+
+            {activeTab !== 'dashboard' && onBack && (
+              <button
+                onClick={onBack}
+                className="flex items-center gap-1.5 rounded-xl bg-[#FFF3C5] px-3.5 py-2 text-xs font-black text-[#37192C] hover:bg-[#ffe79a] transition shadow-xs"
+                title="بازگشت به پیشخوان"
+              >
+                <ChevronRight size={18} />
+                <span className="hidden sm:inline">بازگشت به پیشخوان</span>
+                <span className="sm:hidden">بازگشت</span>
+              </button>
+            )}
 
             <div>
               <h2 className="text-sm font-black text-[#37192C]">
