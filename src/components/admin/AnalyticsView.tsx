@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lock, ShoppingBag, ShieldAlert } from 'lucide-react';
 import { AnalyticsCharts, DateRangeKey } from '../AnalyticsCharts';
 import { db, AdminUser, Product, Order } from '../../services/db';
+import { ProductThumbnail } from '../ProductThumbnail';
 
 type AnalyticsViewProps = {
   currentAdmin: AdminUser;
@@ -226,23 +227,33 @@ export function AnalyticsView({ currentAdmin, onSelectProduct }: AnalyticsViewPr
         ) : (
           <div className="flex items-stretch gap-4 overflow-x-auto pb-4 pt-1 select-none">
             {topSellingProducts.map((p, idx) => (
-              <button
+              <div
                 key={p.productId}
                 onClick={() => {
                   const targetProd = products.find((item) => item.id === p.productId);
                   if (targetProd && onSelectProduct) {
                     onSelectProduct(targetProd);
+                  } else {
+                    window.dispatchEvent(
+                      new CustomEvent('auravibe:open-product-id', { detail: { productId: p.productId } })
+                    );
                   }
                 }}
-                className="group shrink-0 w-48 rounded-2xl border border-[#37192c]/15 bg-[#fffaf0] p-3 text-right hover:border-[#37192C] transition shadow-xs hover:shadow-md flex flex-col justify-between"
+                className="group shrink-0 w-48 rounded-2xl border border-[#37192c]/15 bg-[#fffaf0] p-3 text-right hover:border-[#37192C] transition shadow-xs hover:shadow-md flex flex-col justify-between cursor-pointer"
               >
                 <div>
-                  <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-white mb-2">
-                    <img src={p.image} alt={p.name} className="size-full object-cover group-hover:scale-105 transition" />
+                  <ProductThumbnail
+                    productId={p.productId}
+                    image={p.image}
+                    alt={p.name}
+                    allProducts={products}
+                    containerClassName="relative aspect-square w-full overflow-hidden rounded-xl bg-white mb-2 block"
+                    className="size-full object-cover group-hover:scale-105 transition"
+                  >
                     <span className="absolute top-2 start-2 grid size-6 place-items-center rounded-full bg-[#37192C] text-[10px] font-black text-[#FFF3C5]">
                       #{idx + 1}
                     </span>
-                  </div>
+                  </ProductThumbnail>
                   <h4 className="font-bold text-xs text-[#37192C] line-clamp-2">{p.name}</h4>
                 </div>
 
@@ -250,7 +261,7 @@ export function AnalyticsView({ currentAdmin, onSelectProduct }: AnalyticsViewPr
                   <span className="font-bold text-[#8b627e]">تعداد فروش:</span>
                   <span className="font-black text-[#37192C] bg-[#FFF3C5] px-2 py-0.5 rounded-full">{p.count} عدد</span>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
