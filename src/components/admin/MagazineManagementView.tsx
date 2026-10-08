@@ -10,6 +10,9 @@ type MagazineManagementViewProps = {
 export function MagazineManagementView({ currentAdmin }: MagazineManagementViewProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // Form Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -44,6 +47,8 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
   }, []);
 
   const openForm = (art: Article | null = null) => {
+    setUploadError(null);
+    setDbError(null);
     if (art) {
       setEditingArticle(art);
       setATitle(art.title);
@@ -68,14 +73,17 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      setUploading(true);
       try {
-        setUploading(true);
         const url = await db.uploadFile('products', file);
         setABanner(url);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload article banner:', err);
+        setUploadError(err?.message || 'خطا در آپلود تصویر بنر مقاله.');
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -83,16 +91,19 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
   const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      setUploading(true);
       try {
-        setUploading(true);
         const imgUrl = await db.uploadFile('products', file);
         setInlineImages((prev) => [...prev, imgUrl]);
         const cleanMarker = `\n\n[تصویر ${inlineImages.length + 1}]\n\n`;
         setABody((prev) => prev + cleanMarker);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload inline image:', err);
+        setUploadError(err?.message || 'خطا در آپلود تصویر داخل متن.');
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -101,30 +112,45 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
     e.preventDefault();
     if (!aTitle) return;
 
-    // Process inline images into clean markdown rendering
-    let finalContent = aBody;
-    inlineImages.forEach((imgUrl, idx) => {
-      const marker = `[تصویر ${idx + 1}]`;
-      const markdownImg = `\n![تصویر](${imgUrl})\n`;
-      finalContent = finalContent.replace(marker, markdownImg);
-    });
+    if (uploading) {
+      alert('لطفاً تا اتمام کامل آپلود تصویر مقاله شکیبا باشید.');
+      return;
+    }
 
-    await db.saveArticle(
-      {
-        id: editingArticle ? editingArticle.id : undefined,
-        title: aTitle,
-        subtitle: aSubtitle,
-        content: finalContent,
-        digest: aSubtitle || aBody.slice(0, 80),
-        image: aBanner,
-        status: aActive ? 'published' : 'draft',
-        author: `${currentAdmin.firstName} ${currentAdmin.lastName}`
-      },
-      { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
-    );
+    setSaving(true);
+    setDbError(null);
 
-    await refreshList();
-    setModalOpen(false);
+    try {
+      // Process inline images into clean markdown rendering
+      let finalContent = aBody;
+      inlineImages.forEach((imgUrl, idx) => {
+        const marker = `[تصویر ${idx + 1}]`;
+        const markdownImg = `\n![تصویر](${imgUrl})\n`;
+        finalContent = finalContent.replace(marker, markdownImg);
+      });
+
+      await db.saveArticle(
+        {
+          id: editingArticle ? editingArticle.id : undefined,
+          title: aTitle,
+          subtitle: aSubtitle,
+          content: finalContent,
+          digest: aSubtitle || aBody.slice(0, 80),
+          image: aBanner,
+          status: aActive ? 'published' : 'draft',
+          author: `${currentAdmin.firstName} ${currentAdmin.lastName}`
+        },
+        { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
+      );
+
+      await refreshList();
+      setModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed to save article:', err);
+      setDbError(err?.message || 'خطا در ذخیره مقاله در دیتابیس.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -217,6 +243,18 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
             <h3 className="text-base font-black text-[#37192C] border-b pb-3">
               {editingArticle ? 'ویرایش مقاله مجله' : 'افزودن مقاله جدید به مجله آورا'}
             </h3>
+
+            {uploadError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {uploadError}
+              </div>
+            )}
+
+            {dbError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {dbError}
+              </div>
+            )}
 
             <form onSubmit={handleSave} className="space-y-4 text-xs">
               <div>
@@ -319,9 +357,10 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
 
               <button
                 type="submit"
-                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition"
+                disabled={uploading || saving}
+                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition disabled:opacity-50"
               >
-                ذخیره مقاله و به‌روزرسانی
+                {saving ? 'در حال ذخیره‌سازی...' : uploading ? 'در حال آپلود تصویر...' : 'ذخیره مقاله و به‌روزرسانی'}
               </button>
             </form>
           </div>

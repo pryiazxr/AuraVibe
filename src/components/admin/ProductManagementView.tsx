@@ -19,6 +19,9 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const [products, setProducts] = useState<Product[]>([]);
   const [dbBadges, setDbBadges] = useState<ProductBadgeItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCat, setSelectedCat] = useState('همه');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
@@ -71,6 +74,8 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   }, []);
 
   const openForm = (prod: Product | null = null) => {
+    setUploadError(null);
+    setDbError(null);
     if (prod) {
       setEditingProduct(prod);
       setPCode(prod.productCode);
@@ -110,28 +115,43 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
     e.preventDefault();
     if (!pName || !pPrice || !pCode) return;
 
-    await db.saveProduct(
-      {
-        id: editingProduct ? editingProduct.id : undefined,
-        productCode: pCode,
-        name: pName,
-        category: pCategory,
-        price: Number(pPrice),
-        oldPrice: pOldPrice ? Number(pOldPrice) : undefined,
-        stock: Number(pStock),
-        images: pImages,
-        mainImageIndex: mainImgIdx,
-        videoUrl: pVideoUrl || undefined,
-        badge: pBadge || undefined,
-        description: pDescription,
-        relatedIds: pRelatedIds,
-        status: pStatus
-      },
-      { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
-    );
+    if (uploading) {
+      alert('لطفاً تا اتمام کامل آپلود تصویر/ویدیو شکیبا باشید.');
+      return;
+    }
 
-    await refreshList();
-    setModalOpen(false);
+    setSaving(true);
+    setDbError(null);
+
+    try {
+      await db.saveProduct(
+        {
+          id: editingProduct ? editingProduct.id : undefined,
+          productCode: pCode,
+          name: pName,
+          category: pCategory,
+          price: Number(pPrice),
+          oldPrice: pOldPrice ? Number(pOldPrice) : undefined,
+          stock: Number(pStock),
+          images: pImages,
+          mainImageIndex: mainImgIdx,
+          videoUrl: pVideoUrl || undefined,
+          badge: pBadge || undefined,
+          description: pDescription,
+          relatedIds: pRelatedIds,
+          status: pStatus
+        },
+        { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
+      );
+
+      await refreshList();
+      setModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed to save product to DB:', err);
+      setDbError(err?.message || 'خطا در ذخیره اطلاعات محصول در دیتابیس.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number, name: string) => {
@@ -151,16 +171,19 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
+      setUploadError(null);
+      setUploading(true);
       try {
-        setUploading(true);
         for (const file of Array.from(files)) {
           const url = await db.uploadFile('products', file);
           setPImages((prev) => [...prev, url]);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload product image to storage:', err);
+        setUploadError(err?.message || 'خطا در آپلود تصویر محصول.');
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -168,14 +191,17 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      setUploading(true);
       try {
-        setUploading(true);
         const url = await db.uploadFile('products', file);
         setPVideoUrl(url);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload product video to storage:', err);
+        setUploadError(err?.message || 'خطا در آپلود ویدیوی محصول.');
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -410,6 +436,18 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
             <h3 className="text-base font-black text-[#37192C] border-b border-[#37192c]/10 pb-3">
               {editingProduct ? `ویرایش کامل محصول ${editingProduct.productCode}` : 'ثبت محصول جدید در کاتالوگ'}
             </h3>
+
+            {uploadError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {uploadError}
+              </div>
+            )}
+
+            {dbError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {dbError}
+              </div>
+            )}
 
             <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -698,9 +736,10 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
 
               <button
                 type="submit"
-                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition"
+                disabled={uploading || saving}
+                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition disabled:opacity-50"
               >
-                ذخیره محصول و بروزرسانی دیتابیس
+                {saving ? 'در حال ذخیره‌سازی...' : uploading ? 'در حال آپلود فایل‌ها...' : 'ذخیره محصول و بروزرسانی دیتابیس'}
               </button>
             </form>
           </div>

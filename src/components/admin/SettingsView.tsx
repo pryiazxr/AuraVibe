@@ -35,6 +35,10 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [catName, setCatName] = useState('');
   const [catImage, setCatImage] = useState('');
+  const [catUploading, setCatUploading] = useState(false);
+  const [catSaving, setCatSaving] = useState(false);
+  const [catUploadError, setCatUploadError] = useState<string | null>(null);
+  const [catDbError, setCatDbError] = useState<string | null>(null);
 
   // Modal State for Adding / Editing Badge
   const [badgeModalOpen, setBadgeModalOpen] = useState(false);
@@ -205,6 +209,8 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
             <button
               type="button"
               onClick={() => {
+                setCatUploadError(null);
+                setCatDbError(null);
                 setEditingCategory(null);
                 setCatName('');
                 setCatImage('');
@@ -231,6 +237,8 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      setCatUploadError(null);
+                      setCatDbError(null);
                       setEditingCategory(cat);
                       setCatName(cat.name);
                       setCatImage(cat.image);
@@ -544,6 +552,18 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
               </button>
             </div>
 
+            {catUploadError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {catUploadError}
+              </div>
+            )}
+
+            {catDbError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {catDbError}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="block font-bold text-[#37192C] mb-1">نام دسته‌بندی</label>
@@ -577,16 +597,17 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
+                          setCatUploadError(null);
+                          setCatUploading(true);
                           try {
                             const url = await db.uploadFile('products', file);
                             setCatImage(url);
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error('Failed to upload category image to Supabase:', err);
-                            const reader = new FileReader();
-                            reader.onload = () => {
-                              if (reader.result) setCatImage(reader.result as string);
-                            };
-                            reader.readAsDataURL(file);
+                            setCatUploadError(err?.message || 'خطا در آپلود تصویر دسته‌بندی.');
+                          } finally {
+                            setCatUploading(false);
+                            e.target.value = '';
                           }
                         }
                       }}
@@ -619,25 +640,39 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
               </button>
               <button
                 type="button"
+                disabled={catUploading || catSaving}
                 onClick={async () => {
                   if (!catName.trim() || !catImage.trim()) {
                     alert('لطفاً نام دسته‌بندی و تصویر کاور را وارد کنید.');
                     return;
                   }
-                  await db.saveCategory(
-                    {
-                      id: editingCategory?.id,
-                      name: catName.trim(),
-                      image: catImage.trim()
-                    },
-                    { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
-                  );
-                  await refreshAll();
-                  setCatModalOpen(false);
+                  if (catUploading) {
+                    alert('لطفاً تا اتمام کامل آپلود تصویر شکیبا باشید.');
+                    return;
+                  }
+                  setCatSaving(true);
+                  setCatDbError(null);
+                  try {
+                    await db.saveCategory(
+                      {
+                        id: editingCategory?.id,
+                        name: catName.trim(),
+                        image: catImage.trim()
+                      },
+                      { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
+                    );
+                    await refreshAll();
+                    setCatModalOpen(false);
+                  } catch (err: any) {
+                    console.error('Failed to save category:', err);
+                    setCatDbError(err?.message || 'خطا در ذخیره دسته‌بندی.');
+                  } finally {
+                    setCatSaving(false);
+                  }
                 }}
-                className="flex-1 py-3 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold shadow-md"
+                className="flex-1 py-3 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold shadow-md disabled:opacity-50"
               >
-                ذخیره دسته‌بندی
+                {catSaving ? 'در حال ذخیره‌سازی...' : catUploading ? 'در حال آپلود...' : 'ذخیره دسته‌بندی'}
               </button>
             </div>
           </div>

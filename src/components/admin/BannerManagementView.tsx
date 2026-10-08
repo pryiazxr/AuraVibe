@@ -22,6 +22,9 @@ type BannerManagementViewProps = {
 export function BannerManagementView({ currentAdmin }: BannerManagementViewProps) {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -54,6 +57,8 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
   }, []);
 
   const openForm = (banner: Banner | null = null) => {
+    setUploadError(null);
+    setDbError(null);
     if (banner) {
       setEditingBanner(banner);
       setBInternalName(banner.internalName);
@@ -80,22 +85,37 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
     e.preventDefault();
     if (!bTitle || !bInternalName) return;
 
-    await db.saveBanner(
-      {
-        id: editingBanner ? editingBanner.id : undefined,
-        internalName: bInternalName,
-        eyebrow: bEyebrow,
-        title: bTitle,
-        subtitle: bSubtitle,
-        targetCategory: bCategory,
-        image: bImage,
-        active: bActive
-      },
-      { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
-    );
+    if (uploading) {
+      alert('لطفاً تا اتمام کامل آپلود تصویر بنر شکیبا باشید.');
+      return;
+    }
 
-    await refreshList();
-    setModalOpen(false);
+    setSaving(true);
+    setDbError(null);
+
+    try {
+      await db.saveBanner(
+        {
+          id: editingBanner ? editingBanner.id : undefined,
+          internalName: bInternalName,
+          eyebrow: bEyebrow,
+          title: bTitle,
+          subtitle: bSubtitle,
+          targetCategory: bCategory,
+          image: bImage,
+          active: bActive
+        },
+        { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
+      );
+
+      await refreshList();
+      setModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed to save banner to DB:', err);
+      setDbError(err?.message || 'خطا در ذخیره بنر در دیتابیس.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleToggleActive = async (banner: Banner) => {
@@ -129,14 +149,17 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
   const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
+      setUploading(true);
       try {
-        setUploading(true);
         const url = await db.uploadFile('banners', file);
         setBImage(url);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload banner image to storage:', err);
+        setUploadError(err?.message || 'خطا در آپلود تصویر بنر.');
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -243,6 +266,18 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
               {editingBanner ? 'ویرایش بنر اسلایدر' : 'افزودن بنر تصویری جدید'}
             </h3>
 
+            {uploadError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {uploadError}
+              </div>
+            )}
+
+            {dbError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                ⚠️ {dbError}
+              </div>
+            )}
+
             <form onSubmit={handleSave} className="space-y-3 text-xs">
               <div>
                 <label className="font-bold text-[#37192C]">نام مدیریت داخلی (Internal Name - صرفاً جهت ادمین)</label>
@@ -338,9 +373,10 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
 
               <button
                 type="submit"
-                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition mt-4"
+                disabled={uploading || saving}
+                className="w-full rounded-full bg-[#37192C] py-3.5 font-bold text-[#FFF3C5] hover:bg-[#5a2548] shadow-md transition mt-4 disabled:opacity-50"
               >
-                ذخیره بنر
+                {saving ? 'در حال ذخیره‌سازی...' : uploading ? 'در حال آپلود تصویر...' : 'ذخیره بنر'}
               </button>
             </form>
           </div>
