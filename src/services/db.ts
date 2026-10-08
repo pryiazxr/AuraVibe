@@ -1134,38 +1134,6 @@ class DatabaseService {
       }
     }
 
-    // Default superadmin fallback for local dev / preview environments
-    if (
-      (cleanUsername === 'superadmin' || email === 'superadmin@auravibe.ir') &&
-      password === 'superadmin123'
-    ) {
-      const defaultAdmin: AdminUser = {
-        id: 1,
-        adminCode: 'ADM-1001',
-        firstName: 'مدیر',
-        lastName: 'ارشد',
-        username: 'superadmin',
-        role: 'SUPER_ADMIN',
-        customPermissions: [
-          'manage_products',
-          'manage_orders',
-          'manage_banners',
-          'manage_users',
-          'manage_roles',
-          'manage_support',
-          'manage_content',
-          'manage_seo',
-          'manage_settings',
-          'view_audit_logs'
-        ],
-        status: 'active',
-        createdAt: '۱۴۰۳/۰۱/۰۱',
-        lastLogin: 'هم‌اکنون'
-      };
-      this.notify();
-      return defaultAdmin;
-    }
-
     throw new Error('نام کاربری یا رمز عبور نامعتبر است.');
   }
 

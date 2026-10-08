@@ -143,7 +143,7 @@ function App() {
   });
 
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
-  const [adminLoginUsername, setAdminLoginUsername] = useState('superadmin');
+  const [adminLoginUsername, setAdminLoginUsername] = useState('');
   const [adminLoginPassword, setAdminLoginPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
@@ -819,7 +819,7 @@ function AdminContainer({
                 required
                 value={adminLoginUsername}
                 onChange={(e) => setAdminLoginUsername(e.target.value)}
-                placeholder="مثال: superadmin"
+                placeholder="نام کاربری"
                 className="w-full rounded-xl border border-[#37192c]/20 bg-[#fffdfa] p-3 text-xs outline-none focus:border-[#37192C]"
               />
             </div>
@@ -852,10 +852,6 @@ function AdminContainer({
               >
                 بازگشت به فروشگاه
               </button>
-            </div>
-
-            <div className="rounded-xl bg-[#FFF3C5]/40 border border-[#37192c]/10 p-3 text-center text-[11px] text-[#37192C]/80">
-              اطلاعات پیش‌فرض: نام کاربری <span className="font-mono font-black">superadmin</span> | رمز <span className="font-mono font-black">superadmin123</span>
             </div>
           </form>
         </div>
