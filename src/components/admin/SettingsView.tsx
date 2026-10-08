@@ -48,6 +48,13 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
   const [workingHours, setWorkingHours] = useState('');
   const [footerDesc, setFooterDesc] = useState('');
 
+  // Payment Settings States
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [gwProviderName, setGwProviderName] = useState('');
+  const [gwUrl, setGwUrl] = useState('');
+  const [gwActive, setGwActive] = useState(false);
+
   const [notifOrder, setNotifOrder] = useState(true);
   const [notifUser, setNotifUser] = useState(true);
   const [notifTicket, setNotifTicket] = useState(true);
@@ -71,6 +78,11 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       setNotifOrder(s.notifications.newOrder);
       setNotifUser(s.notifications.newUser);
       setNotifTicket(s.notifications.newTicket);
+      setCardNumber(s.cardToCardSettings?.cardNumber || '6037997512345678');
+      setCardholderName(s.cardToCardSettings?.cardholderName || 'فروشگاه آورا وایب');
+      setGwProviderName(s.paymentGatewaySettings?.providerName || 'درگاه پرداخت آنلاین');
+      setGwUrl(s.paymentGatewaySettings?.gatewayUrl || 'https://api.zarinpal.com/pg/v4/payment/request.json');
+      setGwActive(s.paymentGatewaySettings?.active || false);
     } catch (err) {
       console.error('Failed to load settings:', err);
     }
@@ -99,6 +111,15 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
           newUser: notifUser,
           newTicket: notifTicket,
           securityAlert: true
+        },
+        cardToCardSettings: {
+          cardNumber: cardNumber.trim(),
+          cardholderName: cardholderName.trim()
+        },
+        paymentGatewaySettings: {
+          providerName: gwProviderName.trim(),
+          gatewayUrl: gwUrl.trim(),
+          active: gwActive
         }
       },
       { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` }
@@ -276,6 +297,87 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
               onChange={(e) => setFooterDesc(e.target.value)}
               className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white p-3 outline-none"
             />
+          </div>
+        </div>
+
+        {/* Payment Methods Config (Card to Card & Online Gateway) */}
+        <div className="rounded-2xl border border-[#37192c]/10 bg-white p-6 shadow-sm space-y-4">
+          <div className="border-b border-[#37192c]/10 pb-3">
+            <h3 className="text-sm font-black text-[#37192C]">تنظیمات حساب و درگاه پرداخت (Payment Methods Configuration)</h3>
+            <p className="text-[11px] text-[#8b627e] font-semibold mt-0.5">
+              اطلاعات کارت به کارت و آدرس/تنظیمات درگاه پرداخت آنلاین قابل پیکربندی و ذخیره در دیتابیس
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-xs font-black text-[#37192C] bg-[#FFF3C5]/50 p-2.5 rounded-xl border border-[#37192c]/10">
+              ۱. تنظیمات کارت به کارت (Card to Card Account)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="font-bold text-[#37192C]">شماره کارت بانکی (۱۶ رقمی)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: ۶۰۳۷۹۹۷۵۱۲۳۴۵۶۷۸"
+                  value={cardNumber}
+                  onChange={(e) => setCardNumber(e.target.value)}
+                  className="mt-1 w-full font-mono rounded-xl border border-[#37192c]/20 bg-white p-3 font-bold text-xs outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-[#37192C]">نام صاحب حساب / کارت</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="نام و خانوادگی صاحب کارت"
+                  value={cardholderName}
+                  onChange={(e) => setCardholderName(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white p-3 font-bold text-xs outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-3 border-t border-[#37192c]/10">
+            <h4 className="text-xs font-black text-[#37192C] bg-[#FFF3C5]/50 p-2.5 rounded-xl border border-[#37192c]/10">
+              ۲. تنظیمات درگاه پرداخت آنلاین (Online Payment Gateway)
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="font-bold text-[#37192C]">نام ارائه‌دهنده درگاه (Payment Provider)</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: زیبال، زرین‌پال، سامان‌کیش..."
+                  value={gwProviderName}
+                  onChange={(e) => setGwProviderName(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white p-3 font-bold text-xs outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-[#37192C]">آدرس API / Endpoint درگاه پرداخت</label>
+                <input
+                  type="text"
+                  placeholder="https://..."
+                  value={gwUrl}
+                  onChange={(e) => setGwUrl(e.target.value)}
+                  className="mt-1 w-full font-mono rounded-xl border border-[#37192c]/20 bg-white p-3 font-bold text-xs outline-none"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer font-bold text-[#37192C] pt-1">
+              <input
+                type="checkbox"
+                checked={gwActive}
+                onChange={(e) => setGwActive(e.target.checked)}
+                className="accent-[#37192C] size-4"
+              />
+              <span>فعال‌سازی درگاه پرداخت آنلاین در صفحه تسویه‌حساب (Checkout)</span>
+            </label>
           </div>
         </div>
 

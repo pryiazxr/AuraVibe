@@ -94,19 +94,33 @@ export type ShippingMethod = {
 };
 
 export type OrderStatus =
+  | 'سفارش جدید'
+  | 'در انتظار پرداخت'
+  | 'در حال بررسی پرداخت'
+  | 'پرداخت کارت‌به‌کارت تأیید شد'
+  | 'در حال آماده‌سازی'
+  | 'آماده ارسال'
+  | 'ارسال شده'
+  | 'تکمیل شده'
+  | 'لغو شده'
   | 'جدید'
   | 'در حال بررسی'
   | 'تأیید شده'
-  | 'در حال آماده‌سازی'
-  | 'آماده ارسال'
   | 'تحویل به شرکت حمل'
-  | 'ارسال شده'
   | 'تحویل داده شده'
-  | 'لغو شده'
   | 'مرجوع شده'
   | 'ناموفق / مشکل در ارسال';
 
-export type PaymentStatus = 'پرداخت شده' | 'در انتظار پرداخت' | 'ناموفق' | 'عکاسی/ثبت دستی';
+export type PaymentStatus =
+  | 'در حال بررسی'
+  | 'پرداخت تأیید شده'
+  | 'پرداخت شده'
+  | 'در انتظار پرداخت'
+  | 'ناموفق'
+  | 'رد شده'
+  | 'عکاسی/ثبت دستی';
+
+export type PaymentMethod = 'card_to_card' | 'online_gateway';
 
 export type OrderItemSnapshot = {
   productId: number;
@@ -150,6 +164,9 @@ export type Order = {
   shippingMethod: ShippingMethod;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  paymentReceiptUrl?: string;
+  paymentGatewayProvider?: string;
   trackingCode?: string;
   timeline: TimelineEvent[];
   createdAt: string;
@@ -291,6 +308,17 @@ export type GlobalSEO = {
   sitemapGeneratedAt: string;
 };
 
+export type CardToCardSettings = {
+  cardNumber: string;
+  cardholderName: string;
+};
+
+export type PaymentGatewaySettings = {
+  providerName: string;
+  gatewayUrl: string;
+  active: boolean;
+};
+
 export type GeneralSettings = {
   siteName: string;
   logoUrl: string;
@@ -314,6 +342,8 @@ export type GeneralSettings = {
     newTicket: boolean;
     securityAlert: boolean;
   };
+  cardToCardSettings: CardToCardSettings;
+  paymentGatewaySettings: PaymentGatewaySettings;
 };
 
 export type AuditLog = {
@@ -444,7 +474,7 @@ class DatabaseService {
    * Upload file or base64 to Supabase Storage
    */
   public async uploadFile(
-    bucket: 'banners' | 'products' | 'avatars' | 'support-media',
+    bucket: 'banners' | 'products' | 'avatars' | 'support-media' | 'receipts',
     fileOrDataUrl: File | Blob | string,
     fileName?: string
   ): Promise<string> {
@@ -831,7 +861,17 @@ class DatabaseService {
     customer: OrderCustomer;
     items: OrderItemSnapshot[];
     shippingMethod: ShippingMethod;
+    paymentMethod?: PaymentMethod;
+    paymentReceiptUrl?: string;
+    paymentGatewayProvider?: string;
+    orderStatus?: OrderStatus;
+    paymentStatus?: PaymentStatus;
   }): Promise<Order> {
+    const defaultOrderStatus: OrderStatus = orderPayload.orderStatus ||
+      (orderPayload.paymentMethod === 'card_to_card' ? 'در حال بررسی پرداخت' : 'سفارش جدید');
+    const defaultPaymentStatus: PaymentStatus = orderPayload.paymentStatus ||
+      (orderPayload.paymentMethod === 'card_to_card' ? 'در حال بررسی' : 'در انتظار پرداخت');
+
     // 1. Try secure RPC create_customer_order
     const { data: rpcData, error: rpcError } = await getClient().rpc('create_customer_order', {
       p_customer: orderPayload.customer,
@@ -841,6 +881,21 @@ class DatabaseService {
 
     if (!rpcError && rpcData) {
       const saved = rowToOrder(rpcData);
+      saved.paymentMethod = orderPayload.paymentMethod || 'card_to_card';
+      saved.paymentReceiptUrl = orderPayload.paymentReceiptUrl;
+      saved.paymentGatewayProvider = orderPayload.paymentGatewayProvider;
+      saved.orderStatus = defaultOrderStatus;
+      saved.paymentStatus = defaultPaymentStatus;
+
+      // Update row with extra fields
+      await getClient().from('orders').update({
+        order_status: saved.orderStatus,
+        payment_status: saved.paymentStatus,
+        payment_method: saved.paymentMethod,
+        payment_receipt_url: saved.paymentReceiptUrl,
+        payment_gateway_provider: saved.paymentGatewayProvider
+      }).eq('id', saved.id);
+
       this.cachedOrders.unshift(saved);
 
       // Auto notify admin
@@ -872,14 +927,19 @@ class DatabaseService {
       discount,
       totalAmount,
       shippingMethod: orderPayload.shippingMethod,
-      orderStatus: 'جدید',
-      paymentStatus: 'پرداخت شده',
+      orderStatus: defaultOrderStatus,
+      paymentStatus: defaultPaymentStatus,
+      paymentMethod: orderPayload.paymentMethod || 'card_to_card',
+      paymentReceiptUrl: orderPayload.paymentReceiptUrl,
+      paymentGatewayProvider: orderPayload.paymentGatewayProvider,
       timeline: [
         {
-          status: 'جدید',
+          status: defaultOrderStatus,
           date: now.toLocaleDateString('fa-IR'),
           time: now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
-          note: 'سفارش توسط خریدار در سایت ثبت گردید.'
+          note: orderPayload.paymentMethod === 'card_to_card'
+            ? 'سفارش با روش کارت به کارت ثبت شد و رسید پرداخت آپلود گردید.'
+            : 'سفارش ثبت گردید.'
         }
       ],
       createdAt: now.toISOString(),
@@ -947,6 +1007,50 @@ class DatabaseService {
       module: 'Orders',
       target: order.orderNumber,
       details: `وضعیت به «${status}» تغییر یافت`
+    }).catch(console.error);
+
+    this.notify();
+  }
+
+  public async updateOrderPaymentStatus(
+    orderId: string,
+    paymentStatus: PaymentStatus,
+    orderStatus: OrderStatus,
+    adminUser: { id: number; name: string },
+    note?: string
+  ): Promise<void> {
+    const now = new Date();
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('سفارش مورد نظر یافت نشد.');
+
+    const newTimelineEvent: TimelineEvent = {
+      status: orderStatus,
+      date: now.toLocaleDateString('fa-IR'),
+      time: now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+      note: note || `وضعیت پرداخت توسط ${adminUser.name} به «${paymentStatus}» و وضعیت سفارش به «${orderStatus}» تغییر یافت.`
+    };
+
+    const updatedTimeline = [...order.timeline, newTimelineEvent];
+    const updatePayload: Record<string, any> = {
+      payment_status: paymentStatus,
+      order_status: orderStatus,
+      timeline: updatedTimeline,
+      updated_at: now.toISOString()
+    };
+
+    const { error } = await getClient().from('orders').update(updatePayload).eq('id', orderId);
+    if (error) {
+      console.error('[AuraVibe DB] Error updating order payment status:', error);
+      throw error;
+    }
+
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: 'Order Payment Status Changed',
+      module: 'Orders',
+      target: order.orderNumber,
+      details: `وضعیت پرداخت: ${paymentStatus} | وضعیت سفارش: ${orderStatus}`
     }).catch(console.error);
 
     this.notify();
@@ -1641,6 +1745,15 @@ class DatabaseService {
           newUser: true,
           newTicket: true,
           securityAlert: true
+        },
+        cardToCardSettings: {
+          cardNumber: '6037997512345678',
+          cardholderName: 'فروشگاه آورا وایب'
+        },
+        paymentGatewaySettings: {
+          providerName: 'درگاه پرداخت آنلاین',
+          gatewayUrl: 'https://api.zarinpal.com/pg/v4/payment/request.json',
+          active: false
         }
       };
     }

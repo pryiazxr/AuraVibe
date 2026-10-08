@@ -87,6 +87,7 @@ import {
 } from './services/db';
 
 import { CustomerAuthModal } from './components/CustomerAuthModal';
+import { CheckoutView } from './components/CheckoutView';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
 import { ProductManagementView } from './components/admin/ProductManagementView';
@@ -433,9 +434,16 @@ function App() {
 
   const openCheckoutModalFunc = (open: boolean) => {
     if (open) {
-      window.history.pushState({ view: activeView, modal: 'checkout' }, '', window.location.href);
+      if (!currentUser) {
+        setAuthModal({
+          open: true,
+          mode: 'login',
+          pendingAction: () => navigateToView('checkout')
+        });
+        return;
+      }
+      navigateToView('checkout');
     }
-    setCheckoutModal(open);
   };
 
   const openOrderDetailsModalFunc = (order: Order | null) => {
@@ -653,7 +661,28 @@ function App() {
               </header>
 
           {/* MAIN STOREFRONT VIEWS */}
-          {activeView === 'account' ? (
+          {activeView === 'checkout' ? (
+            <CheckoutView
+              cart={cart}
+              total={cartTotal}
+              user={currentUser}
+              onBackToCart={() => {
+                setAccountTab('cart');
+                navigateToView('account');
+              }}
+              onOrderCompleted={async (createdOrder) => {
+                if (currentUser) {
+                  await db.clearCart(currentUser.id);
+                }
+                localStorage.removeItem(GUEST_CART_KEY);
+                setCart([]);
+                const refreshedOrders = await db.getOrders();
+                setOrders(refreshedOrders);
+              }}
+              openAuthModal={(mode) => setAuthModal({ open: true, mode })}
+              openHome={() => handleNavClick('home')}
+            />
+          ) : activeView === 'account' ? (
             <ProfilePageView
               tab={accountTab}
               setTab={setAccountTab}
@@ -3080,19 +3109,101 @@ function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
   );
 }
 
-function OrderDetailsModal({ order, close }: any) {
+function OrderDetailsModal({ order, close }: { order: Order; close: () => void }) {
+  const [viewReceipt, setViewReceipt] = useState(false);
+
   return (
-    <div className="modal-backdrop p-3">
-      <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-3">
-        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
+    <div className="modal-backdrop p-3" onClick={close}>
+      <div
+        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
           <X size={16} />
         </button>
-        <h3 className="text-base font-black text-[#37192C]">سفارش {order.orderNumber}</h3>
-        <div className="text-xs space-y-1">
-          <div><strong>وضعیت:</strong> {order.orderStatus}</div>
-          <div><strong>روش ارسال:</strong> {order.shippingMethod.title}</div>
-          <div><strong>آدرس:</strong> {order.customer.fullAddress}</div>
+
+        <div className="border-b pb-3">
+          <span className="font-mono text-xs font-bold text-[#8b627e]">{order.orderNumber}</span>
+          <h3 className="text-lg font-black text-[#37192C] mt-1">جزئیات سفارش و وضعیت واریزی</h3>
         </div>
+
+        <div className="rounded-2xl bg-[#fffaf0] p-4 border border-[#37192c]/10 text-xs space-y-2">
+          <div className="flex justify-between font-bold">
+            <span>وضعیت سفارش:</span>
+            <span className="text-purple-800 bg-purple-100 px-3 py-0.5 rounded-full font-black">{order.orderStatus}</span>
+          </div>
+          <div className="flex justify-between font-bold">
+            <span>وضعیت پرداخت:</span>
+            <span className="text-emerald-800 bg-emerald-100 px-3 py-0.5 rounded-full font-black">{order.paymentStatus}</span>
+          </div>
+          <div className="flex justify-between font-bold text-[#8b627e]">
+            <span>روش پرداخت:</span>
+            <span>{order.paymentMethod === 'online_gateway' ? 'درگاه پرداخت آنلاین' : 'کارت به کارت'}</span>
+          </div>
+          <div className="flex justify-between font-bold text-[#8b627e]">
+            <span>روش ارسال:</span>
+            <span>{order.shippingMethod.title} ({order.shippingMethod.costNote})</span>
+          </div>
+          <div className="flex justify-between font-bold text-[#8b627e]">
+            <span>مبلغ قابل پرداخت:</span>
+            <span className="font-black text-sm text-[#37192C]">{money(order.totalAmount)} تومان</span>
+          </div>
+
+          {order.paymentReceiptUrl && (
+            <div className="pt-2 border-t border-[#37192c]/10 flex justify-between items-center">
+              <span className="font-bold text-[#37192C]">رسید آپلود شده:</span>
+              <button
+                onClick={() => setViewReceipt(!viewReceipt)}
+                className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200 hover:bg-emerald-100 transition"
+              >
+                {viewReceipt ? 'بستن تصویر' : 'مشاهده رسید'}
+              </button>
+            </div>
+          )}
+
+          {viewReceipt && order.paymentReceiptUrl && (
+            <div className="mt-2 rounded-2xl overflow-hidden border border-[#37192c]/20 max-h-64 bg-black">
+              <img src={order.paymentReceiptUrl} alt="رسید" className="w-full h-full object-contain mx-auto" />
+            </div>
+          )}
+        </div>
+
+        {/* Item Snapshots */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-[#37192C]">اقلام فاکتور:</h4>
+          <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+            {order.items.map((item, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2.5 bg-white border rounded-xl text-xs font-bold">
+                <div className="flex items-center gap-2">
+                  <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
+                  <div>
+                    <div className="text-[#37192C]">{item.productName}</div>
+                    <div className="text-[10px] text-[#8b627e]">{item.quantity} عدد × {money(item.finalPrice)} تومان</div>
+                  </div>
+                </div>
+                <div className="font-black text-[#37192C]">{money(item.lineTotal)} تومان</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Timeline */}
+        {order.timeline && order.timeline.length > 0 && (
+          <div className="space-y-2 pt-2 border-t border-[#37192c]/10">
+            <h4 className="text-xs font-bold text-[#37192C]">تاریخچه پیگیری سفارش:</h4>
+            <div className="space-y-1.5 text-xs">
+              {order.timeline.map((ev, idx) => (
+                <div key={idx} className="p-2 rounded-xl bg-[#fffaf0] border border-[#37192c]/5">
+                  <div className="flex justify-between font-bold text-[#37192C]">
+                    <span>{ev.status}</span>
+                    <span className="text-[10px] text-[#8b627e]">{ev.date} - {ev.time}</span>
+                  </div>
+                  {ev.note && <p className="text-[11px] text-[#37192C]/70 mt-0.5 font-semibold">{ev.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
