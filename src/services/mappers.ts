@@ -223,6 +223,9 @@ export function rowToOrder(row: any): Order {
     shippingMethod: row.shipping_method,
     orderStatus: row.order_status,
     paymentStatus: row.payment_status,
+    paymentMethod: row.payment_method ?? row.paymentMethod ?? 'card_to_card',
+    paymentReceiptUrl: row.payment_receipt_url ?? row.paymentReceiptUrl ?? undefined,
+    paymentGatewayProvider: row.payment_gateway_provider ?? row.paymentGatewayProvider ?? undefined,
     trackingCode: row.tracking_code ?? undefined,
     timeline: Array.isArray(row.timeline) ? row.timeline : [],
     createdAt: row.created_at ?? new Date().toISOString(),
@@ -245,6 +248,9 @@ export function orderToRow(item: Partial<Order>): Record<string, any> {
   if (item.shippingMethod !== undefined) row.shipping_method = item.shippingMethod;
   if (item.orderStatus !== undefined) row.order_status = item.orderStatus;
   if (item.paymentStatus !== undefined) row.payment_status = item.paymentStatus;
+  if (item.paymentMethod !== undefined) row.payment_method = item.paymentMethod;
+  if (item.paymentReceiptUrl !== undefined) row.payment_receipt_url = item.paymentReceiptUrl;
+  if (item.paymentGatewayProvider !== undefined) row.payment_gateway_provider = item.paymentGatewayProvider;
   if (item.trackingCode !== undefined) row.tracking_code = item.trackingCode;
   if (item.timeline !== undefined) row.timeline = item.timeline;
   if (item.createdAt !== undefined) row.created_at = item.createdAt;
@@ -396,6 +402,15 @@ export function rowToGeneralSettings(row: any): GeneralSettings {
       newUser: true,
       newTicket: true,
       securityAlert: true
+    },
+    cardToCardSettings: row.card_to_card_settings ?? row.cardToCardSettings ?? {
+      cardNumber: '6037997512345678',
+      cardholderName: 'فروشگاه آورا وایب'
+    },
+    paymentGatewaySettings: row.payment_gateway_settings ?? row.paymentGatewaySettings ?? {
+      providerName: 'درگاه پرداخت آنلاین',
+      gatewayUrl: 'https://api.zarinpal.com/pg/v4/payment/request.json',
+      active: false
     }
   };
 }
@@ -415,6 +430,8 @@ export function generalSettingsToRow(item: Partial<GeneralSettings>): Record<str
   if (item.headerLinks !== undefined) row.header_links = item.headerLinks;
   if (item.footerDescription !== undefined) row.footer_description = item.footerDescription;
   if (item.notifications !== undefined) row.notifications = item.notifications;
+  if (item.cardToCardSettings !== undefined) row.card_to_card_settings = item.cardToCardSettings;
+  if (item.paymentGatewaySettings !== undefined) row.payment_gateway_settings = item.paymentGatewaySettings;
   row.updated_at = new Date().toISOString();
   return row;
 }
