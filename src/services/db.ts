@@ -978,6 +978,34 @@ class DatabaseService {
     return rowToUser(data);
   }
 
+  public async getUserByAuthId(authUserId: string): Promise<User | null> {
+    try {
+      const { data, error } = await getClient()
+        .from('users')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+      if (error || !data) return null;
+      return rowToUser(data);
+    } catch {
+      return null;
+    }
+  }
+
+  public async getUserByPhone(phone: string): Promise<User | null> {
+    try {
+      const { data, error } = await getClient()
+        .from('users')
+        .select('*')
+        .eq('phone', phone)
+        .maybeSingle();
+      if (error || !data) return null;
+      return rowToUser(data);
+    } catch {
+      return null;
+    }
+  }
+
   public async saveUser(userData: Partial<User>, adminUser?: { id: number; name: string }): Promise<User> {
     const row = userToRow(userData);
     if (!row.id) {
@@ -1170,6 +1198,13 @@ class DatabaseService {
   }
 
   public async adminLogout(): Promise<void> {
+    if (isSupabaseConfigured() && supabase) {
+      await getClient().auth.signOut();
+    }
+    this.notify();
+  }
+
+  public async userLogout(): Promise<void> {
     if (isSupabaseConfigured() && supabase) {
       await getClient().auth.signOut();
     }
