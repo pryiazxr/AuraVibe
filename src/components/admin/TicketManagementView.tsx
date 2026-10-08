@@ -37,6 +37,7 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const refreshData = async () => {
     try {
@@ -78,6 +79,7 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(null);
       const isVideo = file.type.startsWith('video/');
       const isAudio = file.type.startsWith('audio/');
       if (isVideo) setMediaType('video');
@@ -88,17 +90,13 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
       try {
         const url = await db.uploadFile('support-media', file);
         setMediaUrl(url);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to upload file to Supabase:', err);
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (reader.result) {
-            setMediaUrl(reader.result as string);
-          }
-        };
-        reader.readAsDataURL(file);
+        setUploadError(err?.message || 'خطا در آپلود فایل پیوست پشتیبانی.');
+        setMediaUrl(null);
       } finally {
         setUploading(false);
+        e.target.value = '';
       }
     }
   };
@@ -483,7 +481,14 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
                 })}
               </div>
 
-              {/* Media Preview Box */}
+              {/* Media Preview Box & Upload Error */}
+              {uploadError && (
+                <div className="p-3 bg-rose-50 border-t border-rose-200 text-rose-700 text-xs font-bold flex items-center justify-between">
+                  <span>⚠️ {uploadError}</span>
+                  <button onClick={() => setUploadError(null)} className="text-rose-700 font-bold">✕</button>
+                </div>
+              )}
+
               {mediaUrl && (
                 <div className="p-3 bg-[#fffaf0] border-t border-[#37192c]/10 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -494,6 +499,7 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => {
                       setMediaUrl(null);
                       setMediaType('text');

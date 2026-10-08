@@ -538,6 +538,9 @@ class DatabaseService {
   }
 
   public async saveCategory(catData: Partial<CategoryItem>, adminUser?: { id: number; name: string }): Promise<CategoryItem> {
+    if (catData.image && catData.image.startsWith('blob:')) {
+      throw new Error('آدرس تصویر دسته‌بندی معتبر نیست (blob:). لطفاً ابتدا تصویر را آپلود کنید.');
+    }
     const row = categoryToRow(catData);
     if (!row.id) {
       delete row.id;
@@ -640,6 +643,12 @@ class DatabaseService {
   }
 
   public async saveProduct(prodData: Partial<Product>, adminUser?: { id: number; name: string }): Promise<Product> {
+    if (prodData.images && prodData.images.some((i) => i.startsWith('blob:'))) {
+      throw new Error('یکی از آدرس‌های تصاویر محصول معتبر نیست (blob:). لطفاً تمام تصاویر را آپلود کنید.');
+    }
+    if (prodData.videoUrl && prodData.videoUrl.startsWith('blob:')) {
+      throw new Error('آدرس ویدیوی محصول معتبر نیست (blob:). لطفاً ابتدا ویدیو را آپلود کنید.');
+    }
     const row = productToRow(prodData);
     if (!row.id) {
       row.id = Math.floor(100000 + Math.random() * 899999);
@@ -720,6 +729,9 @@ class DatabaseService {
   }
 
   public async saveBanner(bannerData: Partial<Banner>, adminUser?: { id: number; name: string }): Promise<Banner> {
+    if (bannerData.image && bannerData.image.startsWith('blob:')) {
+      throw new Error('آدرس تصویر بنر معتبر نیست (blob:). لطفاً ابتدا تصویر را آپلود کنید.');
+    }
     const row = bannerToRow(bannerData);
     if (!row.id) {
       row.id = Date.now();
