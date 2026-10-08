@@ -2,6 +2,7 @@ import type {
   CategoryItem,
   ProductBadgeItem,
   Product,
+  ProductReview,
   Banner,
   Order,
   User,
@@ -48,6 +49,36 @@ export function badgeToRow(item: Partial<ProductBadgeItem>): Record<string, any>
   if (item.id !== undefined) row.id = item.id;
   if (item.title !== undefined) row.title = item.title;
   if (item.color !== undefined) row.color = item.color;
+  return row;
+}
+
+// --- PRODUCT REVIEW ---
+export function rowToReview(row: any): ProductReview {
+  return {
+    id: Number(row.id),
+    productId: Number(row.product_id),
+    userId: row.user_id ? Number(row.user_id) : undefined,
+    userName: row.user_name ?? 'کاربر آورا',
+    userAvatar: row.user_avatar ?? undefined,
+    rating: Number(row.rating),
+    comment: row.comment ?? '',
+    status: row.status ?? 'approved',
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? new Date().toISOString()
+  };
+}
+
+export function reviewToRow(item: Partial<ProductReview>): Record<string, any> {
+  const row: Record<string, any> = {};
+  if (item.id !== undefined) row.id = item.id;
+  if (item.productId !== undefined) row.product_id = item.productId;
+  if (item.userId !== undefined) row.user_id = item.userId;
+  if (item.userName !== undefined) row.user_name = item.userName;
+  if (item.userAvatar !== undefined) row.user_avatar = item.userAvatar;
+  if (item.rating !== undefined) row.rating = item.rating;
+  if (item.comment !== undefined) row.comment = item.comment;
+  if (item.status !== undefined) row.status = item.status;
+  row.updated_at = new Date().toISOString();
   return row;
 }
 

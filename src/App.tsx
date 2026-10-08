@@ -74,6 +74,7 @@ import {
   isSupabaseConfigured,
   supabase,
   Product,
+  ProductReview,
   Banner,
   Order,
   User,
@@ -257,10 +258,19 @@ function App() {
       setProducts(p);
       setBanners(b);
       setOrders(o);
-      setTickets(t);
       setArticles(a);
       if (admin && !currentAdmin) {
         setCurrentAdmin(admin);
+      }
+
+      // Filter tickets for storefront modal context
+      const activeAdmin = admin || currentAdmin;
+      if (activeAdmin) {
+        setTickets(t);
+      } else if (currentUser) {
+        setTickets(t.filter((item) => item.userId === currentUser.id || item.customerPhone === currentUser.phone));
+      } else {
+        setTickets([]);
       }
 
       if (currentUser) {
@@ -827,12 +837,14 @@ function App() {
           {selectedProduct && (
             <ProductModal
               product={selectedProduct}
+              user={currentUser}
               close={() => setSelectedProduct(null)}
               add={addToCart}
               toggleWish={toggleWishlist}
               isWished={wishlist.some((w) => w.id === selectedProduct.id)}
               allProducts={products}
               openProduct={openProductModal}
+              openAuthModal={(mode: 'login' | 'register') => setAuthModal({ open: true, mode })}
             />
           )}
 
@@ -2016,10 +2028,35 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
   );
 }
 
-function ProductModal({ product, close, add, toggleWish, isWished, allProducts, openProduct }: any) {
+function ProductModal({ product, user, close, add, toggleWish, isWished, allProducts, openProduct, openAuthModal }: any) {
   const [activeImgIdx, setActiveImgIdx] = useState(product.mainImageIndex || 0);
   const [showVideo, setShowVideo] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+
+  // Reviews state
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState('');
+  const [reviewError, setReviewError] = useState('');
+
+  const loadReviews = async () => {
+    try {
+      const fetched = await db.getProductReviews(product.id);
+      setReviews(fetched);
+    } catch (e) {
+      console.error('Failed to load product reviews:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadReviews();
+    const unsub = db.subscribe(() => {
+      loadReviews();
+    });
+    return () => unsub();
+  }, [product.id]);
 
   const images = product.images && product.images.length > 0 ? product.images : [satinImage];
 
@@ -2033,6 +2070,45 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
       alert(`لینک محصول: ${productUrl}`);
     }
   };
+
+  const handleReviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      openAuthModal('login');
+      return;
+    }
+    if (!newComment.trim()) {
+      setReviewError('لطفاً نظر خود را بنویسید.');
+      return;
+    }
+
+    setReviewError('');
+    setReviewSubmitting(true);
+    try {
+      await db.saveProductReview({
+        productId: product.id,
+        userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'کاربر آورا',
+        userAvatar: user.avatar,
+        rating: newRating,
+        comment: newComment.trim(),
+        status: 'approved'
+      });
+      setNewComment('');
+      setReviewSuccess('دیدگاه شما با موفقیت ثبت شد.');
+      setTimeout(() => setReviewSuccess(''), 3000);
+      await loadReviews();
+    } catch (err: any) {
+      setReviewError(err?.message || 'خطا در ثبت دیدگاه.');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  const approvedReviews = reviews.filter((r) => r.status === 'approved');
+  const avgRating = approvedReviews.length > 0
+    ? (approvedReviews.reduce((sum, r) => sum + r.rating, 0) / approvedReviews.length).toFixed(1)
+    : '۵.۰';
 
   return (
     <div className="modal-backdrop p-3" onClick={close}>
@@ -2157,6 +2233,117 @@ function ProductModal({ product, close, add, toggleWish, isWished, allProducts, 
           </div>
         </div>
 
+        {/* Product Reviews & Rating Section */}
+        <div className="border-t border-[#37192c]/10 p-6 sm:p-8 bg-[#fffdfa] space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-[#37192C] flex items-center gap-2">
+                <span>نظرات و امتیاز خریداران</span>
+                <span className="flex items-center gap-1 text-xs font-bold bg-[#FFF3C5] text-[#37192C] px-2.5 py-0.5 rounded-full">
+                  <Star size={13} fill="currentColor" className="text-amber-500" /> {avgRating} ({approvedReviews.length} نظر)
+                </span>
+              </h3>
+              <p className="text-[11px] text-[#8b627e] font-semibold mt-0.5">تجربه واقعی خریداران آورا وایب</p>
+            </div>
+          </div>
+
+          {/* New Review Form */}
+          <div className="rounded-2xl bg-white p-4 border border-[#37192c]/10 shadow-xs space-y-3">
+            <h4 className="text-xs font-black text-[#37192C]">ثبت دیدگاه جدید</h4>
+            {reviewSuccess && (
+              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                {reviewSuccess}
+              </div>
+            )}
+            {reviewError && (
+              <div className="text-xs font-bold text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                {reviewError}
+              </div>
+            )}
+
+            {!user ? (
+              <div className="text-center py-4 bg-[#fffaf0] rounded-xl border border-[#37192c]/5 space-y-2">
+                <p className="text-xs font-bold text-[#37192C]">برای ثبت نظر ابتدا وارد حساب کاربری شوید.</p>
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="px-4 py-2 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs shadow-xs hover:bg-[#5a2548] transition"
+                >
+                  ورود / ثبت‌نام
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleReviewSubmit} className="space-y-3 text-xs font-bold">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#37192C]">امتیاز شما:</span>
+                  <div className="flex items-center gap-1 dir-ltr">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        type="button"
+                        key={star}
+                        onClick={() => setNewRating(star)}
+                        className="p-1 text-amber-400 hover:scale-125 transition"
+                      >
+                        <Star size={18} fill={star <= newRating ? 'currentColor' : 'none'} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <textarea
+                    required
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="دیدگاه خود را درباره جنس، کیفیت یا طراحی این محصول بنویسید..."
+                    className="w-full p-3 rounded-xl border bg-[#fffaf0] outline-none text-xs font-semibold h-20 text-[#37192C]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={reviewSubmitting}
+                  className="px-6 py-2.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs hover:bg-[#5a2548] transition shadow-xs disabled:opacity-50"
+                >
+                  {reviewSubmitting ? 'در حال ثبت...' : 'ارسال دیدگاه'}
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Reviews List */}
+          <div className="space-y-3">
+            {approvedReviews.length === 0 ? (
+              <div className="text-center py-6 text-xs text-[#8b627e] font-semibold bg-white rounded-2xl border border-[#37192c]/5">
+                هنوز هیچ دیدگاهی برای این محصول ثبت نشده است. اولین نفری باشید که نظر می‌دهد!
+              </div>
+            ) : (
+              approvedReviews.map((rev) => (
+                <div key={rev.id} className="p-4 bg-white rounded-2xl border border-[#37192c]/10 text-xs space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="size-7 rounded-full bg-[#37192C] text-[#FFF3C5] grid place-items-center font-bold text-xs">
+                        {rev.userName ? rev.userName[0] : 'U'}
+                      </div>
+                      <span className="font-black text-[#37192C]">{rev.userName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-amber-500 dir-ltr">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star key={s} size={12} fill={s <= rev.rating ? 'currentColor' : 'none'} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-[#37192C]/85 leading-6 font-semibold pt-1">{rev.comment}</p>
+                  <div className="text-[10px] text-[#8b627e] text-left">
+                    {new Date(rev.createdAt).toLocaleDateString('fa-IR')}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         {/* Related Products Section */}
         <RelatedProductsSection
           currentProduct={product}
@@ -2230,8 +2417,12 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
 
   const refreshTickets = async () => {
     try {
-      const t = await db.getTickets();
-      setTickets(t);
+      if (user) {
+        const t = await db.getTickets({ id: user.id, phone: user.phone });
+        setTickets(t);
+      } else {
+        setTickets([]);
+      }
     } catch (e) {
       console.error('Failed to load tickets:', e);
     }
@@ -2243,10 +2434,13 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
       refreshTickets();
     });
     return () => unsub();
-  }, []);
+  }, [user?.id, user?.phone]);
 
-  // Find or create default user ticket
-  const userTicket = tickets[0] || null;
+  // Find user ticket matched specifically with this user
+  const userTicket = useMemo(() => {
+    if (!user) return null;
+    return tickets.find((t) => t.userId === user.id || t.customerPhone === user.phone) || null;
+  }, [tickets, user]);
 
   useEffect(() => {
     if (userTicket) {
