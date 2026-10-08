@@ -299,14 +299,17 @@ function App() {
     navigateToView(viewId, true);
   };
 
-  // Handle browser / mobile back button via popstate
+  // Handle browser / mobile back button via popstate for storefront views
   useEffect(() => {
-    // Ensure initial history state is set
-    if (!window.history.state || !window.history.state.view) {
+    const isAdminRoute = window.location.pathname.includes('/admin');
+    if (!isAdminRoute && (!window.history.state || !window.history.state.view)) {
       window.history.replaceState({ view: 'home' }, '', window.location.href);
     }
 
     const handlePopState = (e: PopStateEvent) => {
+      if (window.location.pathname.includes('/admin')) {
+        return;
+      }
       setSelectedProduct(null);
       setSearchOpen(false);
       setSupportOpen(false);
@@ -755,6 +758,20 @@ function AdminContainer({
     navigate(`/admin/${tab === 'dashboard' ? '' : tab}`);
   };
 
+  const handleBack = () => {
+    if (activeTab === 'dashboard') return;
+    if (
+      window.history.state &&
+      typeof window.history.state.idx === 'number' &&
+      window.history.state.idx > 0 &&
+      location.key !== 'default'
+    ) {
+      navigate(-1);
+    } else {
+      navigate('/admin');
+    }
+  };
+
   const handleGoHome = () => {
     navigate('/');
   };
@@ -851,6 +868,7 @@ function AdminContainer({
       currentAdmin={currentAdmin}
       activeTab={activeTab}
       setActiveTab={handleSelectTab}
+      onBack={handleBack}
       goHome={handleGoHome}
       onLogout={async () => {
         await db.adminLogout();
