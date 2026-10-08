@@ -8,6 +8,7 @@ import {
   X
 } from 'lucide-react';
 import { Order, OrderStatus, ShippingMethodKey, db, AdminUser } from '../../services/db';
+import { ProductThumbnail } from '../ProductThumbnail';
 
 type OrderManagementViewProps = {
   currentAdmin: AdminUser;
@@ -288,8 +289,18 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                     {selectedOrder.items.map((item, idx) => (
                       <tr key={idx} className="hover:bg-[#fffaf0] transition">
                         <td className="p-3 flex items-center gap-2 font-bold text-[#37192C]">
-                          <img src={item.productImage} alt={item.productName} className="size-10 rounded-lg object-cover" />
-                          <span className="text-xs">{item.productName}</span>
+                          <ProductThumbnail
+                            productId={item.productId}
+                            image={item.productImage}
+                            alt={item.productName}
+                            className="size-10 rounded-lg object-cover border"
+                          />
+                          <span className="text-xs cursor-pointer hover:underline" onClick={(e) => {
+                            e.stopPropagation();
+                            window.dispatchEvent(
+                              new CustomEvent('auravibe:open-product-id', { detail: { productId: item.productId } })
+                            );
+                          }}>{item.productName}</span>
                         </td>
                         <td className="p-3 font-mono font-bold text-[#8b627e]">{item.productCode}</td>
                         <td className="p-3 font-bold text-[#37192C]">{item.finalPrice.toLocaleString('fa-IR')} تومان</td>

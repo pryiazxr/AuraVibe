@@ -86,6 +86,7 @@ import {
   CartItem
 } from './services/db';
 
+import { ProductThumbnail } from './components/ProductThumbnail';
 import { CustomerAuthModal } from './components/CustomerAuthModal';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminDashboardView } from './components/admin/AdminDashboardView';
@@ -405,9 +406,24 @@ function App() {
 
   const openProductModal = (product: Product | null) => {
     if (product) {
-      window.history.pushState({ view: activeView, modal: 'product', productId: product.id }, '', window.location.href);
+      const url = new URL(window.location.href);
+      url.searchParams.set('product', String(product.id));
+      window.history.pushState({ view: activeView, modal: 'product', productId: product.id }, '', url.toString());
+    } else {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('product');
+      window.history.replaceState({ view: activeView }, '', url.toString());
     }
     setSelectedProduct(product);
+  };
+
+  const openProductById = (id: number) => {
+    const p = products.find((prod) => prod.id === id);
+    if (p) {
+      openProductModal(p);
+    } else {
+      alert('محصول مورد نظر پیدا نشد یا از سیستم حذف شده است.');
+    }
   };
 
   const openSearchModal = (open: boolean) => {
@@ -463,6 +479,43 @@ function App() {
   const handleNavClick = (viewId: string) => {
     navigateToView(viewId, true);
   };
+
+  // Listen for global custom events for product thumbnails
+  useEffect(() => {
+    const handleCustomOpenProduct = (e: any) => {
+      if (e.detail?.product) {
+        openProductModal(e.detail.product);
+      }
+    };
+    const handleCustomOpenProductId = (e: any) => {
+      if (e.detail?.productId) {
+        openProductById(e.detail.productId);
+      }
+    };
+
+    window.addEventListener('auravibe:open-product', handleCustomOpenProduct as EventListener);
+    window.addEventListener('auravibe:open-product-id', handleCustomOpenProductId as EventListener);
+
+    return () => {
+      window.removeEventListener('auravibe:open-product', handleCustomOpenProduct as EventListener);
+      window.removeEventListener('auravibe:open-product-id', handleCustomOpenProductId as EventListener);
+    };
+  }, [products, activeView]);
+
+  // Handle URL query ?product=ID on initial load / products change
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prodParam = params.get('product');
+    if (prodParam && products.length > 0) {
+      const pId = Number(prodParam);
+      if (pId) {
+        const found = products.find((p) => p.id === pId);
+        if (found && (!selectedProduct || selectedProduct.id !== found.id)) {
+          setSelectedProduct(found);
+        }
+      }
+    }
+  }, [products]);
 
   // Handle browser / mobile back button via popstate for storefront views
   useEffect(() => {
@@ -899,7 +952,7 @@ function App() {
           )}
 
           {selectedOrderDetails && (
-            <OrderDetailsModal order={selectedOrderDetails} close={() => setSelectedOrderDetails(null)} />
+            <OrderDetailsModal order={selectedOrderDetails} close={() => setSelectedOrderDetails(null)} openProduct={openProductModal} />
           )}
 
           {/* Bottom Nav */}
@@ -1604,21 +1657,20 @@ function ProductSection({ title, intro, items, open, onViewMore }: any) {
 
 function ProductCard({ product, open }: { product: Product; open: (p: Product) => void }) {
   return (
-    <button onClick={() => open(product)} className="product-card group text-right">
-      <div className="relative aspect-[.83] overflow-hidden rounded-[1.55rem] bg-[#f1e4c8]">
-        <img src={product.images[0]} alt={product.name} className="size-full object-cover transition duration-500 group-hover:scale-105" />
-        {product.badge && (
-          <span className="absolute end-3 top-3 rounded-full bg-[#FFF3C5] px-2.5 py-1 text-[10px] font-bold text-[#37192C]">
-            {product.badge}
-          </span>
-        )}
-      </div>
+    <div onClick={() => open(product)} className="product-card group text-right cursor-pointer">
+      <ProductThumbnail
+        product={product}
+        onOpenProduct={open}
+        containerClassName="relative aspect-[.83] w-full overflow-hidden rounded-[1.55rem] bg-[#f1e4c8] block"
+        className="size-full object-cover transition duration-500 group-hover:scale-105"
+        showBadge={true}
+      />
       <h3 className="mt-3 truncate text-sm font-bold text-[#37192C]">{product.name}</h3>
       <div className="mt-1 flex items-center gap-2 text-xs">
         <span className="font-black text-[#37192C]">{money(product.price)} تومان</span>
         {product.oldPrice && <del className="text-[#37192C]/45">{money(product.oldPrice)}</del>}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -2172,21 +2224,24 @@ function RelatedProductsSection({
 
       <div className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 select-none">
         {related.map((p) => (
-          <button
+          <div
             key={p.id}
             onClick={() => openProduct(p)}
-            className="group shrink-0 w-40 sm:w-48 text-right bg-white p-3 rounded-2xl border border-[#37192c]/10 shadow-2xs hover:border-[#37192C] transition flex flex-col justify-between"
+            className="group shrink-0 w-40 sm:w-48 text-right bg-white p-3 rounded-2xl border border-[#37192c]/10 shadow-2xs hover:border-[#37192C] transition flex flex-col justify-between cursor-pointer"
           >
             <div>
-              <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-[#f1e4c8] mb-2">
-                <img src={p.images[0]} alt={p.name} className="size-full object-cover group-hover:scale-105 transition" />
-              </div>
+              <ProductThumbnail
+                product={p}
+                onOpenProduct={openProduct}
+                containerClassName="relative aspect-square w-full overflow-hidden rounded-xl bg-[#f1e4c8] mb-2 block"
+                className="size-full object-cover group-hover:scale-105 transition"
+              />
               <h4 className="font-bold text-xs text-[#37192C] line-clamp-2">{p.name}</h4>
             </div>
             <div className="mt-2 font-black text-xs text-[#37192C]">
               {p.price.toLocaleString('fa-IR')} تومان
             </div>
-          </button>
+          </div>
         ))}
       </div>
     </div>
@@ -2451,15 +2506,22 @@ function SearchModal({ close, openProduct, products }: any) {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
               {filtered.map((p: Product) => (
-                <button
+                <div
                   key={p.id}
                   onClick={() => {
                     openProduct(p);
                     close();
                   }}
-                  className="flex items-center gap-3 p-2.5 border rounded-2xl text-right hover:border-[#37192C]/40 hover:bg-[#fffaf0] transition"
+                  className="flex items-center gap-3 p-2.5 border rounded-2xl text-right hover:border-[#37192C]/40 hover:bg-[#fffaf0] transition cursor-pointer"
                 >
-                  <img src={p.images[0]} alt={p.name} className="size-16 object-cover rounded-xl shrink-0" />
+                  <ProductThumbnail
+                    product={p}
+                    onOpenProduct={(prod) => {
+                      openProduct(prod);
+                      close();
+                    }}
+                    className="size-16 object-cover rounded-xl shrink-0"
+                  />
                   <div className="overflow-hidden">
                     <span className="text-[10px] font-bold text-[#8b627e] bg-[#FFF3C5] px-2 py-0.5 rounded-full inline-block mb-1">
                       {p.category}
@@ -2467,7 +2529,7 @@ function SearchModal({ close, openProduct, products }: any) {
                     <div className="mt-0.5 font-bold text-xs truncate text-[#37192C]">{p.name}</div>
                     <div className="mt-1 font-black text-xs text-[#37192C]">{money(p.price)} تومان</div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -2997,9 +3059,16 @@ function ProfilePageView({
                 {cart.map((item: CartItem, idx: number) => (
                   <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#fffaf0] rounded-2xl border border-[#37192c]/10 text-xs font-bold gap-3">
                     <div className="flex items-center gap-3">
-                      <img src={item.product.images[0]} alt={item.product.name} className="size-14 rounded-xl object-cover shrink-0" />
+                      <ProductThumbnail
+                        product={item.product}
+                        productId={item.productId}
+                        image={item.product?.images?.[0]}
+                        alt={item.product?.name}
+                        onOpenProduct={openProduct}
+                        className="size-14 rounded-xl object-cover shrink-0"
+                      />
                       <div>
-                        <span className="block text-sm text-[#37192C]">{item.product.name}</span>
+                        <span className="block text-sm text-[#37192C] cursor-pointer hover:underline" onClick={() => openProduct(item.product)}>{item.product.name}</span>
                         <span className="text-xs text-[#8b627e]">{item.product.category} {item.color ? `| رنگ: ${item.color}` : ''}</span>
                         <span className="block mt-1 text-xs text-[#37192C]/80">{money(item.product.price)} تومان</span>
                       </div>
@@ -3080,18 +3149,48 @@ function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
   );
 }
 
-function OrderDetailsModal({ order, close }: any) {
+function OrderDetailsModal({ order, close, openProduct }: any) {
   return (
-    <div className="modal-backdrop p-3">
-      <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-3">
-        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
+    <div className="modal-backdrop p-3" onClick={close}>
+      <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
           <X size={16} />
         </button>
         <h3 className="text-base font-black text-[#37192C]">سفارش {order.orderNumber}</h3>
-        <div className="text-xs space-y-1">
+        <div className="text-xs space-y-1.5 bg-[#fffaf0] p-3.5 rounded-2xl border border-[#37192c]/10 font-bold">
           <div><strong>وضعیت:</strong> {order.orderStatus}</div>
           <div><strong>روش ارسال:</strong> {order.shippingMethod.title}</div>
-          <div><strong>آدرس:</strong> {order.customer.fullAddress}</div>
+          <div><strong>مبلغ پرداختی:</strong> {money(order.totalAmount)} تومان</div>
+          <div><strong>آدرس تحویل:</strong> {order.customer.fullAddress}</div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-xs font-black text-[#37192C]">اقلام سفارش:</h4>
+          <div className="space-y-2">
+            {order.items.map((item: any, idx: number) => (
+              <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl border bg-white text-xs">
+                <div className="flex items-center gap-3">
+                  <ProductThumbnail
+                    productId={item.productId}
+                    image={item.productImage}
+                    alt={item.productName}
+                    onOpenProduct={openProduct}
+                    className="size-12 rounded-lg object-cover"
+                  />
+                  <div>
+                    <span className="font-bold text-[#37192C] block cursor-pointer hover:underline" onClick={() => openProductById(item.productId)}>
+                      {item.productName}
+                    </span>
+                    <span className="text-[10px] text-[#8b627e] font-mono">{item.productCode}</span>
+                  </div>
+                </div>
+                <div className="text-left font-black">
+                  <div>{money(item.finalPrice)} تومان</div>
+                  <div className="text-[10px] text-[#8b627e]">{item.quantity} عدد</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { categoryList, satinImage, jewelryImage, necklaceImage, watchImage } from '../../data';
 import { Product, db, AdminUser, ProductBadgeItem } from '../../services/db';
+import { ProductThumbnail } from '../ProductThumbnail';
 
 type ProductManagementViewProps = {
   currentAdmin: AdminUser;
@@ -350,7 +351,16 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
               {filteredProducts.map((p) => (
                 <tr key={p.id} className="hover:bg-[#fffaf0]/60 transition">
                   <td className="p-4">
-                    <img src={p.images[p.mainImageIndex || 0] || p.images[0]} alt={p.name} className="size-12 rounded-xl object-cover border" />
+                    <ProductThumbnail
+                      product={p}
+                      image={p.images[p.mainImageIndex || 0] || p.images[0]}
+                      alt={p.name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openForm(p);
+                      }}
+                      className="size-12 rounded-xl object-cover border"
+                    />
                   </td>
                   <td className="p-4 font-mono font-bold text-[#37192C]">{p.productCode}</td>
                   <td className="p-4 font-bold text-[#37192C]">
@@ -681,7 +691,12 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                               }}
                               className="accent-[#37192C] size-4 rounded cursor-pointer"
                             />
-                            <img src={p.images[0]} alt={p.name} className="size-8 rounded-lg object-cover" />
+                            <ProductThumbnail
+                              product={p}
+                              image={p.images[0]}
+                              alt={p.name}
+                              className="size-8 rounded-lg object-cover border"
+                            />
                             <div>
                               <span className="font-bold text-[#37192C] block">{p.name}</span>
                               <span className="font-mono text-[10px] text-[#8b627e]">{p.productCode} | {p.category}</span>
