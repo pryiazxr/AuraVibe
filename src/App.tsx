@@ -138,7 +138,9 @@ function saveGuestWishlist(items: Product[]) {
 }
 
 function App() {
-  const [intro, setIntro] = useState(isSupabaseConfigured());
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin') || window.location.hash.includes('/admin');
+  const [intro, setIntro] = useState(isSupabaseConfigured() && !isAdminRoute);
   const [followModal, setFollowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [cart, setCart] = useState<CartItem[]>(getGuestCart());
@@ -301,8 +303,9 @@ function App() {
 
   // Intro and Banner Carousel
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured() || location.pathname.startsWith('/admin') || window.location.hash.includes('/admin')) {
       setIntro(false);
+      setFollowModal(false);
       return;
     }
     const timer = window.setTimeout(() => {
@@ -310,7 +313,7 @@ function App() {
       setFollowModal(true);
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (banners.length === 0) return;
@@ -484,13 +487,13 @@ function App() {
 
   // Handle browser / mobile back button via popstate for storefront views
   useEffect(() => {
-    const isAdminRoute = window.location.pathname.includes('/admin');
-    if (!isAdminRoute && (!window.history.state || !window.history.state.view)) {
+    const isCurrentAdmin = location.pathname.startsWith('/admin') || window.location.hash.includes('/admin');
+    if (!isCurrentAdmin && (!window.history.state || !window.history.state.view)) {
       window.history.replaceState({ view: 'home' }, '', window.location.href);
     }
 
     const handlePopState = (e: PopStateEvent) => {
-      if (window.location.pathname.includes('/admin')) {
+      if (location.pathname.startsWith('/admin') || window.location.hash.includes('/admin')) {
         return;
       }
       setSelectedProduct(null);
@@ -506,7 +509,7 @@ function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [location.pathname]);
 
   // Section collections dynamically sliced from real db based on badges and categories
   const productsNewest = useMemo(() => {
