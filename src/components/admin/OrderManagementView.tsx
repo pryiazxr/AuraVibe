@@ -232,7 +232,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                 >
                   همه وضعیت‌ها
                 </button>
-                {allStatuses.map((st) => (
+                {allOrderStatuses.map((st) => (
                   <button
                     key={st}
                     onClick={() => {

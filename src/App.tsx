@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -138,6 +138,54 @@ function saveGuestWishlist(items: Product[]) {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Helper to close modal via history back or param deletion
+  const closeModalParam = (paramKey: string) => {
+    if (searchParams.has(paramKey)) {
+      if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+        navigate(-1);
+      } else {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete(paramKey);
+          return next;
+        }, { replace: true });
+      }
+    }
+  };
+
+  // Derive storefront active route from location
+  const getActiveView = () => {
+    const path = location.pathname;
+    if (path === '/checkout') return 'checkout';
+    if (path === '/account') return 'account';
+    if (path === '/journal') return 'journal';
+    if (path.startsWith('/category/')) {
+      return decodeURIComponent(path.replace('/category/', '')) || 'home';
+    }
+    return 'home';
+  };
+
+  const activeView = getActiveView();
+
+  const handleNavClick = (viewId: string) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (viewId === 'home') {
+      navigate('/');
+    } else if (viewId === 'journal') {
+      navigate('/journal');
+    } else if (viewId === 'account') {
+      navigate('/account');
+    } else if (viewId === 'checkout') {
+      navigate('/checkout');
+    } else {
+      navigate(`/category/${encodeURIComponent(viewId)}`);
+    }
+  };
+
   const [intro, setIntro] = useState(isSupabaseConfigured());
   const [followModal, setFollowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -158,7 +206,6 @@ function App() {
   const [articles, setArticles] = useState<Article[]>([]);
 
   // Active View State
-  const [activeView, setActiveView] = useState<string>('home');
   const [adminTab, setAdminTab] = useState<
     'dashboard' | 'products' | 'banners' | 'orders' | 'users' | 'support' | 'magazine' | 'analytics' | 'seo' | 'settings' | 'audit'
   >('dashboard');
@@ -180,6 +227,51 @@ function App() {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [checkoutModal, setCheckoutModal] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+
+  // Synchronize modal states with URL searchParams for robust Back button handling
+  useEffect(() => {
+    // Product Modal
+    const prodId = searchParams.get('product');
+    if (prodId) {
+      const p = products.find((item) => item.id === Number(prodId));
+      if (p) setSelectedProduct(p);
+    } else {
+      setSelectedProduct(null);
+    }
+
+    // Search Modal
+    setSearchOpen(searchParams.get('search') === 'true');
+
+    // Support Modal
+    setSupportOpen(searchParams.get('support') === 'true');
+
+    // Menu Drawer
+    setMenuOpen(searchParams.get('menu') === 'true');
+
+    // Order Details Modal
+    const orderId = searchParams.get('order');
+    if (orderId) {
+      const o = orders.find((item) => String(item.id) === orderId || item.orderNumber === orderId);
+      if (o) setSelectedOrderDetails(o);
+    } else {
+      setSelectedOrderDetails(null);
+    }
+
+    // Auth Modal
+    const authVal = searchParams.get('auth');
+    if (authVal === 'login' || authVal === 'register') {
+      setAuthModal((prev) => ({ ...prev, open: true, mode: authVal }));
+    } else {
+      setAuthModal((prev) => ({ ...prev, open: false }));
+    }
+
+    // Account Tab
+    const tabVal = searchParams.get('tab');
+    if (tabVal === 'profile' || tabVal === 'orders' || tabVal === 'fav' || tabVal === 'cart') {
+      setAccountTab(tabVal as any);
+    }
+  }, [searchParams, products, orders]);
+
 
   const loadCartAndWishlist = async (user: User | null) => {
     if (user) {
@@ -205,7 +297,7 @@ function App() {
 
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase!.auth.getSession();
         if (session?.user) {
           let profile = await db.getUserByAuthId(session.user.id);
           if (!profile && session.user.phone) {
@@ -223,7 +315,7 @@ function App() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         let profile = await db.getUserByAuthId(session.user.id);
         if (!profile && session.user.phone) {
@@ -416,30 +508,50 @@ function App() {
 
   const openProductModal = (product: Product | null) => {
     if (product) {
-      window.history.pushState({ view: activeView, modal: 'product', productId: product.id }, '', window.location.href);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('product', String(product.id));
+        return next;
+      });
+    } else {
+      closeModalParam('product');
     }
-    setSelectedProduct(product);
   };
 
   const openSearchModal = (open: boolean) => {
     if (open) {
-      window.history.pushState({ view: activeView, modal: 'search' }, '', window.location.href);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('search', 'true');
+        return next;
+      });
+    } else {
+      closeModalParam('search');
     }
-    setSearchOpen(open);
   };
 
   const openSupportModal = (open: boolean) => {
     if (open) {
-      window.history.pushState({ view: activeView, modal: 'support' }, '', window.location.href);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('support', 'true');
+        return next;
+      });
+    } else {
+      closeModalParam('support');
     }
-    setSupportOpen(open);
   };
 
   const openMenuDrawer = (open: boolean) => {
     if (open) {
-      window.history.pushState({ view: activeView, modal: 'menu' }, '', window.location.href);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('menu', 'true');
+        return next;
+      });
+    } else {
+      closeModalParam('menu');
     }
-    setMenuOpen(open);
   };
 
   const openCheckoutModalFunc = (open: boolean) => {
@@ -448,66 +560,29 @@ function App() {
         setAuthModal({
           open: true,
           mode: 'login',
-          pendingAction: () => navigateToView('checkout')
+          pendingAction: () => navigate('/checkout')
         });
         return;
       }
-      navigateToView('checkout');
+      navigate('/checkout');
     }
   };
 
   const openOrderDetailsModalFunc = (order: Order | null) => {
     if (order) {
-      window.history.pushState({ view: activeView, modal: 'orderDetails', orderId: order.id }, '', window.location.href);
-    }
-    setSelectedOrderDetails(order);
-  };
-
-  const navigateToView = (viewId: string, pushHistory = true) => {
-    setActiveView(viewId);
-    setMenuOpen(false);
-    setSelectedProduct(null);
-    setSearchOpen(false);
-    setCheckoutModal(false);
-    setSelectedOrderDetails(null);
-    setSupportOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    if (pushHistory) {
-      window.history.pushState({ view: viewId }, '', window.location.href);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('order', String(order.id));
+        return next;
+      });
+    } else {
+      closeModalParam('order');
     }
   };
 
-  const handleNavClick = (viewId: string) => {
-    navigateToView(viewId, true);
+  const navigateToView = (viewId: string) => {
+    handleNavClick(viewId);
   };
-
-  // Handle browser / mobile back button via popstate for storefront views
-  useEffect(() => {
-    const isAdminRoute = window.location.pathname.includes('/admin');
-    if (!isAdminRoute && (!window.history.state || !window.history.state.view)) {
-      window.history.replaceState({ view: 'home' }, '', window.location.href);
-    }
-
-    const handlePopState = (e: PopStateEvent) => {
-      if (window.location.pathname.includes('/admin')) {
-        return;
-      }
-      setSelectedProduct(null);
-      setSearchOpen(false);
-      setSupportOpen(false);
-      setMenuOpen(false);
-      setCheckoutModal(false);
-      setSelectedOrderDetails(null);
-
-      const targetView = e.state?.view || 'home';
-      setActiveView(targetView);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
   // Section collections dynamically sliced from real db based on badges and categories
   const productsNewest = useMemo(() => {
     const matched = products.filter((p) => p.badge === 'جدیدترین‌ها' || p.badge === 'جدید');
@@ -650,12 +725,12 @@ function App() {
                             mode: 'login',
                             pendingAction: () => {
                               setAccountTab('cart');
-                              setActiveView('account');
+                              handleNavClick('account');
                             }
                           });
                         } else {
                           setAccountTab('cart');
-                          setActiveView('account');
+                          handleNavClick('account');
                         }
                       }}
                     >
@@ -826,10 +901,10 @@ function App() {
           {supportOpen && (
             <SupportModal
               close={() => setSupportOpen(false)}
-              user={currentUser}
+              user={currentUser || undefined}
               openProfile={() => {
                 setAccountTab('profile');
-                setActiveView('account');
+                handleNavClick('account');
               }}
             />
           )}
@@ -908,7 +983,7 @@ function App() {
                 setCart([]);
                 setCheckoutModal(false);
                 setAccountTab('orders');
-                setActiveView('account');
+                handleNavClick('account');
               }}
             />
           )}
@@ -960,12 +1035,12 @@ function App() {
                     mode: 'login',
                     pendingAction: () => {
                       setAccountTab('profile');
-                      setActiveView('account');
+                      handleNavClick('account');
                     }
                   });
                 } else {
                   setAccountTab('profile');
-                  setActiveView('account');
+                  handleNavClick('account');
                 }
               }}
               aria-label="حساب کاربری"
@@ -1664,43 +1739,45 @@ function ProductCard({ product, open }: { product: Product; open: (p: Product) =
 }
 
 function CategoryPageView({ categoryName, products, openProduct, backToHome }: any) {
-  const getInitialFilters = () => {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      minPrice: params.get('minPrice') ? Number(params.get('minPrice')) : undefined,
-      maxPrice: params.get('maxPrice') ? Number(params.get('maxPrice')) : undefined,
-      inStockOnly: params.get('inStock') === 'true',
-      sort: params.get('sort') || 'newest',
-      colors: params.get('colors') ? params.get('colors')!.split(',') : [],
-      badges: params.get('badges') ? params.get('badges')!.split(',') : [],
-    };
-  };
-
-  const [filters, setFilters] = useState(getInitialFilters);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Sync state with URL without full-page reloads
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (filters.minPrice !== undefined) params.set('minPrice', filters.minPrice.toString());
-    if (filters.maxPrice !== undefined) params.set('maxPrice', filters.maxPrice.toString());
-    if (filters.inStockOnly) params.set('inStock', 'true');
-    if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort);
-    if (filters.colors.length > 0) params.set('colors', filters.colors.join(','));
-    if (filters.badges.length > 0) params.set('badges', filters.badges.join(','));
-
-    const queryStr = params.toString();
-    const newUrl = queryStr ? `${window.location.pathname}?${queryStr}` : window.location.pathname;
-    window.history.replaceState(null, '', newUrl);
-  }, [filters]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      setFilters(getInitialFilters());
+  const filters = useMemo(() => {
+    return {
+      minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined,
+      maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined,
+      inStockOnly: searchParams.get('inStock') === 'true',
+      sort: searchParams.get('sort') || 'newest',
+      colors: searchParams.get('colors') ? searchParams.get('colors')!.split(',') : [],
+      badges: searchParams.get('badges') ? searchParams.get('badges')!.split(',') : [],
     };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [searchParams]);
+
+  const updateFilters = (updater: ((prev: typeof filters) => typeof filters) | typeof filters) => {
+    const updated = typeof updater === 'function' ? updater(filters) : updater;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (updated.minPrice !== undefined) next.set('minPrice', updated.minPrice.toString());
+      else next.delete('minPrice');
+
+      if (updated.maxPrice !== undefined) next.set('maxPrice', updated.maxPrice.toString());
+      else next.delete('maxPrice');
+
+      if (updated.inStockOnly) next.set('inStock', 'true');
+      else next.delete('inStock');
+
+      if (updated.sort && updated.sort !== 'newest') next.set('sort', updated.sort);
+      else next.delete('sort');
+
+      if (updated.colors.length > 0) next.set('colors', updated.colors.join(','));
+      else next.delete('colors');
+
+      if (updated.badges.length > 0) next.set('badges', updated.badges.join(','));
+      else next.delete('badges');
+
+      return next;
+    }, { replace: true });
+  };
 
   const categoryPrices = products.map((p: Product) => p.price);
   const minCategoryPrice = categoryPrices.length ? Math.min(...categoryPrices) : 0;
@@ -1744,7 +1821,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
   }, [products, filters]);
 
   const clearAllFilters = () => {
-    setFilters({
+    updateFilters({
       minPrice: undefined,
       maxPrice: undefined,
       inStockOnly: false,
@@ -1763,7 +1840,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
     filters.sort !== 'newest';
 
   const toggleColor = (col: string) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       colors: prev.colors.includes(col)
         ? prev.colors.filter(c => c !== col)
@@ -1772,7 +1849,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
   };
 
   const toggleBadge = (badge: string) => {
-    setFilters(prev => ({
+    updateFilters(prev => ({
       ...prev,
       badges: prev.badges.includes(badge)
         ? prev.badges.filter(b => b !== badge)
@@ -1794,7 +1871,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               type="number"
               placeholder={minCategoryPrice ? money(minCategoryPrice) : '۰'}
               value={filters.minPrice ?? ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, minPrice: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => updateFilters(prev => ({ ...prev, minPrice: e.target.value ? Number(e.target.value) : undefined }))}
               className="w-full p-2 rounded-xl border bg-[#fffaf0] font-bold text-xs"
             />
           </div>
@@ -1804,7 +1881,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
               type="number"
               placeholder={maxCategoryPrice ? money(maxCategoryPrice) : '۱,۰۰۰,۰۰۰'}
               value={filters.maxPrice ?? ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={(e) => updateFilters(prev => ({ ...prev, maxPrice: e.target.value ? Number(e.target.value) : undefined }))}
               className="w-full p-2 rounded-xl border bg-[#fffaf0] font-bold text-xs"
             />
           </div>
@@ -1823,7 +1900,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
           <input
             type="checkbox"
             checked={filters.inStockOnly}
-            onChange={(e) => setFilters(prev => ({ ...prev, inStockOnly: e.target.checked }))}
+            onChange={(e) => updateFilters(prev => ({ ...prev, inStockOnly: e.target.checked }))}
             className="size-4 rounded accent-[#37192C]"
           />
           <span>فقط کالاهای موجود</span>
@@ -1919,7 +1996,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
           <span className="text-xs font-bold text-[#8b627e]">مرتب‌سازی:</span>
           <select
             value={filters.sort}
-            onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+            onChange={(e) => updateFilters(prev => ({ ...prev, sort: e.target.value }))}
             className="p-2 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] font-bold text-xs text-[#37192C] outline-none cursor-pointer"
           >
             <option value="newest">جدیدترین</option>
@@ -1936,19 +2013,19 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
             {filters.minPrice !== undefined && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 از {money(filters.minPrice)} تومان
-                <button onClick={() => setFilters(prev => ({ ...prev, minPrice: undefined }))}><X size={12} /></button>
+                <button onClick={() => updateFilters(prev => ({ ...prev, minPrice: undefined }))}><X size={12} /></button>
               </span>
             )}
             {filters.maxPrice !== undefined && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 تا {money(filters.maxPrice)} تومان
-                <button onClick={() => setFilters(prev => ({ ...prev, maxPrice: undefined }))}><X size={12} /></button>
+                <button onClick={() => updateFilters(prev => ({ ...prev, maxPrice: undefined }))}><X size={12} /></button>
               </span>
             )}
             {filters.inStockOnly && (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFF3C5] text-[#37192C] text-xs font-bold">
                 موجود
-                <button onClick={() => setFilters(prev => ({ ...prev, inStockOnly: false }))}><X size={12} /></button>
+                <button onClick={() => updateFilters(prev => ({ ...prev, inStockOnly: false }))}><X size={12} /></button>
               </span>
             )}
             {filters.colors.map(c => (
