@@ -25,6 +25,15 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       newUser: true,
       newTicket: true,
       securityAlert: true
+    },
+    cardToCardSettings: {
+      cardNumber: '۶۰۳۷۹۹۷۵۱۲۳۴۵۶۷۸',
+      cardholderName: 'فروشگاه آورا وایب'
+    },
+    paymentGatewaySettings: {
+      providerName: 'درگاه پرداخت آنلاین',
+      gatewayUrl: '',
+      active: false
     }
   });
   const [categories, setCategories] = useState<CategoryItem[]>([]);

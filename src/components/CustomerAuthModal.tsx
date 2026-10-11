@@ -165,7 +165,7 @@ export function OTPInput({
       {Array.from({ length }).map((_, idx) => (
         <input
           key={idx}
-          ref={(el) => (inputRefs.current[idx] = el)}
+          ref={(el) => { inputRefs.current[idx] = el; }}
           type="text"
           inputMode="numeric"
           maxLength={1}
