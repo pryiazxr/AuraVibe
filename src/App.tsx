@@ -104,39 +104,6 @@ import { AuditLogsView } from './components/admin/AuditLogsView';
 
 const money = (value: number) => new Intl.NumberFormat('fa-IR').format(value);
 
-const GUEST_CART_KEY = 'auravibe_guest_cart';
-const GUEST_WISHLIST_KEY = 'auravibe_guest_wishlist';
-
-function getGuestCart(): CartItem[] {
-  try {
-    const raw = localStorage.getItem(GUEST_CART_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveGuestCart(items: CartItem[]) {
-  try {
-    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
-  } catch {}
-}
-
-function getGuestWishlist(): Product[] {
-  try {
-    const raw = localStorage.getItem(GUEST_WISHLIST_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveGuestWishlist(items: Product[]) {
-  try {
-    localStorage.setItem(GUEST_WISHLIST_KEY, JSON.stringify(items));
-  } catch {}
-}
-
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -189,8 +156,8 @@ function App() {
   const [intro, setIntro] = useState(isSupabaseConfigured());
   const [followModal, setFollowModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [cart, setCart] = useState<CartItem[]>(getGuestCart());
-  const [wishlist, setWishlist] = useState<Product[]>(getGuestWishlist());
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [wishlist, setWishlist] = useState<Product[]>([]);
   const [bannerIndex, setBannerIndex] = useState(0);
   const [supportOpen, setSupportOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -289,8 +256,8 @@ function App() {
         console.error('[AuraVibe Cart/Wishlist] Error loading from DB:', err);
       }
     } else {
-      setCart(getGuestCart());
-      setWishlist(getGuestWishlist());
+      setCart([]);
+      setWishlist([]);
     }
   };
 
@@ -330,8 +297,8 @@ function App() {
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
-        setCart(getGuestCart());
-        setWishlist(getGuestWishlist());
+        setCart([]);
+        setWishlist([]);
       }
     });
 
@@ -424,79 +391,78 @@ function App() {
   );
 
   const addToCart = async (product: Product, quantity = 1, color?: string) => {
-    if (currentUser) {
-      const updated = await db.addToCart(currentUser.id, product.id, quantity, color);
-      setCart(updated);
-    } else {
-      const currentGuestCart = getGuestCart();
-      const existingIdx = currentGuestCart.findIndex(
-        (item) => item.productId === product.id && (color ? item.color === color : !item.color)
-      );
-      let updatedGuestCart: CartItem[];
-      if (existingIdx >= 0) {
-        updatedGuestCart = currentGuestCart.map((item, idx) =>
-          idx === existingIdx ? { ...item, quantity: item.quantity + quantity } : item
-        );
-      } else {
-        updatedGuestCart = [
-          ...currentGuestCart,
-          { productId: product.id, product, quantity, color }
-        ];
-      }
-      saveGuestCart(updatedGuestCart);
-      setCart(updatedGuestCart);
+    if (!currentUser) {
+      setSelectedProduct(null);
+      setAuthModal({
+        open: true,
+        mode: 'login',
+        pendingAction: async () => {
+          const sessionRes = await supabase?.auth.getSession();
+          const sessionUser = sessionRes?.data?.session?.user;
+          if (sessionUser) {
+            let userProfile = await db.getUserByAuthId(sessionUser.id);
+            if (!userProfile && sessionUser.phone) {
+              userProfile = await db.getUserByPhone(sessionUser.phone);
+            }
+            if (userProfile) {
+              const updatedCart = await db.addToCart(userProfile.id, product.id, quantity, color);
+              setCart(updatedCart);
+            }
+          }
+        }
+      });
+      return;
     }
+
+    const updated = await db.addToCart(currentUser.id, product.id, quantity, color);
+    setCart(updated);
     setSelectedProduct(null);
   };
 
+  const handleAddToCartGated = (product: Product, quantity = 1, color?: string) => {
+    addToCart(product, quantity, color);
+  };
+
   const updateCartQuantity = async (productId: number, quantity: number, color?: string) => {
-    if (currentUser) {
-      const updated = await db.updateCartItemQuantity(currentUser.id, productId, quantity, color);
-      setCart(updated);
-    } else {
-      if (quantity <= 0) {
-        await removeFromCart(productId, color);
-        return;
-      }
-      const currentGuestCart = getGuestCart();
-      const updatedGuestCart = currentGuestCart.map((item) =>
-        item.productId === productId && (color ? item.color === color : !item.color)
-          ? { ...item, quantity }
-          : item
-      );
-      saveGuestCart(updatedGuestCart);
-      setCart(updatedGuestCart);
-    }
+    if (!currentUser) return;
+    const updated = await db.updateCartItemQuantity(currentUser.id, productId, quantity, color);
+    setCart(updated);
   };
 
   const removeFromCart = async (productId: number, color?: string) => {
-    if (currentUser) {
-      const updated = await db.removeFromCart(currentUser.id, productId, color);
-      setCart(updated);
-    } else {
-      const currentGuestCart = getGuestCart();
-      const updatedGuestCart = currentGuestCart.filter(
-        (item) => !(item.productId === productId && (color ? item.color === color : !item.color))
-      );
-      saveGuestCart(updatedGuestCart);
-      setCart(updatedGuestCart);
-    }
+    if (!currentUser) return;
+    const updated = await db.removeFromCart(currentUser.id, productId, color);
+    setCart(updated);
   };
 
   const toggleWishlist = async (product: Product) => {
-    if (currentUser) {
-      await db.toggleWishlist(currentUser.id, product.id);
-      const updatedWishlist = await db.getUserWishlist(currentUser.id);
-      setWishlist(updatedWishlist);
-    } else {
-      const currentGuestWish = getGuestWishlist();
-      const exists = currentGuestWish.some((item) => item.id === product.id);
-      const updatedGuestWish = exists
-        ? currentGuestWish.filter((item) => item.id !== product.id)
-        : [...currentGuestWish, product];
-      saveGuestWishlist(updatedGuestWish);
-      setWishlist(updatedGuestWish);
+    if (!currentUser) {
+      setSelectedProduct(null);
+      setAuthModal({
+        open: true,
+        mode: 'login',
+        pendingAction: async () => {
+          const sessionRes = await supabase?.auth.getSession();
+          const sessionUser = sessionRes?.data?.session?.user;
+          if (sessionUser) {
+            let userProfile = await db.getUserByAuthId(sessionUser.id);
+            if (!userProfile && sessionUser.phone) {
+              userProfile = await db.getUserByPhone(sessionUser.phone);
+            }
+            if (userProfile) {
+              await db.toggleWishlist(userProfile.id, product.id);
+              const updatedWishlist = await db.getUserWishlist(userProfile.id);
+              setWishlist(updatedWishlist);
+            }
+          }
+        }
+      });
+      return;
     }
+
+    await db.toggleWishlist(currentUser.id, product.id);
+    const updatedWishlist = await db.getUserWishlist(currentUser.id);
+    setWishlist(updatedWishlist);
   };
 
   const menuSections = [
@@ -755,7 +721,6 @@ function App() {
                 if (currentUser) {
                   await db.clearCart(currentUser.id);
                 }
-                localStorage.removeItem(GUEST_CART_KEY);
                 setCart([]);
                 const refreshedOrders = await db.getOrders();
                 setOrders(refreshedOrders);
@@ -910,7 +875,7 @@ function App() {
               product={selectedProduct}
               user={currentUser}
               close={() => setSelectedProduct(null)}
-              add={addToCart}
+              add={handleAddToCartGated}
               toggleWish={toggleWishlist}
               isWished={wishlist.some((w) => w.id === selectedProduct.id)}
               allProducts={products}
@@ -975,7 +940,6 @@ function App() {
                 if (currentUser) {
                   await db.clearCart(currentUser.id);
                 }
-                localStorage.removeItem(GUEST_CART_KEY);
                 setCart([]);
                 setCheckoutModal(false);
                 setAccountTab('orders');
@@ -988,23 +952,14 @@ function App() {
             <CustomerAuthModal
               open={authModal.open}
               initialMode={authModal.mode}
-              close={() => setAuthModal({ ...authModal, open: false })}
+              close={() => setAuthModal({ open: false, mode: 'login' })}
               onSuccess={async (loggedUser) => {
-                const gCart = getGuestCart();
-                const gWish = getGuestWishlist();
-                if (gCart.length > 0 || gWish.length > 0) {
-                  const merged = await db.mergeGuestCartAndWishlist(loggedUser.id, gCart, gWish);
-                  localStorage.removeItem(GUEST_CART_KEY);
-                  localStorage.removeItem(GUEST_WISHLIST_KEY);
-                  setCart(merged.cart);
-                  setWishlist(merged.wishlist);
-                } else {
-                  await loadCartAndWishlist(loggedUser);
-                }
                 setCurrentUser(loggedUser);
-                setAuthModal({ ...authModal, open: false });
-                if (authModal.pendingAction) {
-                  authModal.pendingAction();
+                await loadCartAndWishlist(loggedUser);
+                const pending = authModal.pendingAction;
+                setAuthModal({ open: false, mode: 'login' });
+                if (pending) {
+                  await pending();
                 }
               }}
             />

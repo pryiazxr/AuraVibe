@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Phone, ShieldCheck, ChevronDown } from 'lucide-react';
+import { X, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react';
 import { db, supabase, isSupabaseConfigured, User as CustomerUser } from '../services/db';
 import { IRAN_PROVINCES_AND_CITIES } from '../data';
 
-// --- PHONE INPUT COMPONENT ---
+// --- PHONE INPUT COMPONENT (10 Direct Digit Boxes LTR) ---
 export function PhoneInput({
   value,
   onChange,
@@ -13,10 +13,11 @@ export function PhoneInput({
   onChange: (normalizedTenDigits: string) => void;
   disabled?: boolean;
 }) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(10, '').slice(0, 10).split('');
 
-  const handleRawChange = (rawInput: string) => {
-    let clean = rawInput
+  const normalizeRawText = (raw: string): string => {
+    let clean = raw
       .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
       .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
       .replace(/\D/g, '');
@@ -27,63 +28,104 @@ export function PhoneInput({
     if (clean.startsWith('0')) {
       clean = clean.slice(1);
     }
+    return clean.slice(0, 10);
+  };
 
-    clean = clean.slice(0, 10);
-    onChange(clean);
+  const handleDigitChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
+    let char = e.target.value
+      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
+      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
+      .replace(/\D/g, '');
+
+    if (char.length > 1) {
+      char = char.slice(-1);
+    }
+
+    const newDigits = [...digits];
+    newDigits[idx] = char;
+    const newTenDigits = newDigits.join('').replace(/\s/g, '').slice(0, 10);
+    onChange(newTenDigits);
+
+    if (char && idx < 9) {
+      inputRefs.current[idx + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    if (e.key === 'Backspace') {
+      if (!digits[idx] || digits[idx].trim() === '') {
+        if (idx > 0) {
+          inputRefs.current[idx - 1]?.focus();
+          const newDigits = [...digits];
+          newDigits[idx - 1] = '';
+          onChange(newDigits.join('').replace(/\s/g, ''));
+        }
+      } else {
+        const newDigits = [...digits];
+        newDigits[idx] = '';
+        onChange(newDigits.join('').replace(/\s/g, ''));
+      }
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedRaw = e.clipboardData.getData('text');
+    const cleanDigits = normalizeRawText(pastedRaw);
+
+    if (cleanDigits) {
+      onChange(cleanDigits);
+      const focusIdx = Math.min(cleanDigits.length, 9);
+      inputRefs.current[focusIdx]?.focus();
+    }
   };
 
   return (
-    <div className="space-y-2.5">
-      {/* Visual Box Grid +98 | □ □ □ □ □ □ □ □ □ □ (Responsive Grid) */}
-      <div className="p-2.5 sm:p-3 bg-[#fffaf0] rounded-2xl border-2 border-[#37192c]/20 focus-within:border-[#37192C] transition shadow-xs space-y-2" dir="ltr">
+    <div className="space-y-3">
+      {/* Container with +98 prefix and 10 digit boxes */}
+      <div className="p-3 bg-[#fffaf0] rounded-2xl border border-[#37192c]/15 space-y-2.5" dir="ltr">
         <div className="flex items-center justify-between text-xs font-bold text-[#37192C]">
-          <div className="flex items-center gap-1.5 font-mono font-black text-xs sm:text-sm">
+          <div className="flex items-center gap-2 font-mono text-xs sm:text-sm">
             <span className="text-emerald-700">🇮🇷</span>
-            <span>+98</span>
-            <span className="text-[#37192C]/30">|</span>
-            <span className="text-[11px] text-[#8b627e] font-sans font-semibold">شماره همراه ۱۰ رقمی</span>
+            <span className="font-black text-[#37192C]">+98</span>
+            <span className="text-[#37192C]/20">|</span>
+            <span className="text-[11px] text-[#8b627e] font-sans font-medium">شماره همراه ۱۰ رقمی</span>
           </div>
-          <span className="text-[10px] font-mono text-[#37192C]/60">ایران</span>
+          <span className="text-[10px] text-[#8b627e] font-medium font-sans">ایران</span>
         </div>
 
-        {/* 10 Digit Grid Slot Container */}
+        {/* 10 Distinct Input Boxes */}
         <div className="grid grid-cols-10 gap-1 sm:gap-1.5 w-full">
           {Array.from({ length: 10 }).map((_, idx) => {
-            const hasDigit = digits[idx] && digits[idx].trim() !== '';
+            const hasDigit = Boolean(digits[idx] && digits[idx].trim() !== '');
             return (
-              <div
+              <input
                 key={idx}
-                className={`aspect-square w-full rounded-lg sm:rounded-xl border flex items-center justify-center font-mono font-black text-xs sm:text-sm transition ${
+                ref={(el) => { inputRefs.current[idx] = el; }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                disabled={disabled}
+                value={hasDigit ? digits[idx] : ''}
+                onChange={(e) => handleDigitChange(e, idx)}
+                onKeyDown={(e) => handleKeyDown(e, idx)}
+                onPaste={handlePaste}
+                placeholder="•"
+                className={`aspect-square w-full rounded-xl border text-center font-mono font-black text-xs sm:text-base outline-none transition disabled:opacity-50 ${
                   hasDigit
-                    ? 'border-[#37192C] bg-[#37192C] text-[#FFF3C5] shadow-xs'
-                    : 'border-[#37192c]/20 bg-white/80 text-[#37192C]/30'
+                    ? 'border-[#37192C] bg-[#37192C] text-[#FFF3C5]'
+                    : 'border-[#37192c]/20 bg-white text-[#37192C] focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/15'
                 }`}
-              >
-                {hasDigit ? digits[idx] : '□'}
-              </div>
+              />
             );
           })}
         </div>
-      </div>
-
-      {/* Primary Input Element */}
-      <div className="relative">
-        <input
-          type="tel"
-          inputMode="numeric"
-          disabled={disabled}
-          value={value ? '0' + value : ''}
-          onChange={(e) => handleRawChange(e.target.value)}
-          placeholder="ورود شماره همراه (مثال: ۰۹۱۲۳۴۵۶۷۸۹)"
-          className="w-full text-center font-mono font-black text-sm p-3 rounded-2xl border border-[#37192c]/20 bg-white text-[#37192C] outline-none focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/20 transition disabled:opacity-50"
-          dir="ltr"
-        />
       </div>
     </div>
   );
 }
 
-// --- OTP INPUT COMPONENT ---
+// --- OTP INPUT COMPONENT (6 Distinct Digit Boxes LTR) ---
 export function OTPInput({
   length = 6,
   value,
@@ -162,23 +204,29 @@ export function OTPInput({
 
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-3" dir="ltr">
-      {Array.from({ length }).map((_, idx) => (
-        <input
-          key={idx}
-          ref={(el) => { inputRefs.current[idx] = el; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={digits[idx] && digits[idx].trim() !== '' ? digits[idx] : ''}
-          onChange={(e) => handleChange(e, idx)}
-          onKeyDown={(e) => handleKeyDown(e, idx)}
-          onPaste={handlePaste}
-          disabled={disabled}
-          className={`size-11 sm:size-12 rounded-2xl border-2 text-center font-mono text-lg font-black bg-white text-[#37192C] shadow-xs outline-none focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/20 border-[#37192c]/20 transition ${
-            digits[idx] && digits[idx].trim() !== '' ? 'border-[#37192C] bg-[#FFF3C5]/40' : ''
-          }`}
-        />
-      ))}
+      {Array.from({ length }).map((_, idx) => {
+        const hasDigit = Boolean(digits[idx] && digits[idx].trim() !== '');
+        return (
+          <input
+            key={idx}
+            ref={(el) => { inputRefs.current[idx] = el; }}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={hasDigit ? digits[idx] : ''}
+            onChange={(e) => handleChange(e, idx)}
+            onKeyDown={(e) => handleKeyDown(e, idx)}
+            onPaste={handlePaste}
+            disabled={disabled}
+            placeholder="•"
+            className={`size-11 sm:size-12 rounded-xl border text-center font-mono text-base sm:text-lg font-black bg-white text-[#37192C] outline-none transition disabled:opacity-50 ${
+              hasDigit
+                ? 'border-[#37192C] bg-[#FFF3C5]/50 ring-1 ring-[#37192C]'
+                : 'border-[#37192c]/20 focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/15'
+            }`}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -243,11 +291,11 @@ export function CustomerAuthModal({
 
   const canonicalPhone = `+98${phoneTenDigits}`;
 
-  // Request SMS OTP
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Request SMS Verification Code
+  const handleRequestOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (phoneTenDigits.length !== 10 || !phoneTenDigits.startsWith('9')) {
-      setErrorMessage('لطفاً شماره موبایل ۱۰ رقمی معتبر ایران (مثال: ۰۹۱۲۳۴۵۶۷۸۹) را وارد کنید.');
+      setErrorMessage('لطفاً شماره همراه ۱۰ رقمی معتبر ایران (مثال: ۰۹۱۲۳۴۵۶۷۸۹) را وارد نمایید.');
       return;
     }
 
@@ -270,7 +318,7 @@ export function CustomerAuthModal({
             error.status === 500
           ) {
             setErrorMessage(
-              `خطا در اتصال به سرویس پیامک: ${error.message} (سرویس ارسال SMS در تنظیمات Supabase این محیط فعال نگردیده است).`
+              `خطا در اتصال به سرویس پیامک: ${error.message} (سرویس ارسال پیامک در تنظیمات این محیط فعال نشده است).`
             );
             setLoading(false);
             return;
@@ -281,7 +329,7 @@ export function CustomerAuthModal({
           }
         }
       } else {
-        setErrorMessage('ارتباط با سرور احراز هویت Supabase برقرار نیست.');
+        setErrorMessage('ارتباط با سرویس احراز هویت برقرار نیست.');
         setLoading(false);
         return;
       }
@@ -296,7 +344,7 @@ export function CustomerAuthModal({
     }
   };
 
-  // Verify OTP
+  // Verify Code
   const handleVerifyOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (otpCode.length !== 6) {
@@ -406,31 +454,32 @@ export function CustomerAuthModal({
   return (
     <div className="modal-backdrop p-3" onClick={close}>
       <div
-        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl relative space-y-6 text-right max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-xl relative space-y-5 text-right max-h-[90vh] overflow-y-auto border border-[#37192c]/10"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >
         {/* Close Button */}
         <button
           onClick={close}
-          className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] hover:bg-[#ffe79a] transition"
+          className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C] hover:bg-[#ffe79a] transition"
+          aria-label="بستن"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
 
         {/* Modal Header Title */}
         <div className="text-center space-y-1">
           <div className="brand-font text-2xl font-black text-[#37192C]">AuraVibe</div>
-          <h2 className="text-lg font-black text-[#37192C]">
+          <h2 className="text-base font-black text-[#37192C]">
             {step === 'profile'
               ? 'تکمیل حساب کاربری'
               : mode === 'register'
               ? 'ثبت‌نام حساب جدید'
               : 'ورود به حساب کاربری'}
           </h2>
-          <p className="text-xs text-[#8b627e] font-bold">
+          <p className="text-xs text-[#8b627e] font-medium">
             {step === 'phone'
-              ? 'شماره همراه خود را جهت دریافت کد تایید ورود/ثبت‌نام وارد نمایید'
+              ? 'شماره همراه خود را برای دریافت کد تایید وارد کنید'
               : step === 'otp'
               ? `کد ۶ رقمی ارسال‌شده به شماره ${canonicalPhone} را وارد کنید`
               : 'برای ارائه بهترین خدمت، اطلاعات حساب خود را تکمیل نمایید'}
@@ -439,14 +488,14 @@ export function CustomerAuthModal({
 
         {/* Mode Selector Tabs (only in phone step) */}
         {step === 'phone' && (
-          <div className="flex rounded-2xl bg-[#fffaf0] p-1 border border-[#37192c]/10 text-xs font-bold">
+          <div className="flex rounded-xl bg-[#fffaf0] p-1 border border-[#37192c]/10 text-xs font-bold">
             <button
               onClick={() => {
                 setMode('login');
                 setErrorMessage(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl transition ${
-                mode === 'login' ? 'bg-[#37192C] text-[#FFF3C5] shadow-xs font-black' : 'text-[#37192C]/70 hover:text-[#37192C]'
+              className={`flex-1 py-2 rounded-lg transition ${
+                mode === 'login' ? 'bg-[#37192C] text-[#FFF3C5] font-black' : 'text-[#37192C]/70 hover:text-[#37192C]'
               }`}
             >
               ورود با شماره موبایل
@@ -456,8 +505,8 @@ export function CustomerAuthModal({
                 setMode('register');
                 setErrorMessage(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl transition ${
-                mode === 'register' ? 'bg-[#37192C] text-[#FFF3C5] shadow-xs font-black' : 'text-[#37192C]/70 hover:text-[#37192C]'
+              className={`flex-1 py-2 rounded-lg transition ${
+                mode === 'register' ? 'bg-[#37192C] text-[#FFF3C5] font-black' : 'text-[#37192C]/70 hover:text-[#37192C]'
               }`}
             >
               ثبت‌نام کاربر جدید
@@ -467,15 +516,15 @@ export function CustomerAuthModal({
 
         {/* Error Alert Box */}
         {errorMessage && (
-          <div className="rounded-2xl bg-rose-50 border border-rose-200 p-3.5 text-xs font-bold text-rose-700 flex items-start gap-2 leading-6">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs font-medium text-rose-700 flex items-start gap-2 leading-5">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {/* STEP 1: Phone Input Step */}
         {step === 'phone' && (
-          <form onSubmit={handleRequestOtp} className="space-y-5">
+          <form onSubmit={handleRequestOtp} className="space-y-4">
             <PhoneInput
               value={phoneTenDigits}
               onChange={(val) => {
@@ -488,17 +537,17 @@ export function CustomerAuthModal({
             <button
               type="submit"
               disabled={loading || phoneTenDigits.length !== 10}
-              className="w-full py-4 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs sm:text-sm hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>در حال دریافت کد...</span>
+                  <span>در حال ارسال...</span>
                 </>
               ) : (
                 <>
-                  <ShieldCheck size={18} />
-                  <span>دریافت کد تایید OTP</span>
+                  <ShieldCheck size={16} />
+                  <span>دریافت کد تأیید</span>
                 </>
               )}
             </button>
@@ -507,7 +556,7 @@ export function CustomerAuthModal({
 
         {/* STEP 2: OTP Verification Step */}
         {step === 'otp' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <OTPInput
               length={6}
               value={otpCode}
@@ -520,7 +569,7 @@ export function CustomerAuthModal({
             />
 
             {/* Resend Timer & Actions */}
-            <div className="flex items-center justify-between text-xs font-bold pt-1">
+            <div className="flex items-center justify-between text-xs font-medium pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -534,17 +583,17 @@ export function CustomerAuthModal({
               </button>
 
               {resendTimer > 0 ? (
-                <span className="text-[#37192C]/70 font-mono">
+                <span className="text-[#37192C]/70 font-mono text-[11px]">
                   ارسال مجدد کد ({resendTimer} ثانیه)
                 </span>
               ) : (
                 <button
                   type="button"
-                  onClick={handleRequestOtp}
+                  onClick={() => handleRequestOtp()}
                   disabled={loading}
-                  className="text-[#37192C] font-black underline flex items-center gap-1 hover:text-[#8b627e]"
+                  className="text-[#37192C] font-bold underline flex items-center gap-1 hover:text-[#8b627e]"
                 >
-                  <RefreshCw size={14} /> ارسال مجدد کد OTP
+                  <RefreshCw size={12} /> ارسال مجدد کد تأیید
                 </button>
               )}
             </div>
@@ -553,16 +602,16 @@ export function CustomerAuthModal({
               type="button"
               onClick={() => handleVerifyOtp()}
               disabled={loading || otpCode.length !== 6}
-              className="w-full py-4 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs sm:text-sm hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>در حال تایید کد...</span>
+                  <span>در حال تایید...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={16} />
                   <span>تایید و ادامه</span>
                 </>
               )}
@@ -572,7 +621,7 @@ export function CustomerAuthModal({
 
         {/* STEP 3: Profile Completion Step */}
         {step === 'profile' && (
-          <form onSubmit={handleSaveProfile} className="space-y-4 text-xs font-bold">
+          <form onSubmit={handleSaveProfile} className="space-y-3.5 text-xs font-bold">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[#37192C] mb-1">نام *</label>
@@ -582,7 +631,7 @@ export function CustomerAuthModal({
                   value={profileForm.firstName}
                   onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
                   placeholder="مثال: سارا"
-                  className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
+                  className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
                 />
               </div>
               <div>
@@ -593,7 +642,7 @@ export function CustomerAuthModal({
                   value={profileForm.lastName}
                   onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
                   placeholder="مثال: محمدی"
-                  className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
+                  className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
                 />
               </div>
             </div>
@@ -605,7 +654,7 @@ export function CustomerAuthModal({
                   type="text"
                   disabled
                   value={canonicalPhone}
-                  className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-gray-100 text-gray-600 font-mono text-center cursor-not-allowed"
+                  className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-gray-100 text-gray-600 font-mono text-center cursor-not-allowed"
                   dir="ltr"
                 />
               </div>
@@ -616,7 +665,7 @@ export function CustomerAuthModal({
                   value={profileForm.email}
                   onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                   placeholder="sara@example.com"
-                  className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
+                  className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C]"
                   dir="ltr"
                 />
               </div>
@@ -629,7 +678,7 @@ export function CustomerAuthModal({
                 <label className="block text-[#37192C] mb-1">استان *</label>
                 <div
                   onClick={() => setProvinceDropdownOpen(!provinceDropdownOpen)}
-                  className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] cursor-pointer flex justify-between items-center"
+                  className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] cursor-pointer flex justify-between items-center"
                 >
                   <span>{profileForm.province || 'انتخاب استان...'}</span>
                   <ChevronDown size={16} />
@@ -667,7 +716,7 @@ export function CustomerAuthModal({
                   onClick={() => {
                     if (profileForm.province) setCityDropdownOpen(!cityDropdownOpen);
                   }}
-                  className={`w-full p-3 rounded-xl border border-[#37192c]/20 flex justify-between items-center ${
+                  className={`w-full p-2.5 rounded-xl border border-[#37192c]/20 flex justify-between items-center ${
                     profileForm.province ? 'bg-[#fffaf0] cursor-pointer' : 'bg-gray-100 cursor-not-allowed opacity-60'
                   }`}
                 >
@@ -709,7 +758,7 @@ export function CustomerAuthModal({
                 value={profileForm.address}
                 onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
                 placeholder="خیابان، کوچه، پلاک، واحد..."
-                className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C] h-20"
+                className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C] h-18"
               />
             </div>
 
@@ -722,7 +771,7 @@ export function CustomerAuthModal({
                 value={profileForm.postalCode}
                 onChange={(e) => setProfileForm({ ...profileForm, postalCode: e.target.value })}
                 placeholder="۱۹۸۷۶۵۴۳۲۱"
-                className="w-full p-3 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C] font-mono text-center"
+                className="w-full p-2.5 rounded-xl border border-[#37192c]/20 bg-[#fffaf0] outline-none focus:border-[#37192C] font-mono text-center"
                 dir="ltr"
               />
             </div>
@@ -730,16 +779,16 @@ export function CustomerAuthModal({
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2 pt-3"
+              className="w-full py-3.5 rounded-full bg-[#37192C] text-[#FFF3C5] font-bold text-xs sm:text-sm hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2 pt-2"
             >
               {loading ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>در حال ذخیره اطلاعات...</span>
+                  <span>در حال ذخیره...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={16} />
                   <span>تکمیل و ورود به حساب</span>
                 </>
               )}
