@@ -24,11 +24,11 @@ a { text-decoration: none; color: inherit; }
 .product-row { gap: .9rem; }
 .product-card { width: 155px; flex: 0 0 155px; }
 .product-card:focus-visible, .icon-button:focus-visible { outline: 3px solid #8b627e; outline-offset: 3px; }
-.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; overflow-y: auto; background: rgba(36,13,29,.6); backdrop-filter: blur(5px); animation: fade .25s ease both; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(36,13,29,.6); backdrop-filter: blur(5px); animation: fade .25s ease both; padding: 0.75rem; }
 .follow-modal { position: relative; width: calc(100% - 2rem); max-width: 410px; padding: 2.2rem 1.8rem 1.7rem; border-radius: 2rem; background: #fffaf0; text-align: center; box-shadow: 0 25px 70px rgba(31,10,24,.26); animation: rise .35s ease both; }
 .social-icon { display: grid; place-items: center; width: 3.2rem; height: 3.2rem; border-radius: 999px; color: #FFF3C5; background: #37192C; transition: transform .2s, background .2s; }
 .social-icon:hover { transform: translateY(-3px); background: #8b627e; }
-.product-modal { position: relative; width: min(920px,100%); overflow: hidden; border-radius: 2rem; background: #fffaf0; box-shadow: 0 25px 70px rgba(31,10,24,.28); animation: rise .3s ease both; }
+.product-modal { position: relative; width: min(920px,100%); max-height: calc(100dvh - 1.5rem); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 2rem; background: #fffaf0; box-shadow: 0 25px 70px rgba(31,10,24,.28); animation: rise .3s ease both; }
 .journal-card { overflow: hidden; border: 1px solid rgba(55,25,44,.1); border-radius: 2rem; background: #fffdf7; }
 .journal-image { width: 100%; height: 240px; object-fit: cover; }
 .support-button { position: fixed; z-index: 35; bottom: calc(4.9rem + env(safe-area-inset-bottom)); left: 1.25rem; display: grid; place-items: center; width: 3.4rem; height: 3.4rem; border-radius: 999px; color: #FFF3C5; background: #37192C; box-shadow: 0 10px 25px rgba(55,25,44,.25); transition: transform .2s; }

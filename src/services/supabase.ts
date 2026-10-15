@@ -14,7 +14,12 @@ const supabaseKey =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo';
 
 export const isSupabaseConfigured = (): boolean => {
-  return true;
+  return (
+    Boolean(supabaseUrl) &&
+    supabaseUrl !== 'https://demo.supabase.co' &&
+    Boolean(supabaseKey) &&
+    supabaseKey !== 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo'
+  );
 };
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured()
