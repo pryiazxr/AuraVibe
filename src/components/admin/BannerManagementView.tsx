@@ -254,7 +254,7 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
       {/* Edit/Add Banner Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4">
             <button
               onClick={() => setModalOpen(false)}
               className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"

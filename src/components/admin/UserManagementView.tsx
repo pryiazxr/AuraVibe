@@ -245,7 +245,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
       {/* Block Modal */}
       {blockModal.open && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4">
             <button onClick={() => setBlockModal({ open: false, user: null })} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
               <X size={16} />
             </button>
@@ -273,7 +273,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
       {/* Add User Modal */}
       {addUserModal && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4">
             <button onClick={() => setAddUserModal(false)} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
               <X size={16} />
             </button>
@@ -302,7 +302,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
       {/* Add Admin Modal */}
       {adminModal && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4">
             <button onClick={() => setAdminModal(false)} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
               <X size={16} />
             </button>

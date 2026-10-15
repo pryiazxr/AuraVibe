@@ -484,7 +484,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       {/* Badge Add/Edit Modal */}
       {badgeModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 relative text-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-lg relative space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-3">
               <h3 className="font-black text-sm text-[#37192C]">
                 {editingBadge ? `ویرایش برچسب «${editingBadge.title}»` : 'افزودن برچسب محصول جدید'}
@@ -547,7 +547,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       {/* Category Add/Edit Modal */}
       {catModalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl space-y-4 relative text-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-lg relative space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-3">
               <h3 className="font-black text-sm text-[#37192C]">
                 {editingCategory ? `ویرایش دسته‌بندی «${editingCategory.name}»` : 'افزودن دسته‌بندی جدید'}

@@ -406,7 +406,7 @@ export function CustomerAuthModal({
   return (
     <div className="modal-backdrop p-3" onClick={close}>
       <div
-        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl relative space-y-6 text-right max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-lg relative space-y-6 text-right max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >
@@ -635,7 +635,7 @@ export function CustomerAuthModal({
                   <ChevronDown size={16} />
                 </div>
                 {provinceDropdownOpen && (
-                  <div className="absolute z-30 mt-1 w-full bg-white border border-[#37192c]/20 rounded-xl shadow-xl p-2 max-h-48 overflow-y-auto">
+                  <div className="absolute z-30 mt-1 w-full bg-white border border-[#37192c]/20 rounded-xl shadow-md p-2 max-h-48 overflow-y-auto">
                     <input
                       type="text"
                       placeholder="جستجوی استان..."
@@ -675,7 +675,7 @@ export function CustomerAuthModal({
                   <ChevronDown size={16} />
                 </div>
                 {cityDropdownOpen && profileForm.province && (
-                  <div className="absolute z-30 mt-1 w-full bg-white border border-[#37192c]/20 rounded-xl shadow-xl p-2 max-h-48 overflow-y-auto">
+                  <div className="absolute z-30 mt-1 w-full bg-white border border-[#37192c]/20 rounded-xl shadow-md p-2 max-h-48 overflow-y-auto">
                     <input
                       type="text"
                       placeholder="جستجوی شهر..."
