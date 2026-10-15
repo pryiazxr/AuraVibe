@@ -223,7 +223,7 @@ export function CheckoutView({
   if (orderCreated) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 lg:px-8 font-vazir text-right" dir="rtl">
-        <div className="rounded-[2.5rem] bg-white p-8 sm:p-12 border border-[#37192c]/10 shadow-xl text-center space-y-6">
+        <div className="rounded-[2.5rem] bg-white p-8 sm:p-12 border border-[#37192c]/10 shadow-md text-center space-y-6">
           <div className="mx-auto size-20 sm:size-24 rounded-full bg-emerald-100 border-4 border-emerald-200 grid place-items-center text-emerald-700 shadow-md">
             <CheckCircle size={48} />
           </div>
@@ -341,7 +341,7 @@ export function CheckoutView({
               </button>
 
               {shippingDropdownOpen && (
-                <div className="absolute z-20 mt-1 w-full rounded-2xl border bg-white p-2 shadow-xl space-y-1">
+                <div className="absolute z-20 mt-1 w-full rounded-2xl border bg-white p-2 shadow-md space-y-1">
                   {(Object.keys(shippingMethods) as Array<keyof typeof shippingMethods>).map((key) => (
                     <button
                       key={key}

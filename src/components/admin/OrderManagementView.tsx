@@ -222,7 +222,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
               <ChevronDown size={16} />
             </button>
             {statusFilterOpen && (
-              <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-60 overflow-y-auto space-y-1">
+              <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md max-h-60 overflow-y-auto space-y-1">
                 <button
                   onClick={() => {
                     setStatusFilter('all');
@@ -350,7 +350,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
       {/* Order Details Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-3xl rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-6 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-6 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedOrder(null)}
               className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
@@ -486,7 +486,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                     <ChevronDown size={16} />
                   </button>
                   {formStatusOpen && (
-                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-52 overflow-y-auto space-y-1">
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md max-h-52 overflow-y-auto space-y-1">
                       {allOrderStatuses.map((st) => (
                         <button
                           key={st}
@@ -519,7 +519,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
                     <ChevronDown size={16} />
                   </button>
                   {formPaymentStatusOpen && (
-                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-52 overflow-y-auto space-y-1">
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md max-h-52 overflow-y-auto space-y-1">
                       {allPaymentStatuses.map((pst) => (
                         <button
                           key={pst}
@@ -583,7 +583,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
       {/* High Res Receipt Modal */}
       {viewingReceiptModal && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-xs" onClick={() => setViewingReceiptModal(null)}>
-          <div className="relative max-w-2xl max-h-[90vh] bg-white rounded-3xl p-4 overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-2xl max-h-[90vh] bg-white rounded-3xl p-4 overflow-hidden shadow-lg" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setViewingReceiptModal(null)}
               className="absolute top-4 end-4 grid size-9 place-items-center rounded-full bg-[#37192C] text-[#FFF3C5] z-10"

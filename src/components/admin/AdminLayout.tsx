@@ -260,7 +260,7 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goH
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div className="fixed inset-0 bg-[#37192C]/50 backdrop-blur-xs" onClick={() => setMobileMenuOpen(false)} />
-          <div className="relative flex w-4/5 max-w-xs flex-1 flex-col bg-white p-4 shadow-2xl z-10">
+          <div className="relative flex w-4/5 max-w-xs flex-1 flex-col bg-white p-4 shadow-lg z-10">
             <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4">
               <div>
                 <div className="brand-font text-xl font-black text-[#37192C]">AuraVibe</div>
