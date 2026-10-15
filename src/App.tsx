@@ -700,15 +700,6 @@ function App() {
                     <button onClick={() => handleNavClick('home')} className={'hover:text-[#8b627e] ' + (activeView === 'home' ? 'text-[#8b627e] underline' : '')}>
                       صفحه اصلی
                     </button>
-                    <button onClick={() => handleNavClick('جدیدترین‌ها')} className="hover:text-[#8b627e]">
-                      جدیدترین‌ها
-                    </button>
-                    <button onClick={() => handleNavClick('پرفروش‌ترین‌ها')} className="hover:text-[#8b627e]">
-                      پرفروش‌ترین‌ها
-                    </button>
-                    <button onClick={() => handleNavClick('تخفیف ویژه')} className="hover:text-[#8b627e]">
-                      تخفیف ویژه
-                    </button>
                     <button onClick={() => handleNavClick('journal')} className="hover:text-[#8b627e]">
                       مجله استایل
                     </button>
