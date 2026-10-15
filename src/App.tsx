@@ -578,7 +578,7 @@ function App() {
   if (!isSupabaseConfigured()) {
     return (
       <main className="min-h-screen bg-[#fffaf0] text-[#37192C] font-vazir flex flex-col items-center justify-center p-6 text-center" dir="rtl">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-[#37192C]/10 p-8 flex flex-col items-center gap-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-md border border-[#37192C]/10 p-8 flex flex-col items-center gap-6">
           <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-sm">
             <AlertTriangle className="w-8 h-8" />
           </div>
@@ -1077,7 +1077,7 @@ function AdminContainer({
   if (!currentAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fffaf0] p-4 font-vazir text-right">
-        <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-xl space-y-6">
+        <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-md space-y-6">
           <div className="text-center space-y-2">
             <div className="brand-font text-3xl font-black text-[#37192C]">AuraVibe</div>
             <h2 className="text-lg font-black text-[#37192C]">ورود به پیشخوان مدیریت ۳۶۰</h2>
@@ -1586,7 +1586,7 @@ function JournalPageView({ articles, openHome }: { articles: Article[]; openHome
       {/* Article Detail Modal */}
       {selectedArticle && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 sm:p-8 shadow-lg relative space-y-4 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setSelectedArticle(null)}
               className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
@@ -2036,7 +2036,7 @@ function CategoryPageView({ categoryName, products, openProduct, backToHome }: a
       {mobileFilterOpen && (
         <div className="modal-backdrop p-3 lg:hidden" onClick={() => setMobileFilterOpen(false)}>
           <div
-            className="w-full max-w-md rounded-t-[2.5rem] rounded-b-2xl bg-[#fffaf0] p-6 shadow-2xl relative max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-md rounded-t-[2.5rem] rounded-b-2xl bg-[#fffaf0] p-6 shadow-lg relative max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b pb-3 mb-4">
@@ -2569,7 +2569,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
   };
 
   return (
-    <div className="support-panel shadow-2xl flex flex-col h-[520px]">
+    <div className="support-panel shadow-lg flex flex-col h-[520px]">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3 shrink-0">
         <div className="flex items-center gap-2">
@@ -2689,7 +2689,7 @@ function SearchModal({ close, openProduct, products }: any) {
 
   return (
     <div className="modal-backdrop p-3" onClick={close}>
-      <div className="w-full max-w-xl rounded-[2.5rem] bg-white p-6 shadow-2xl space-y-4 relative" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl rounded-[2.5rem] bg-white p-6 shadow-lg space-y-4 relative" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center border-b pb-3">
           <div className="flex items-center gap-2 flex-1 pl-2">
             <Search size={20} className="text-[#8b627e]" />
@@ -3078,7 +3078,7 @@ function ProfilePageView({
                     <ChevronDown size={16} />
                   </div>
                   {provinceDropdownOpen && (
-                    <div className="absolute z-30 mt-1 w-full bg-white border rounded-xl shadow-xl p-2 max-h-56 overflow-y-auto">
+                    <div className="absolute z-30 mt-1 w-full bg-white border rounded-xl shadow-md p-2 max-h-56 overflow-y-auto">
                       <input
                         type="text"
                         placeholder="جستجوی استان..."
@@ -3338,7 +3338,7 @@ function ProfilePageView({
 function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
   return (
     <div className="modal-backdrop p-3">
-      <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4">
+      <div className="w-full max-w-md rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4">
         <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
           <X size={16} />
         </button>
@@ -3362,7 +3362,7 @@ function OrderDetailsModal({ order, close }: { order: Order; close: () => void }
   return (
     <div className="modal-backdrop p-3" onClick={close}>
       <div
-        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-[2.5rem] bg-white p-6 shadow-lg relative space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
