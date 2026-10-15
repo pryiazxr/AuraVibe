@@ -233,8 +233,11 @@ function App() {
     // Product Modal
     const prodId = searchParams.get('product');
     if (prodId) {
-      const p = products.find((item) => item.id === Number(prodId));
-      if (p) setSelectedProduct(p);
+      const targetId = Number(prodId);
+      if (!selectedProduct || selectedProduct.id !== targetId) {
+        const p = products.find((item) => item.id === targetId);
+        if (p) setSelectedProduct(p);
+      }
     } else {
       setSelectedProduct(null);
     }
@@ -270,7 +273,7 @@ function App() {
     if (tabVal === 'profile' || tabVal === 'orders' || tabVal === 'fav' || tabVal === 'cart') {
       setAccountTab(tabVal as any);
     }
-  }, [searchParams, products, orders]);
+  }, [searchParams, products, orders, selectedProduct?.id]);
 
 
   const loadCartAndWishlist = async (user: User | null) => {
@@ -508,12 +511,14 @@ function App() {
 
   const openProductModal = (product: Product | null) => {
     if (product) {
+      setSelectedProduct(product);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.set('product', String(product.id));
         return next;
       });
     } else {
+      setSelectedProduct(null);
       closeModalParam('product');
     }
   };
@@ -2118,6 +2123,25 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
   const [reviewSuccess, setReviewSuccess] = useState('');
   const [reviewError, setReviewError] = useState('');
 
+  // Body scroll lock
+  useEffect(() => {
+    const originalStyle = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, []);
+
+  // Reset internal state when product changes
+  useEffect(() => {
+    setActiveImgIdx(product.mainImageIndex || 0);
+    setShowVideo(false);
+    setCopiedShare(false);
+    setReviewSuccess('');
+    setReviewError('');
+    setNewComment('');
+  }, [product.id]);
+
   const loadReviews = async () => {
     try {
       const fetched = await db.getProductReviews(product.id);
@@ -2188,11 +2212,12 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
     : '۵.۰';
 
   return (
-    <div className="modal-backdrop p-3" onClick={close}>
-      <div className="product-modal max-h-[92vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop" onClick={close}>
+      <div className="product-modal relative" onClick={(e) => e.stopPropagation()}>
         <button
-          className="absolute end-5 top-5 z-20 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C]"
+          className="sticky top-4 start-auto ms-auto me-4 z-30 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C] hover:bg-white transition"
           onClick={close}
+          aria-label="بستن"
         >
           <X size={20} />
         </button>
