@@ -9,14 +9,15 @@ export function PhoneInput({
   onChange,
   disabled
 }: {
-  value: string; // 10 digits without prefix e.g. "9123456789"
+  value: string; // 10 digits e.g. "9123456789"
   onChange: (normalizedTenDigits: string) => void;
   disabled?: boolean;
 }) {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const digits = value.padEnd(10, '').slice(0, 10).split('');
 
-  const handleRawChange = (rawInput: string) => {
-    let clean = rawInput
+  const normalizeText = (raw: string) => {
+    let clean = raw
       .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
       .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
       .replace(/\D/g, '');
@@ -27,57 +28,94 @@ export function PhoneInput({
     if (clean.startsWith('0')) {
       clean = clean.slice(1);
     }
+    return clean.slice(0, 10);
+  };
 
-    clean = clean.slice(0, 10);
-    onChange(clean);
+  const handleDigitChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
+    let char = e.target.value
+      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
+      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
+      .replace(/\D/g, '');
+
+    if (char.length > 1) {
+      char = char.slice(-1);
+    }
+
+    const currentDigits = [...digits];
+    currentDigits[idx] = char;
+    const newPhone = normalizeText(currentDigits.join(''));
+    onChange(newPhone);
+
+    if (char && idx < 9) {
+      inputRefs.current[idx + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    if (e.key === 'Backspace') {
+      if (!digits[idx] || digits[idx].trim() === '') {
+        if (idx > 0) {
+          inputRefs.current[idx - 1]?.focus();
+          const currentDigits = [...digits];
+          currentDigits[idx - 1] = '';
+          onChange(normalizeText(currentDigits.join('')));
+        }
+      } else {
+        const currentDigits = [...digits];
+        currentDigits[idx] = '';
+        onChange(normalizeText(currentDigits.join('')));
+      }
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = normalizeText(e.clipboardData.getData('text'));
+    if (pasted) {
+      onChange(pasted);
+      const focusIdx = Math.min(pasted.length, 9);
+      inputRefs.current[focusIdx]?.focus();
+    }
   };
 
   return (
-    <div className="space-y-2.5">
-      {/* Visual Box Grid +98 | □ □ □ □ □ □ □ □ □ □ (Responsive Grid) */}
-      <div className="p-2.5 sm:p-3 bg-[#fffaf0] rounded-2xl border-2 border-[#37192c]/20 focus-within:border-[#37192C] transition shadow-xs space-y-2" dir="ltr">
-        <div className="flex items-center justify-between text-xs font-bold text-[#37192C]">
-          <div className="flex items-center gap-1.5 font-mono font-black text-xs sm:text-sm">
+    <div className="space-y-2 text-right">
+      <div className="p-3 bg-[#fffaf0] rounded-2xl border border-[#37192c]/15 focus-within:border-[#37192C] transition space-y-2.5" dir="ltr">
+        <div className="flex items-center justify-between text-xs font-bold text-[#37192C] px-1">
+          <div className="flex items-center gap-1.5 font-mono font-black text-sm">
             <span className="text-emerald-700">🇮🇷</span>
             <span>+98</span>
-            <span className="text-[#37192C]/30">|</span>
-            <span className="text-[11px] text-[#8b627e] font-sans font-semibold">شماره همراه ۱۰ رقمی</span>
           </div>
-          <span className="text-[10px] font-mono text-[#37192C]/60">ایران</span>
+          <span className="text-[10px] font-sans text-[#8b627e] font-semibold">شماره همراه ۱۰ رقمی</span>
         </div>
 
-        {/* 10 Digit Grid Slot Container */}
+        {/* 10 Inputs Grid */}
         <div className="grid grid-cols-10 gap-1 sm:gap-1.5 w-full">
           {Array.from({ length: 10 }).map((_, idx) => {
-            const hasDigit = digits[idx] && digits[idx].trim() !== '';
+            const hasValue = digits[idx] && digits[idx].trim() !== '';
             return (
-              <div
+              <input
                 key={idx}
-                className={`aspect-square w-full rounded-lg sm:rounded-xl border flex items-center justify-center font-mono font-black text-xs sm:text-sm transition ${
-                  hasDigit
-                    ? 'border-[#37192C] bg-[#37192C] text-[#FFF3C5] shadow-xs'
-                    : 'border-[#37192c]/20 bg-white/80 text-[#37192C]/30'
+                ref={(el) => { inputRefs.current[idx] = el; }}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                disabled={disabled}
+                value={hasValue ? digits[idx] : ''}
+                onChange={(e) => handleDigitChange(e, idx)}
+                onKeyDown={(e) => handleKeyDown(e, idx)}
+                onPaste={handlePaste}
+                placeholder="•"
+                className={`aspect-square w-full rounded-xl border text-center font-mono font-black text-xs sm:text-sm outline-none transition ${
+                  hasValue
+                    ? 'border-[#37192C] bg-[#37192C] text-[#FFF3C5]'
+                    : 'border-[#37192c]/20 bg-white/90 text-[#37192C]/40 focus:border-[#37192C] focus:bg-white'
                 }`}
-              >
-                {hasDigit ? digits[idx] : '□'}
-              </div>
+                dir="ltr"
+              />
             );
           })}
         </div>
-      </div>
-
-      {/* Primary Input Element */}
-      <div className="relative">
-        <input
-          type="tel"
-          inputMode="numeric"
-          disabled={disabled}
-          value={value ? '0' + value : ''}
-          onChange={(e) => handleRawChange(e.target.value)}
-          placeholder="ورود شماره همراه (مثال: ۰۹۱۲۳۴۵۶۷۸۹)"
-          className="w-full text-center font-mono font-black text-sm p-3 rounded-2xl border border-[#37192c]/20 bg-white text-[#37192C] outline-none focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/20 transition disabled:opacity-50"
-          dir="ltr"
-        />
       </div>
     </div>
   );
@@ -161,24 +199,29 @@ export function OTPInput({
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3" dir="ltr">
-      {Array.from({ length }).map((_, idx) => (
-        <input
-          key={idx}
-          ref={(el) => { inputRefs.current[idx] = el; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={digits[idx] && digits[idx].trim() !== '' ? digits[idx] : ''}
-          onChange={(e) => handleChange(e, idx)}
-          onKeyDown={(e) => handleKeyDown(e, idx)}
-          onPaste={handlePaste}
-          disabled={disabled}
-          className={`size-11 sm:size-12 rounded-2xl border-2 text-center font-mono text-lg font-black bg-white text-[#37192C] shadow-xs outline-none focus:border-[#37192C] focus:ring-2 focus:ring-[#37192C]/20 border-[#37192c]/20 transition ${
-            digits[idx] && digits[idx].trim() !== '' ? 'border-[#37192C] bg-[#FFF3C5]/40' : ''
-          }`}
-        />
-      ))}
+    <div className="flex items-center justify-center gap-2 sm:gap-2.5" dir="ltr">
+      {Array.from({ length }).map((_, idx) => {
+        const hasDigit = digits[idx] && digits[idx].trim() !== '';
+        return (
+          <input
+            key={idx}
+            ref={(el) => { inputRefs.current[idx] = el; }}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={hasDigit ? digits[idx] : ''}
+            onChange={(e) => handleChange(e, idx)}
+            onKeyDown={(e) => handleKeyDown(e, idx)}
+            onPaste={handlePaste}
+            disabled={disabled}
+            className={`size-11 sm:size-12 rounded-xl border text-center font-mono text-base sm:text-lg font-black bg-white text-[#37192C] outline-none transition ${
+              hasDigit
+                ? 'border-[#37192C] bg-[#FFF3C5]/50 text-[#37192C]'
+                : 'border-[#37192c]/15 focus:border-[#37192C] focus:bg-[#fffaf0]'
+            }`}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -488,7 +531,7 @@ export function CustomerAuthModal({
             <button
               type="submit"
               disabled={loading || phoneTenDigits.length !== 10}
-              className="w-full py-4 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-xs hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -498,7 +541,7 @@ export function CustomerAuthModal({
               ) : (
                 <>
                   <ShieldCheck size={18} />
-                  <span>دریافت کد تایید OTP</span>
+                  <span>دریافت کد تأیید</span>
                 </>
               )}
             </button>
@@ -507,7 +550,7 @@ export function CustomerAuthModal({
 
         {/* STEP 2: OTP Verification Step */}
         {step === 'otp' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <OTPInput
               length={6}
               value={otpCode}
@@ -544,7 +587,7 @@ export function CustomerAuthModal({
                   disabled={loading}
                   className="text-[#37192C] font-black underline flex items-center gap-1 hover:text-[#8b627e]"
                 >
-                  <RefreshCw size={14} /> ارسال مجدد کد OTP
+                  <RefreshCw size={14} /> ارسال مجدد کد تأیید
                 </button>
               )}
             </div>
@@ -553,17 +596,17 @@ export function CustomerAuthModal({
               type="button"
               onClick={() => handleVerifyOtp()}
               disabled={loading || otpCode.length !== 6}
-              className="w-full py-4 rounded-full bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-md hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-2xl bg-[#37192C] text-[#FFF3C5] font-black text-xs sm:text-sm shadow-xs hover:bg-[#5a2548] transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <RefreshCw size={16} className="animate-spin" />
-                  <span>در حال تایید کد...</span>
+                  <span>در حال بررسی کد...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 size={18} />
-                  <span>تایید و ادامه</span>
+                  <span>تأیید و ورود</span>
                 </>
               )}
             </button>
