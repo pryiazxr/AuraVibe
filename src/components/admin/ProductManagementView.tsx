@@ -280,7 +280,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
               <ChevronDown size={16} />
             </button>
             {catFilterOpen && (
-              <div className="absolute z-30 mt-1 w-full sm:w-56 rounded-2xl border bg-white p-1.5 shadow-xl max-h-60 overflow-y-auto space-y-1">
+              <div className="absolute z-30 mt-1 w-full sm:w-56 rounded-2xl border bg-white p-1.5 shadow-md max-h-60 overflow-y-auto space-y-1">
                 <button
                   onClick={() => {
                     setSelectedCat('همه');
@@ -327,7 +327,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
               <ChevronDown size={16} />
             </button>
             {statusFilterOpen && (
-              <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl space-y-1">
+              <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md space-y-1">
                 {[
                   { key: 'all', label: 'همه وضعیت‌ها' },
                   { key: 'active', label: 'فعال' },
@@ -425,7 +425,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
       {/* Product Edit/Add Form Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-[#37192C]/70 p-3 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-4">
+          <div className="w-full max-w-2xl rounded-[2.5rem] bg-white p-6 shadow-lg relative max-h-[90vh] overflow-y-auto space-y-4">
             <button
               onClick={() => setModalOpen(false)}
               className="absolute end-5 top-5 grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]"
@@ -520,7 +520,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                     <ChevronDown size={16} />
                   </button>
                   {formCatOpen && (
-                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl max-h-56 overflow-y-auto space-y-1">
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md max-h-56 overflow-y-auto space-y-1">
                       {allCategories.map((c) => (
                         <button
                           key={c}
@@ -552,7 +552,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                     <ChevronDown size={16} />
                   </button>
                   {formBadgeOpen && (
-                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-xl space-y-1">
+                    <div className="absolute z-30 mt-1 w-full rounded-2xl border bg-white p-1.5 shadow-md space-y-1">
                       <button
                         type="button"
                         onClick={() => {
