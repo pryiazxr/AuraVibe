@@ -1553,14 +1553,19 @@ function ArticleCard({ art, onClick }: { art: Article; onClick?: () => void }) {
         <div className="absolute inset-0 bg-gradient-to-r from-[#37192C] via-[#37192C]/80 to-transparent pointer-events-none" />
 
         {/* White Content Panel on RIGHT side: Sharp right corners, rounded left corners */}
-        <div className="z-10 mr-0 ml-auto bg-white/95 backdrop-blur-md text-[#37192C] p-5 sm:p-7 rounded-l-2xl rounded-r-none h-full max-w-[68%] sm:max-w-[55%] flex flex-col justify-center shadow-md">
-          <h3 className="text-base sm:text-xl font-black text-[#37192C] leading-snug">
+        <div className="z-10 mr-0 ml-auto bg-white/95 backdrop-blur-md text-[#37192C] p-3.5 sm:p-5 rounded-l-2xl rounded-r-none h-full w-[48%] sm:w-[36%] flex flex-col justify-center shadow-md">
+          <h3 className="text-xs sm:text-base font-black text-[#37192C] leading-snug line-clamp-2">
             {art.title}
           </h3>
-          <p className="mt-2 text-xs sm:text-sm font-light text-[#37192C]/85 leading-relaxed truncate">
+          <p className="mt-1.5 text-[11px] sm:text-xs font-light text-[#37192C]/85 leading-relaxed line-clamp-2">
             {art.subtitle || art.digest}
           </p>
-          <span className="mt-3 text-[10px] font-bold text-[#8b627e] block">{pDate}</span>
+          <div className="mt-2.5 flex items-center justify-between gap-1 text-[10px] sm:text-xs font-bold text-[#8b627e]">
+            <span>{pDate}</span>
+            <span className="flex items-center gap-0.5 hover:underline">
+              مطالعه <ArrowLeft size={12} />
+            </span>
+          </div>
         </div>
       </div>
 
