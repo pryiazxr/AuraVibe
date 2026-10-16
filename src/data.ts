@@ -49,7 +49,7 @@ export const generateProducts = (count: number, prefix: string, category: string
   return Array.from({ length: count }, (_, i) => ({
     id: Math.floor(Math.random() * 899999) + 100000 + i,
     productCode: `AUR-${Math.floor(100 + Math.random() * 899)}-${i + 1}`,
-    name: `${prefix} مدل آورا کد ${i + 1}`,
+    name: `${prefix} مدل اورالون کد ${i + 1}`,
     category,
     price: basePrice + i * 18000,
     oldPrice: isDiscounted || i % 2 === 0 ? basePrice + i * 18000 + 55000 : undefined,
@@ -60,7 +60,7 @@ export const generateProducts = (count: number, prefix: string, category: string
     mainImageIndex: 0,
     badge: isDiscounted ? 'تخفیف ویژه' : (i % 3 === 0 ? 'جدید' : (i % 4 === 0 ? 'پرفروش' : undefined)),
     colors: i % 2 === 0 ? ['#37192C', '#FFF3C5'] : ['#D2B4DE', '#FADBD8', '#37192C'],
-    description: `محصول ${prefix} طراحی شده با بهترین متریال ضدحساسیت، رنگ‌بندی جذاب پاستیلی و بسته‌بندی لوکس آورا استایل.`,
+    description: `محصول ${prefix} طراحی شده با بهترین متریال ضدحساسیت، رنگ‌بندی جذاب پاستیلی و بسته‌بندی لوکس اورالون.`,
     status: 'active',
     updatedAt: new Date().toISOString()
   }));
@@ -86,7 +86,7 @@ export const sampleArticles: Article[] = [
   {
     id: 3,
     title: 'استایل اولد مانی چیست؟',
-    digest: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و آورا استایل.',
+    digest: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و اورالون.',
     date: 'سه‌شنبه، ۸ اردیبهشت ۱۴۰۵',
     image: watchImage,
     tag: 'اکسسوری کلاسیک'

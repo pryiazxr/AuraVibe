@@ -452,7 +452,7 @@ class DatabaseService {
         'user_wishlists'
       ];
 
-      this.realtimeChannel = getClient().channel('auravibe-table-sync');
+      this.realtimeChannel = getClient().channel('auralune-table-sync');
 
       for (const table of tables) {
         this.realtimeChannel.on(
@@ -466,7 +466,7 @@ class DatabaseService {
 
       this.realtimeChannel.subscribe();
     } catch (err) {
-      console.warn('[AuraVibe DB] Realtime subscription could not be established:', err);
+      console.warn('[Auralune DB] Realtime subscription could not be established:', err);
     }
   }
 
@@ -480,7 +480,7 @@ class DatabaseService {
       try {
         listener();
       } catch (err) {
-        console.error('[AuraVibe DB] Listener notification error:', err);
+        console.error('[Auralune DB] Listener notification error:', err);
       }
     });
   }
@@ -505,7 +505,7 @@ class DatabaseService {
         return this.cachedBadges;
       }
     } catch (err) {
-      console.warn('[AuraVibe DB] Network fetch error for badges:', err);
+      console.warn('[Auralune DB] Network fetch error for badges:', err);
     }
     return this.cachedBadges.length ? this.cachedBadges : [
       { id: 1, title: 'جدیدترین‌ها' },
@@ -521,7 +521,7 @@ class DatabaseService {
     }
     const { data, error } = await getClient().from('product_badges').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving badge:', error);
+      console.error('[Auralune DB] Error saving badge:', error);
       throw error;
     }
     const saved = rowToBadge(data);
@@ -544,7 +544,7 @@ class DatabaseService {
   public async deleteBadge(id: number, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('product_badges').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting badge:', error);
+      console.error('[Auralune DB] Error deleting badge:', error);
       throw error;
     }
     if (adminUser) {
@@ -572,7 +572,7 @@ class DatabaseService {
         return this.cachedCategories;
       }
     } catch (err) {
-      console.warn('[AuraVibe DB] Network fetch error for categories:', err);
+      console.warn('[Auralune DB] Network fetch error for categories:', err);
     }
     return this.cachedCategories.length ? this.cachedCategories : [
       { id: 1, name: 'ساعت', image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800', displayOrder: 1 },
@@ -592,7 +592,7 @@ class DatabaseService {
     }
     const { data, error } = await getClient().from('categories').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving category:', error);
+      console.error('[Auralune DB] Error saving category:', error);
       throw error;
     }
     const saved = rowToCategory(data);
@@ -615,7 +615,7 @@ class DatabaseService {
   public async deleteCategory(id: number, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('categories').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting category:', error);
+      console.error('[Auralune DB] Error deleting category:', error);
       throw error;
     }
     if (adminUser) {
@@ -643,13 +643,13 @@ class DatabaseService {
         return this.cachedProducts;
       }
     } catch (err) {
-      console.warn('[AuraVibe DB] Network fetch error for products:', err);
+      console.warn('[Auralune DB] Network fetch error for products:', err);
     }
     return this.cachedProducts.length ? this.cachedProducts : [
       {
         id: 101,
         productCode: 'AUR-101',
-        name: 'گردنبند صدف و مروارید آورا',
+        name: 'گردنبند صدف و مروارید اورالون',
         category: 'گردنبند',
         price: 380000,
         oldPrice: 450000,
@@ -701,7 +701,7 @@ class DatabaseService {
 
     const { data, error } = await getClient().from('products').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving product:', error);
+      console.error('[Auralune DB] Error saving product:', error);
       throw error;
     }
     const saved = rowToProduct(data);
@@ -724,7 +724,7 @@ class DatabaseService {
   public async deleteProduct(id: number, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('products').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting product:', error);
+      console.error('[Auralune DB] Error deleting product:', error);
       throw error;
     }
     if (adminUser) {
@@ -752,7 +752,7 @@ class DatabaseService {
         return this.cachedBanners;
       }
     } catch (err) {
-      console.warn('[AuraVibe DB] Network fetch error for banners:', err);
+      console.warn('[Auralune DB] Network fetch error for banners:', err);
     }
     return this.cachedBanners.length ? this.cachedBanners : [
       {
@@ -760,7 +760,7 @@ class DatabaseService {
         internalName: 'بنر اصلی ۱',
         eyebrow: 'کالکشن زمستانه',
         title: 'درخشش در جزئیات',
-        subtitle: 'مجموعه زیورآلات و ساعت‌های ظریف آورا وایب',
+        subtitle: 'مجموعه زیورآلات و ساعت‌های ظریف اورالون',
         image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1200',
         active: true,
         displayOrder: 1
@@ -784,7 +784,7 @@ class DatabaseService {
 
     const { data, error } = await getClient().from('banners').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving banner:', error);
+      console.error('[Auralune DB] Error saving banner:', error);
       throw error;
     }
     const saved = rowToBanner(data);
@@ -813,7 +813,7 @@ class DatabaseService {
     for (const item of updates) {
       const { error } = await getClient().from('banners').update({ display_order: item.display_order }).eq('id', item.id);
       if (error) {
-        console.error('[AuraVibe DB] Error reordering banner:', error);
+        console.error('[Auralune DB] Error reordering banner:', error);
         throw error;
       }
     }
@@ -835,7 +835,7 @@ class DatabaseService {
   public async deleteBanner(id: number, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('banners').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting banner:', error);
+      console.error('[Auralune DB] Error deleting banner:', error);
       throw error;
     }
     if (adminUser) {
@@ -863,7 +863,7 @@ class DatabaseService {
         return this.cachedOrders;
       }
     } catch (err) {
-      console.warn('[AuraVibe DB] Network fetch error for orders:', err);
+      console.warn('[Auralune DB] Network fetch error for orders:', err);
     }
     return this.cachedOrders;
   }
@@ -976,7 +976,7 @@ class DatabaseService {
     const row = orderToRow(newOrder);
     const { data, error } = await getClient().from('orders').insert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error creating order:', error);
+      console.error('[Auralune DB] Error creating order:', error);
       throw error;
     }
     const saved = rowToOrder(data);
@@ -1023,7 +1023,7 @@ class DatabaseService {
 
     const { error } = await getClient().from('orders').update(updatePayload).eq('id', orderId);
     if (error) {
-      console.error('[AuraVibe DB] Error updating order status:', error);
+      console.error('[Auralune DB] Error updating order status:', error);
       throw error;
     }
 
@@ -1067,7 +1067,7 @@ class DatabaseService {
 
     const { error } = await getClient().from('orders').update(updatePayload).eq('id', orderId);
     if (error) {
-      console.error('[AuraVibe DB] Error updating order payment status:', error);
+      console.error('[Auralune DB] Error updating order payment status:', error);
       throw error;
     }
 
@@ -1086,7 +1086,7 @@ class DatabaseService {
   public async deleteOrder(orderId: string, adminUser: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('orders').delete().eq('id', orderId);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting order:', error);
+      console.error('[Auralune DB] Error deleting order:', error);
       throw error;
     }
     this.addAuditLog({
@@ -1107,7 +1107,7 @@ class DatabaseService {
       .select('*')
       .order('id', { ascending: false });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching users:', error);
+      console.error('[Auralune DB] Error fetching users:', error);
       throw error;
     }
     this.cachedUsers = (data || []).map(rowToUser);
@@ -1159,7 +1159,7 @@ class DatabaseService {
 
     const { data, error } = await getClient().from('users').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving user:', error);
+      console.error('[Auralune DB] Error saving user:', error);
       throw error;
     }
     const saved = rowToUser(data);
@@ -1185,7 +1185,7 @@ class DatabaseService {
       .update({ status: 'blocked', block_reason: blockReason })
       .eq('id', userId);
     if (error) {
-      console.error('[AuraVibe DB] Error blocking user:', error);
+      console.error('[Auralune DB] Error blocking user:', error);
       throw error;
     }
 
@@ -1207,7 +1207,7 @@ class DatabaseService {
       .update({ status: 'active', block_reason: null })
       .eq('id', userId);
     if (error) {
-      console.error('[AuraVibe DB] Error unblocking user:', error);
+      console.error('[Auralune DB] Error unblocking user:', error);
       throw error;
     }
 
@@ -1229,7 +1229,7 @@ class DatabaseService {
       .select('*')
       .order('id', { ascending: true });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching admins:', error);
+      console.error('[Auralune DB] Error fetching admins:', error);
       throw error;
     }
     this.cachedAdmins = (data || []).map(rowToAdmin);
@@ -1253,7 +1253,7 @@ class DatabaseService {
       if (error || !data) return null;
       return rowToAdmin(data);
     } catch (err) {
-      console.error('[AuraVibe DB] Error retrieving current admin:', err);
+      console.error('[Auralune DB] Error retrieving current admin:', err);
       return null;
     }
   }
@@ -1262,20 +1262,32 @@ class DatabaseService {
     const cleanUsername = usernameOrEmail.trim().toLowerCase();
     const email = usernameOrEmail.includes('@')
       ? cleanUsername
-      : `${cleanUsername}@auravibe.ir`;
+      : `${cleanUsername}@auralune.ir`;
 
     if (isSupabaseConfigured()) {
       try {
-        const { data: authResult, error: authError } = await getClient().auth.signInWithPassword({
+        let { data: authData, error: authError } = await getClient().auth.signInWithPassword({
           email,
           password
         });
 
-        if (!authError && authResult?.user) {
+        // Fallback for legacy admin accounts registered as @auravibe.ir
+        if (authError && !usernameOrEmail.includes('@')) {
+          const fallbackRes = await getClient().auth.signInWithPassword({
+            email: `${cleanUsername}@auravibe.ir`,
+            password
+          });
+          if (!fallbackRes.error) {
+            authData = fallbackRes.data;
+            authError = fallbackRes.error;
+          }
+        }
+
+        if (!authError && authData?.user) {
           const { data: adminData, error: adminErr } = await getClient()
             .from('admin_users')
             .select('*')
-            .eq('auth_user_id', authResult.user.id)
+            .eq('auth_user_id', authData.user.id)
             .eq('status', 'active')
             .single();
 
@@ -1300,7 +1312,7 @@ class DatabaseService {
           }
         }
       } catch (err) {
-        console.warn('[AuraVibe DB] Supabase admin auth offline/fallback:', err);
+        console.warn('[Auralune DB] Supabase admin auth offline/fallback:', err);
       }
     }
 
@@ -1340,7 +1352,7 @@ class DatabaseService {
         .select()
         .single();
       if (error) {
-        console.error('[AuraVibe DB] Error updating admin user:', error);
+        console.error('[Auralune DB] Error updating admin user:', error);
         throw error;
       }
       const saved = rowToAdmin(data);
@@ -1361,7 +1373,7 @@ class DatabaseService {
         throw new Error('کلمه عبور اختصاصی برای ایجاد حساب ادمین الزامی است.');
       }
       const cleanUsername = (adminData.username || '').trim().toLowerCase();
-      const email = `${cleanUsername}@auravibe.ir`;
+      const email = `${cleanUsername}@auralune.ir`;
 
       const { data: rpcResult, error: rpcError } = await getClient().rpc('create_admin_user', {
         p_username: cleanUsername,
@@ -1374,7 +1386,7 @@ class DatabaseService {
       });
 
       if (rpcError) {
-        console.error('[AuraVibe DB] Error creating admin user via RPC:', rpcError);
+        console.error('[Auralune DB] Error creating admin user via RPC:', rpcError);
         throw rpcError;
       }
 
@@ -1407,11 +1419,16 @@ class DatabaseService {
         .eq('product_id', productId)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
+      if (error) {
+        console.warn('[Auralune DB] Could not fetch reviews (table may not exist in database yet):', error.message);
+        return [];
+      }
+
+      if (data) {
         return data.map(rowToReview);
       }
     } catch (err) {
-      console.error('[AuraVibe DB] Error fetching reviews for product:', err);
+      console.error('[Auralune DB] Error fetching reviews for product:', err);
     }
     return [];
   }
@@ -1442,7 +1459,7 @@ class DatabaseService {
     }
 
     if (error) {
-      console.error('[AuraVibe DB] Error saving review:', error);
+      console.error('[Auralune DB] Error saving review:', error);
       throw error;
     }
 
@@ -1458,7 +1475,7 @@ class DatabaseService {
       .eq('id', reviewId);
 
     if (error) {
-      console.error('[AuraVibe DB] Error deleting review:', error);
+      console.error('[Auralune DB] Error deleting review:', error);
       throw error;
     }
     this.notify();
@@ -1479,7 +1496,7 @@ class DatabaseService {
 
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching tickets:', error);
+      console.error('[Auralune DB] Error fetching tickets:', error);
       throw error;
     }
     this.cachedTickets = (data || []).map(rowToTicket);
@@ -1566,7 +1583,7 @@ class DatabaseService {
     const row = ticketToRow(newTicket);
     const { data, error } = await getClient().from('support_tickets').insert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error creating ticket:', error);
+      console.error('[Auralune DB] Error creating ticket:', error);
       throw error;
     }
     const saved = rowToTicket(data);
@@ -1634,7 +1651,7 @@ class DatabaseService {
       .eq('id', ticketId);
 
     if (error) {
-      console.error('[AuraVibe DB] Error replying ticket:', error);
+      console.error('[Auralune DB] Error replying ticket:', error);
       throw error;
     }
 
@@ -1656,7 +1673,7 @@ class DatabaseService {
 
     const { error } = await getClient().from('support_tickets').update(rowUpdates).eq('id', ticketId);
     if (error) {
-      console.error('[AuraVibe DB] Error updating ticket state:', error);
+      console.error('[Auralune DB] Error updating ticket state:', error);
       throw error;
     }
     this.notify();
@@ -1668,7 +1685,7 @@ class DatabaseService {
       .update({ unread_admin_count: 0 })
       .eq('id', ticketId);
     if (error) {
-      console.error('[AuraVibe DB] Error marking ticket read by admin:', error);
+      console.error('[Auralune DB] Error marking ticket read by admin:', error);
       return;
     }
     this.notify();
@@ -1680,7 +1697,7 @@ class DatabaseService {
       .update({ unread_user_count: 0 })
       .eq('id', ticketId);
     if (error) {
-      console.error('[AuraVibe DB] Error marking ticket read by user:', error);
+      console.error('[Auralune DB] Error marking ticket read by user:', error);
       return;
     }
     this.notify();
@@ -1701,7 +1718,7 @@ class DatabaseService {
     const row = ticketToRow(ticket);
     const { error } = await getClient().from('support_tickets').update(row).eq('id', ticketId);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting message from ticket:', error);
+      console.error('[Auralune DB] Error deleting message from ticket:', error);
       throw error;
     }
     this.notify();
@@ -1714,7 +1731,7 @@ class DatabaseService {
       .select('*')
       .order('display_order', { ascending: true });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching articles:', error);
+      console.error('[Auralune DB] Error fetching articles:', error);
       throw error;
     }
     this.cachedArticles = (data || []).map(rowToArticle);
@@ -1730,7 +1747,7 @@ class DatabaseService {
 
     const { data, error } = await getClient().from('articles').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving article:', error);
+      console.error('[Auralune DB] Error saving article:', error);
       throw error;
     }
     const saved = rowToArticle(data);
@@ -1753,7 +1770,7 @@ class DatabaseService {
   public async deleteArticle(id: number, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('articles').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting article:', error);
+      console.error('[Auralune DB] Error deleting article:', error);
       throw error;
     }
     if (adminUser) {
@@ -1773,18 +1790,18 @@ class DatabaseService {
   public async getGlobalSEO(): Promise<GlobalSEO> {
     const { data, error } = await getClient().from('global_seo').select('*').eq('id', 1).maybeSingle();
     if (error) {
-      console.error('[AuraVibe DB] Error fetching global SEO:', error);
+      console.error('[Auralune DB] Error fetching global SEO:', error);
       throw error;
     }
     if (!data) {
       return {
-        siteTitle: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-        defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
+        siteTitle: 'Auralune | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+        defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس اورالون.',
         defaultOgImage: '',
-        defaultCanonical: 'https://auravibe.ir',
-        organizationName: 'مجموعه آورا وایب و وینا اکسسوری',
+        defaultCanonical: 'https://auralune.ir',
+        organizationName: 'مجموعه اورالون و وینا اکسسوری',
         organizationLogo: '',
-        robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml',
+        robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auralune.ir/sitemap.xml',
         sitemapGeneratedAt: new Date().toISOString()
       };
     }
@@ -1796,7 +1813,7 @@ class DatabaseService {
     const row = globalSeoToRow(seoData);
     const { error } = await getClient().from('global_seo').upsert(row);
     if (error) {
-      console.error('[AuraVibe DB] Error updating global SEO:', error);
+      console.error('[Auralune DB] Error updating global SEO:', error);
       throw error;
     }
     if (adminUser) {
@@ -1815,22 +1832,22 @@ class DatabaseService {
   public async getGeneralSettings(): Promise<GeneralSettings> {
     const { data, error } = await getClient().from('general_settings').select('*').eq('id', 1).maybeSingle();
     if (error) {
-      console.error('[AuraVibe DB] Error fetching general settings:', error);
+      console.error('[Auralune DB] Error fetching general settings:', error);
       throw error;
     }
     if (!data) {
       return {
-        siteName: 'AuraVibe | آورا وایب',
+        siteName: 'Auralune | اورالون',
         logoUrl: '',
         faviconUrl: '',
-        contactEmail: 'hello@auravibe.ir',
+        contactEmail: 'hello@auralune.ir',
         contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
         address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
         workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
         socialLinks: {
-          instagram: 'https://instagram.com/auravibe',
-          telegram: 'https://t.me/auravibe',
-          bale: 'https://ble.ir/auravibe'
+          instagram: 'https://instagram.com/auralune',
+          telegram: 'https://t.me/auralune',
+          bale: 'https://ble.ir/auralune'
         },
         timezone: 'Asia/Tehran',
         language: 'fa',
@@ -1840,7 +1857,7 @@ class DatabaseService {
           { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
           { title: 'مجله استایل', url: '/journal' }
         ],
-        footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+        footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
         notifications: {
           newOrder: true,
           newUser: true,
@@ -1849,7 +1866,7 @@ class DatabaseService {
         },
         cardToCardSettings: {
           cardNumber: '6037997512345678',
-          cardholderName: 'فروشگاه آورا وایب'
+          cardholderName: 'فروشگاه اورالون (Auralune)'
         },
         paymentGatewaySettings: {
           providerName: 'درگاه پرداخت آنلاین',
@@ -1866,7 +1883,7 @@ class DatabaseService {
     const row = generalSettingsToRow(settings);
     const { error } = await getClient().from('general_settings').upsert(row);
     if (error) {
-      console.error('[AuraVibe DB] Error updating general settings:', error);
+      console.error('[Auralune DB] Error updating general settings:', error);
       throw error;
     }
     if (adminUser) {
@@ -1886,7 +1903,7 @@ class DatabaseService {
   public async getRedirects(): Promise<RedirectRule[]> {
     const { data, error } = await getClient().from('redirects').select('*').order('created_at', { ascending: false });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching redirects:', error);
+      console.error('[Auralune DB] Error fetching redirects:', error);
       throw error;
     }
     this.cachedRedirects = (data || []).map(rowToRedirect);
@@ -1898,7 +1915,7 @@ class DatabaseService {
     if (!row.id) row.id = String(Date.now());
     const { data, error } = await getClient().from('redirects').upsert(row).select().single();
     if (error) {
-      console.error('[AuraVibe DB] Error saving redirect:', error);
+      console.error('[Auralune DB] Error saving redirect:', error);
       throw error;
     }
     const saved = rowToRedirect(data);
@@ -1920,7 +1937,7 @@ class DatabaseService {
   public async deleteRedirect(id: string, adminUser?: { id: number; name: string }): Promise<void> {
     const { error } = await getClient().from('redirects').delete().eq('id', id);
     if (error) {
-      console.error('[AuraVibe DB] Error deleting redirect:', error);
+      console.error('[Auralune DB] Error deleting redirect:', error);
       throw error;
     }
     if (adminUser) {
@@ -1944,7 +1961,7 @@ class DatabaseService {
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) {
-      console.error('[AuraVibe DB] Error fetching audit logs:', error);
+      console.error('[Auralune DB] Error fetching audit logs:', error);
       throw error;
     }
     this.cachedAuditLogs = (data || []).map(rowToAuditLog);
@@ -1978,7 +1995,7 @@ class DatabaseService {
     const row = auditLogToRow(newLog);
     const { error } = await getClient().from('audit_logs').insert(row);
     if (error) {
-      console.warn('[AuraVibe DB] Warning inserting audit log:', error.message);
+      console.warn('[Auralune DB] Warning inserting audit log:', error.message);
     }
   }
 
@@ -1990,7 +2007,7 @@ class DatabaseService {
     }
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) {
-      console.error('[AuraVibe DB] Error fetching notifications:', error);
+      console.error('[Auralune DB] Error fetching notifications:', error);
       throw error;
     }
     this.cachedNotifications = (data || []).map(rowToNotification);
@@ -2007,7 +2024,7 @@ class DatabaseService {
     const row = notificationToRow(newNotif);
     const { error } = await getClient().from('notifications').insert(row);
     if (error) {
-      console.warn('[AuraVibe DB] Warning inserting notification:', error.message);
+      console.warn('[Auralune DB] Warning inserting notification:', error.message);
     }
     this.notify();
   }
@@ -2026,7 +2043,7 @@ class DatabaseService {
       const allProducts = await this.getProducts();
       return allProducts.filter((p) => productIds.includes(p.id));
     } catch (err) {
-      console.error('[AuraVibe DB] Error fetching user wishlist:', err);
+      console.error('[Auralune DB] Error fetching user wishlist:', err);
       return [];
     }
   }
@@ -2037,11 +2054,11 @@ class DatabaseService {
         .from('user_wishlists')
         .upsert({ user_id: userId, product_id: productId }, { onConflict: 'user_id,product_id' });
       if (error) {
-        console.error('[AuraVibe DB] Error adding to wishlist:', error);
+        console.error('[Auralune DB] Error adding to wishlist:', error);
       }
       this.notify();
     } catch (err) {
-      console.error('[AuraVibe DB] Error adding to wishlist:', err);
+      console.error('[Auralune DB] Error adding to wishlist:', err);
     }
   }
 
@@ -2053,11 +2070,11 @@ class DatabaseService {
         .eq('user_id', userId)
         .eq('product_id', productId);
       if (error) {
-        console.error('[AuraVibe DB] Error removing from wishlist:', error);
+        console.error('[Auralune DB] Error removing from wishlist:', error);
       }
       this.notify();
     } catch (err) {
-      console.error('[AuraVibe DB] Error removing from wishlist:', err);
+      console.error('[Auralune DB] Error removing from wishlist:', err);
     }
   }
 
@@ -2078,7 +2095,7 @@ class DatabaseService {
         return true;
       }
     } catch (err) {
-      console.error('[AuraVibe DB] Error toggling wishlist:', err);
+      console.error('[Auralune DB] Error toggling wishlist:', err);
       return false;
     }
   }
@@ -2112,7 +2129,7 @@ class DatabaseService {
       }
       return items;
     } catch (err) {
-      console.error('[AuraVibe DB] Error fetching user cart:', err);
+      console.error('[Auralune DB] Error fetching user cart:', err);
       return [];
     }
   }
@@ -2156,7 +2173,7 @@ class DatabaseService {
       this.notify();
       return await this.getUserCart(userId);
     } catch (err) {
-      console.error('[AuraVibe DB] Error adding to cart:', err);
+      console.error('[Auralune DB] Error adding to cart:', err);
       return await this.getUserCart(userId);
     }
   }
@@ -2186,13 +2203,13 @@ class DatabaseService {
 
       const { error } = await query;
       if (error) {
-        console.error('[AuraVibe DB] Error updating cart quantity:', error);
+        console.error('[Auralune DB] Error updating cart quantity:', error);
       }
 
       this.notify();
       return await this.getUserCart(userId);
     } catch (err) {
-      console.error('[AuraVibe DB] Error updating cart quantity:', err);
+      console.error('[Auralune DB] Error updating cart quantity:', err);
       return await this.getUserCart(userId);
     }
   }
@@ -2217,13 +2234,13 @@ class DatabaseService {
 
       const { error } = await query;
       if (error) {
-        console.error('[AuraVibe DB] Error removing from cart:', error);
+        console.error('[Auralune DB] Error removing from cart:', error);
       }
 
       this.notify();
       return await this.getUserCart(userId);
     } catch (err) {
-      console.error('[AuraVibe DB] Error removing from cart:', err);
+      console.error('[Auralune DB] Error removing from cart:', err);
       return await this.getUserCart(userId);
     }
   }
@@ -2232,11 +2249,11 @@ class DatabaseService {
     try {
       const { error } = await getClient().from('user_carts').delete().eq('user_id', userId);
       if (error) {
-        console.error('[AuraVibe DB] Error clearing cart:', error);
+        console.error('[Auralune DB] Error clearing cart:', error);
       }
       this.notify();
     } catch (err) {
-      console.error('[AuraVibe DB] Error clearing cart:', err);
+      console.error('[Auralune DB] Error clearing cart:', err);
     }
   }
 
@@ -2253,7 +2270,7 @@ class DatabaseService {
         await this.addToCart(userId, item.product.id, item.quantity, item.color);
       }
     } catch (err) {
-      console.error('[AuraVibe DB] Error merging guest cart & wishlist:', err);
+      console.error('[Auralune DB] Error merging guest cart & wishlist:', err);
     }
     const cart = await this.getUserCart(userId);
     const wishlist = await this.getUserWishlist(userId);

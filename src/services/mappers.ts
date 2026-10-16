@@ -58,7 +58,7 @@ export function rowToReview(row: any): ProductReview {
     id: Number(row.id),
     productId: Number(row.product_id),
     userId: row.user_id ? Number(row.user_id) : undefined,
-    userName: row.user_name ?? 'کاربر آورا',
+    userName: row.user_name ?? 'کاربر اورالون',
     userAvatar: row.user_avatar ?? undefined,
     rating: Number(row.rating),
     comment: row.comment ?? '',
@@ -416,7 +416,7 @@ export function globalSeoToRow(item: Partial<GlobalSEO>): Record<string, any> {
 // --- GENERAL SETTINGS ---
 export function rowToGeneralSettings(row: any): GeneralSettings {
   return {
-    siteName: row.site_name ?? 'AuraVibe',
+    siteName: row.site_name ?? 'Auralune',
     logoUrl: row.logo_url ?? '',
     faviconUrl: row.favicon_url ?? '',
     contactEmail: row.contact_email ?? '',
@@ -436,7 +436,7 @@ export function rowToGeneralSettings(row: any): GeneralSettings {
     },
     cardToCardSettings: row.card_to_card_settings ?? row.cardToCardSettings ?? {
       cardNumber: '6037997512345678',
-      cardholderName: 'فروشگاه آورا وایب'
+      cardholderName: 'فروشگاه اورالون (Auralune)'
     },
     paymentGatewaySettings: row.payment_gateway_settings ?? row.paymentGatewaySettings ?? {
       providerName: 'درگاه پرداخت آنلاین',

@@ -309,7 +309,7 @@ export function CustomerAuthModal({
         });
 
         if (error) {
-          console.error('[AuraVibe Auth] Supabase signInWithOtp error:', error);
+          console.error('[Auralune Auth] Supabase signInWithOtp error:', error);
           if (
             error.message.includes('provider') ||
             error.message.includes('not configured') ||
@@ -452,7 +452,7 @@ export function CustomerAuthModal({
   const filteredCities = (selectedProvinceData?.cities || []).filter((c) => c.includes(citySearch));
 
   return (
-    <div className="modal-backdrop p-3" onClick={close}>
+    <div className="modal-backdrop z-[60] p-3" onClick={close}>
       <div
         className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-lg relative space-y-5 text-right max-h-[90vh] overflow-y-auto border border-[#37192c]/10"
         onClick={(e) => e.stopPropagation()}
@@ -469,7 +469,7 @@ export function CustomerAuthModal({
 
         {/* Modal Header Title */}
         <div className="text-center space-y-1">
-          <div className="brand-font text-2xl font-black text-[#37192C]">AuraVibe</div>
+          <div className="brand-font text-2xl font-black text-[#37192C]">Auralune</div>
           <h2 className="text-base font-black text-[#37192C]">
             {step === 'profile'
               ? 'تکمیل حساب کاربری'

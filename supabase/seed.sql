@@ -75,13 +75,13 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO public.global_seo (id, site_title, default_meta_description, default_og_image, default_canonical, organization_name, organization_logo, robots_txt)
 VALUES (
   1,
-  'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-  'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
+  'Auralune | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+  'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس اورالون.',
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23FFF3C5"/><circle cx="150" cy="150" r="90" fill="%2337192C"/><polygon points="150,75 172,127 225,127 180,157 198,210 150,180 102,210 120,157 75,127 128,127" fill="%23FFF3C5"/></svg>',
-  'https://auravibe.ir',
-  'مجموعه آورا وایب و وینا اکسسوری',
+  'https://auralune.ir',
+  'مجموعه اورالون و وینا اکسسوری',
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%2337192C"/><circle cx="150" cy="150" r="100" fill="%23FFF3C5"/><path d="M100 180 Q150 90 200 180" stroke="%2337192C" stroke-width="12" fill="none"/></svg>',
-  E'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml'
+  E'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auralune.ir/sitemap.xml'
 )
 ON CONFLICT (id) DO UPDATE SET
   site_title = EXCLUDED.site_title,
@@ -91,18 +91,18 @@ ON CONFLICT (id) DO UPDATE SET
 INSERT INTO public.general_settings (id, site_name, logo_url, favicon_url, contact_email, contact_phone, address, working_hours, social_links, timezone, language, header_links, footer_description, notifications)
 VALUES (
   1,
-  'AuraVibe | آورا وایب',
+  'Auralune | اورالون',
   '',
   '',
-  'hello@auravibe.ir',
+  'hello@auralune.ir',
   '۰۲۱-۸۸۸۸۹۹۹۹',
   'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
   'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
-  '{"instagram":"https://instagram.com/auravibe","telegram":"https://t.me/auravibe","bale":"https://ble.ir/auravibe"}'::jsonb,
+  '{"instagram":"https://instagram.com/auralune","telegram":"https://t.me/auralune","bale":"https://ble.ir/auralune"}'::jsonb,
   'Asia/Tehran',
   'fa',
   '[{"title":"صفحه اصلی","url":"/"},{"title":"جدیدترین‌ها","url":"/category/new"},{"title":"پرفروش‌ترین‌ها","url":"/category/bestsellers"},{"title":"مجله استایل","url":"/journal"}]'::jsonb,
-  'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+  'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
   '{"newOrder":true,"newUser":true,"newTicket":true,"securityAlert":true}'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET

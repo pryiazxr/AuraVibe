@@ -86,7 +86,7 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goH
     { id: 'products', label: 'مدیریت محصولات', icon: <Box size={18} />, permission: 'manage_products' },
     { id: 'banners', label: 'مدیریت بنرها', icon: <Image size={18} />, permission: 'manage_banners' },
     { id: 'orders', label: 'مدیریت سفارشات', icon: <ShoppingBag size={18} />, permission: 'manage_orders' },
-    { id: 'magazine', label: 'مجله آورا', icon: <Globe size={18} />, permission: 'manage_content' },
+    { id: 'magazine', label: 'مجله اورالون', icon: <Globe size={18} />, permission: 'manage_content' },
     { id: 'users', label: 'کاربران و نقش‌ها (RBAC)', icon: <Users size={18} />, permission: 'manage_users' },
     {
       id: 'support',
@@ -128,7 +128,7 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goH
           <div className="flex items-center justify-between p-4 border-b border-[#37192c]/10">
             {!sidebarCollapsed && (
               <div>
-                <div className="brand-font text-xl font-black text-[#37192C]">AuraVibe</div>
+                <div className="brand-font text-xl font-black text-[#37192C]">Auralune</div>
                 <span className="text-[10px] font-bold text-[#8b627e]">پیشخوان مدیریتی ۳۶۰</span>
               </div>
             )}
@@ -263,8 +263,8 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goH
           <div className="relative flex w-4/5 max-w-xs flex-1 flex-col bg-white p-4 shadow-lg z-10">
             <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4">
               <div>
-                <div className="brand-font text-xl font-black text-[#37192C]">AuraVibe</div>
-                <span className="text-[10px] font-bold text-[#8b627e]">پنل مدیریتی آورا</span>
+                <div className="brand-font text-xl font-black text-[#37192C]">Auralune</div>
+                <span className="text-[10px] font-bold text-[#8b627e]">پنل مدیریتی اورالون</span>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}

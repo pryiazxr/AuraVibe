@@ -172,7 +172,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-2xl bg-white p-5 border border-[#37192c]/10 shadow-sm">
         <div>
-          <h2 className="text-lg font-black text-[#37192C]">مدیریت مجله آورا (Magazine CMS)</h2>
+          <h2 className="text-lg font-black text-[#37192C]">مدیریت مجله اورالون (Magazine CMS)</h2>
           <p className="text-xs text-[#8b627e]">ایجاد و ویرایش مقالات، ثبت خودکار تاریخ شمسی قفل‌شده و ادیتور تصویر پیشرفته</p>
         </div>
         <button
@@ -241,7 +241,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
             </button>
 
             <h3 className="text-base font-black text-[#37192C] border-b pb-3">
-              {editingArticle ? 'ویرایش مقاله مجله' : 'افزودن مقاله جدید به مجله آورا'}
+              {editingArticle ? 'ویرایش مقاله مجله' : 'افزودن مقاله جدید به مجله اورالون'}
             </h3>
 
             {uploadError && (
