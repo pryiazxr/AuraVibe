@@ -104,6 +104,23 @@ import { AuditLogsView } from './components/admin/AuditLogsView';
 
 const money = (value: number) => new Intl.NumberFormat('fa-IR').format(value);
 
+const GUEST_CART_KEY = 'auralune_guest_cart';
+
+function getGuestCart(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(GUEST_CART_KEY) || localStorage.getItem('auravibe_guest_cart');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestCart(items: CartItem[]) {
+  try {
+    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(items));
+  } catch {}
+}
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,6 +139,15 @@ function App() {
         }, { replace: true });
       }
     }
+  };
+
+  const handleCloseProductModal = () => {
+    setSelectedProduct(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('product');
+      return next;
+    }, { replace: true });
   };
 
   // Derive storefront active route from location
@@ -227,12 +253,10 @@ function App() {
       setSelectedOrderDetails(null);
     }
 
-    // Auth Modal
+    // Auth Modal (only open if explicitly set in searchParams; don't forcefully overwrite pending actions)
     const authVal = searchParams.get('auth');
     if (authVal === 'login' || authVal === 'register') {
       setAuthModal((prev) => ({ ...prev, open: true, mode: authVal }));
-    } else {
-      setAuthModal((prev) => ({ ...prev, open: false }));
     }
 
     // Account Tab
@@ -240,7 +264,7 @@ function App() {
     if (tabVal === 'profile' || tabVal === 'orders' || tabVal === 'fav' || tabVal === 'cart') {
       setAccountTab(tabVal as any);
     }
-  }, [searchParams, products, orders, selectedProduct?.id]);
+  }, [searchParams, products, orders]);
 
 
   const loadCartAndWishlist = async (user: User | null) => {
@@ -256,13 +280,16 @@ function App() {
         console.error('[Auralune Cart/Wishlist] Error loading from DB:', err);
       }
     } else {
-      setCart([]);
+      setCart(getGuestCart());
       setWishlist([]);
     }
   };
 
   // Restore active Supabase Auth session for customer on mount
   useEffect(() => {
+    // Initial guest cart load for visitors
+    setCart(getGuestCart());
+
     if (!isSupabaseConfigured() || !supabase) return;
 
     const checkSession = async () => {
@@ -275,7 +302,16 @@ function App() {
           }
           if (profile) {
             setCurrentUser(profile);
-            await loadCartAndWishlist(profile);
+            const gCart = getGuestCart();
+            if (gCart.length > 0) {
+              const merged = await db.mergeGuestCartAndWishlist(profile.id, gCart, []);
+              localStorage.removeItem(GUEST_CART_KEY);
+              localStorage.removeItem('auravibe_guest_cart');
+              setCart(merged.cart);
+              setWishlist(merged.wishlist);
+            } else {
+              await loadCartAndWishlist(profile);
+            }
           }
         }
       } catch (err) {
@@ -293,11 +329,20 @@ function App() {
         }
         if (profile) {
           setCurrentUser(profile);
-          await loadCartAndWishlist(profile);
+          const gCart = getGuestCart();
+          if (gCart.length > 0) {
+            const merged = await db.mergeGuestCartAndWishlist(profile.id, gCart, []);
+            localStorage.removeItem(GUEST_CART_KEY);
+            localStorage.removeItem('auravibe_guest_cart');
+            setCart(merged.cart);
+            setWishlist(merged.wishlist);
+          } else {
+            await loadCartAndWishlist(profile);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
-        setCart([]);
+        setCart(getGuestCart());
         setWishlist([]);
       }
     });
@@ -374,12 +419,6 @@ function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (banners.length === 0) return;
-    const timer = window.setInterval(() => setBannerIndex((current) => (current + 1) % banners.length), 4800);
-    return () => window.clearInterval(timer);
-  }, [banners.length]);
-
   const cartTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
     [cart]
@@ -391,32 +430,36 @@ function App() {
   );
 
   const addToCart = async (product: Product, quantity = 1, color?: string) => {
-    if (!currentUser) {
-      setSelectedProduct(null);
-      setAuthModal({
-        open: true,
-        mode: 'login',
-        pendingAction: async () => {
-          const sessionRes = await supabase?.auth.getSession();
-          const sessionUser = sessionRes?.data?.session?.user;
-          if (sessionUser) {
-            let userProfile = await db.getUserByAuthId(sessionUser.id);
-            if (!userProfile && sessionUser.phone) {
-              userProfile = await db.getUserByPhone(sessionUser.phone);
-            }
-            if (userProfile) {
-              const updatedCart = await db.addToCart(userProfile.id, product.id, quantity, color);
-              setCart(updatedCart);
-            }
+    if (currentUser) {
+      const updated = await db.addToCart(currentUser.id, product.id, quantity, color);
+      setCart(updated);
+    } else {
+      const currentGuestCart = getGuestCart();
+      const existingIdx = currentGuestCart.findIndex(
+        (item) => item.product.id === product.id && (color ? item.color === color : !item.color)
+      );
+      let updatedGuestCart: CartItem[];
+      if (existingIdx >= 0) {
+        updatedGuestCart = currentGuestCart.map((item, idx) =>
+          idx === existingIdx ? { ...item, quantity: item.quantity + quantity } : item
+        );
+      } else {
+        updatedGuestCart = [
+          ...currentGuestCart,
+          {
+            id: Date.now(),
+            userId: 0,
+            productId: product.id,
+            product,
+            quantity,
+            color,
+            createdAt: new Date().toISOString()
           }
-        }
-      });
-      return;
+        ];
+      }
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
     }
-
-    const updated = await db.addToCart(currentUser.id, product.id, quantity, color);
-    setCart(updated);
-    setSelectedProduct(null);
   };
 
   const handleAddToCartGated = (product: Product, quantity = 1, color?: string) => {
@@ -424,20 +467,41 @@ function App() {
   };
 
   const updateCartQuantity = async (productId: number, quantity: number, color?: string) => {
-    if (!currentUser) return;
-    const updated = await db.updateCartItemQuantity(currentUser.id, productId, quantity, color);
-    setCart(updated);
+    if (currentUser) {
+      const updated = await db.updateCartItemQuantity(currentUser.id, productId, quantity, color);
+      setCart(updated);
+    } else {
+      if (quantity <= 0) {
+        removeFromCart(productId, color);
+        return;
+      }
+      const currentGuestCart = getGuestCart();
+      const updatedGuestCart = currentGuestCart.map((item) =>
+        item.product.id === productId && (color ? item.color === color : !item.color)
+          ? { ...item, quantity }
+          : item
+      );
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
+    }
   };
 
   const removeFromCart = async (productId: number, color?: string) => {
-    if (!currentUser) return;
-    const updated = await db.removeFromCart(currentUser.id, productId, color);
-    setCart(updated);
+    if (currentUser) {
+      const updated = await db.removeFromCart(currentUser.id, productId, color);
+      setCart(updated);
+    } else {
+      const currentGuestCart = getGuestCart();
+      const updatedGuestCart = currentGuestCart.filter(
+        (item) => !(item.product.id === productId && (color ? item.color === color : !item.color))
+      );
+      saveGuestCart(updatedGuestCart);
+      setCart(updatedGuestCart);
+    }
   };
 
   const toggleWishlist = async (product: Product) => {
     if (!currentUser) {
-      setSelectedProduct(null);
       setAuthModal({
         open: true,
         mode: 'login',
@@ -484,8 +548,7 @@ function App() {
         return next;
       });
     } else {
-      setSelectedProduct(null);
-      closeModalParam('product');
+      handleCloseProductModal();
     }
   };
 
@@ -681,19 +744,8 @@ function App() {
                       className="icon-button relative"
                       aria-label="سبد خرید"
                       onClick={() => {
-                        if (!currentUser) {
-                          setAuthModal({
-                            open: true,
-                            mode: 'login',
-                            pendingAction: () => {
-                              setAccountTab('cart');
-                              handleNavClick('account');
-                            }
-                          });
-                        } else {
-                          setAccountTab('cart');
-                          handleNavClick('account');
-                        }
+                        setAccountTab('cart');
+                        handleNavClick('account');
                       }}
                     >
                       <ShoppingBag size={20} />
@@ -721,6 +773,8 @@ function App() {
                 if (currentUser) {
                   await db.clearCart(currentUser.id);
                 }
+                localStorage.removeItem(GUEST_CART_KEY);
+                localStorage.removeItem('auravibe_guest_cart');
                 setCart([]);
                 const refreshedOrders = await db.getOrders();
                 setOrders(refreshedOrders);
@@ -874,8 +928,8 @@ function App() {
             <ProductModal
               product={selectedProduct}
               user={currentUser}
-              close={() => setSelectedProduct(null)}
-              add={handleAddToCartGated}
+              close={handleCloseProductModal}
+              add={addToCart}
               toggleWish={toggleWishlist}
               isWished={wishlist.some((w) => w.id === selectedProduct.id)}
               allProducts={products}
@@ -940,6 +994,8 @@ function App() {
                 if (currentUser) {
                   await db.clearCart(currentUser.id);
                 }
+                localStorage.removeItem(GUEST_CART_KEY);
+                localStorage.removeItem('auravibe_guest_cart');
                 setCart([]);
                 setCheckoutModal(false);
                 setAccountTab('orders');
@@ -955,7 +1011,20 @@ function App() {
               close={() => setAuthModal({ open: false, mode: 'login' })}
               onSuccess={async (loggedUser) => {
                 setCurrentUser(loggedUser);
-                await loadCartAndWishlist(loggedUser);
+                const gCart = getGuestCart();
+                if (gCart.length > 0) {
+                  try {
+                    const merged = await db.mergeGuestCartAndWishlist(loggedUser.id, gCart, []);
+                    localStorage.removeItem(GUEST_CART_KEY);
+                    localStorage.removeItem('auravibe_guest_cart');
+                    setCart(merged.cart);
+                    setWishlist(merged.wishlist);
+                  } catch {
+                    await loadCartAndWishlist(loggedUser);
+                  }
+                } else {
+                  await loadCartAndWishlist(loggedUser);
+                }
                 const pending = authModal.pendingAction;
                 setAuthModal({ open: false, mode: 'login' });
                 if (pending) {
@@ -1211,12 +1280,12 @@ function BannerCarousel({
   const minSwipeDistance = 50;
 
   useEffect(() => {
-    if (banners.length === 0) return;
+    if (banners.length <= 1) return;
     const timer = setInterval(() => {
       setBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 4500);
+    }, 3000);
     return () => clearInterval(timer);
-  }, [banners.length, setBannerIndex]);
+  }, [banners.length, bannerIndex, setBannerIndex]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
@@ -2065,6 +2134,7 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
   const [activeImgIdx, setActiveImgIdx] = useState(product.mainImageIndex || 0);
   const [showVideo, setShowVideo] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [addedCartFeedback, setAddedCartFeedback] = useState(false);
 
   // Reviews state
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -2166,7 +2236,7 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
     <div className="modal-backdrop" onClick={close}>
       <div className="product-modal relative" onClick={(e) => e.stopPropagation()}>
         <button
-          className="sticky top-4 start-auto ms-auto me-4 z-30 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C] hover:bg-white transition"
+          className="sticky top-4 start-auto ms-auto me-4 z-30 grid size-10 place-items-center rounded-full bg-white/90 shadow-md text-[#37192C] hover:bg-white transition cursor-pointer"
           onClick={close}
           aria-label="بستن"
         >
@@ -2250,15 +2320,29 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
             <div className="space-y-3 pt-4 border-t border-[#37192c]/10">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                 <button
-                  onClick={() => add(product)}
-                  className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2"
+                  onClick={() => {
+                    add(product);
+                    setAddedCartFeedback(true);
+                    setTimeout(() => setAddedCartFeedback(false), 2200);
+                  }}
+                  className="flex-1 rounded-full bg-[#37192C] py-3.5 text-xs sm:text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <ShoppingBag size={18} /> افزودن به سبد خرید
+                  {addedCartFeedback ? (
+                    <>
+                      <Check size={18} className="text-emerald-400" />
+                      <span className="text-emerald-300">به سبد خرید افزوده شد</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingBag size={18} />
+                      <span>افزودن به سبد خرید</span>
+                    </>
+                  )}
                 </button>
 
                 <button
                   onClick={() => toggleWish(product)}
-                  className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-bold border transition flex items-center justify-center gap-2 ${
+                  className={`flex-1 rounded-full py-3.5 text-xs sm:text-sm font-bold border transition flex items-center justify-center gap-2 cursor-pointer ${
                     isWished
                       ? 'bg-rose-500 text-white border-rose-500'
                       : 'bg-[#FFF3C5] border-[#37192c]/15 text-[#37192C] hover:bg-[#ffe79a]'
@@ -2810,7 +2894,7 @@ function ProfilePageView({
   const [postalError, setPostalError] = useState('');
 
   // If Guest User (user === null)
-  if (!user) {
+  if (!user && tab !== 'cart') {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 pt-8 pb-12 sm:px-6 lg:px-8 text-right font-vazir">
         <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
@@ -2830,7 +2914,7 @@ function ProfilePageView({
           <div className="space-y-2 max-w-md mx-auto">
             <h2 className="text-xl sm:text-2xl font-black text-[#37192C]">خوش آمدید!</h2>
             <p className="text-xs sm:text-sm text-[#37192C]/80 leading-7 font-bold">
-              برای دسترسی به سبد خرید، پیگیری سفارشات و لیست علاقه‌مندی‌های خود وارد حساب کاربری شوید یا ثبت‌نام کنید.
+              برای دسترسی به اطلاعات حساب، پیگیری سفارشات و لیست علاقه‌مندی‌های خود وارد حساب کاربری شوید یا ثبت‌نام کنید.
             </p>
           </div>
 
@@ -2848,6 +2932,95 @@ function ProfilePageView({
               ورود با شماره همراه
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && tab === 'cart') {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 lg:px-8 text-right font-vazir">
+        <div className="flex items-center justify-between border-b border-[#37192c]/10 pb-4 mb-6">
+          <div>
+            <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
+              <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">سبد خرید شما</h1>
+          </div>
+          <button
+            onClick={() => openAuthModal('login')}
+            className="flex items-center gap-1 text-xs font-bold text-[#37192C] bg-[#FFF3C5] px-4 py-2 rounded-full hover:bg-[#ffe79a] transition cursor-pointer"
+          >
+            ورود به حساب کاربری
+          </button>
+        </div>
+
+        <div className="rounded-[2.5rem] bg-white p-6 sm:p-8 border border-[#37192c]/10 shadow-xs">
+          {cart.length === 0 ? (
+            <div className="py-12 text-center text-xs font-bold text-[#8b627e]">
+              سبد خرید شما خالی است.
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {cart.map((item: CartItem, idx: number) => (
+                  <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#fffaf0] rounded-2xl border border-[#37192c]/10 text-xs font-bold gap-3">
+                    <div className="flex items-center gap-3">
+                      <img src={item.product.images[0]} alt={item.product.name} className="size-14 rounded-xl object-cover shrink-0" />
+                      <div>
+                        <span className="block text-sm text-[#37192C]">{item.product.name}</span>
+                        <span className="text-xs text-[#8b627e]">{item.product.category} {item.color ? `| رنگ: ${item.color}` : ''}</span>
+                        <span className="block mt-1 text-xs text-[#37192C]/80">{money(item.product.price)} تومان</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0">
+                      <div className="flex items-center border border-[#37192c]/20 bg-white rounded-xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, item.color)}
+                          className="px-2.5 py-1.5 hover:bg-[#FFF3C5] transition text-[#37192C] cursor-pointer"
+                          title="کاهش تعداد"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="px-3 font-black text-xs text-[#37192C]">{item.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, item.color)}
+                          className="px-2.5 py-1.5 hover:bg-[#FFF3C5] transition text-[#37192C] cursor-pointer"
+                          title="افزایش تعداد"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+
+                      <span className="text-sm font-black text-[#37192C]">{money(item.product.price * item.quantity)} تومان</span>
+
+                      <button
+                        type="button"
+                        onClick={() => removeFromCart(item.product.id, item.color)}
+                        className="text-rose-500 hover:bg-rose-50 p-2 rounded-full transition cursor-pointer"
+                        title="حذف از سبد"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 pt-4 border-t flex justify-between items-center text-sm font-black">
+                <span>مبلغ قابل پرداخت:</span>
+                <span className="text-lg text-[#37192C]">{money(total)} تومان</span>
+              </div>
+              <button
+                onClick={openCheckout}
+                className="mt-6 w-full rounded-full bg-[#37192C] py-4 text-sm font-bold text-[#FFF3C5] hover:bg-[#5a2548] transition shadow-md cursor-pointer"
+              >
+                تکمیل سفارش و پرداخت فاکتور
+              </button>
+            </>
+          )}
         </div>
       </div>
     );

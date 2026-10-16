@@ -452,7 +452,7 @@ export function CustomerAuthModal({
   const filteredCities = (selectedProvinceData?.cities || []).filter((c) => c.includes(citySearch));
 
   return (
-    <div className="modal-backdrop p-3" onClick={close}>
+    <div className="modal-backdrop z-[60] p-3" onClick={close}>
       <div
         className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-lg relative space-y-5 text-right max-h-[90vh] overflow-y-auto border border-[#37192c]/10"
         onClick={(e) => e.stopPropagation()}
