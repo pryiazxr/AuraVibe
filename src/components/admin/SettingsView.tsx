@@ -8,7 +8,7 @@ type SettingsViewProps = {
 
 export function SettingsView({ currentAdmin }: SettingsViewProps) {
   const [settings, setSettings] = useState<GeneralSettings>({
-    siteName: 'AuraVibe',
+    siteName: 'Auralune',
     logoUrl: '',
     faviconUrl: '',
     contactEmail: '',
@@ -28,7 +28,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
     },
     cardToCardSettings: {
       cardNumber: '۶۰۳۷۹۹۷۵۱۲۳۴۵۶۷۸',
-      cardholderName: 'فروشگاه آورا وایب'
+      cardholderName: 'فروشگاه اورالون (Auralune)'
     },
     paymentGatewaySettings: {
       providerName: 'درگاه پرداخت آنلاین',
@@ -92,7 +92,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
       setNotifUser(s.notifications.newUser);
       setNotifTicket(s.notifications.newTicket);
       setCardNumber(s.cardToCardSettings?.cardNumber || '6037997512345678');
-      setCardholderName(s.cardToCardSettings?.cardholderName || 'فروشگاه آورا وایب');
+      setCardholderName(s.cardToCardSettings?.cardholderName || 'فروشگاه اورالون (Auralune)');
       setGwProviderName(s.paymentGatewaySettings?.providerName || 'درگاه پرداخت آنلاین');
       setGwUrl(s.paymentGatewaySettings?.gatewayUrl || 'https://api.zarinpal.com/pg/v4/payment/request.json');
       setGwActive(s.paymentGatewaySettings?.active || false);

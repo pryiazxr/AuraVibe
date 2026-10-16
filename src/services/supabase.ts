@@ -167,7 +167,7 @@ export async function uploadToStorage(
   });
 
   if (uploadError) {
-    console.error(`[AuraVibe Storage] Upload failed for bucket '${bucket}':`, uploadError);
+    console.error(`[Auralune Storage] Upload failed for bucket '${bucket}':`, uploadError);
     throw new Error(`خطا در آپلود فایل در ذخیره‌ساز (${bucket}): ${uploadError.message}`);
   }
 

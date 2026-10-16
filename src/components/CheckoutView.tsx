@@ -84,7 +84,7 @@ export function CheckoutView({
 
   const cardInfo = settings?.cardToCardSettings || {
     cardNumber: '۶۰۳۷۹۹۷۵۱۲۳۴۵۶۷۸',
-    cardholderName: 'فروشگاه آورا وایب'
+    cardholderName: 'فروشگاه اورالون (Auralune)'
   };
 
   const gatewayInfo = settings?.paymentGatewaySettings || {
@@ -136,7 +136,7 @@ export function CheckoutView({
     },
     AURA_EXPRESS: {
       key: 'AURA_EXPRESS',
-      title: 'پیک اختصاصی آورا (تهران)',
+      title: 'پیک اختصاصی اورالون (تهران)',
       subtitle: 'تحویل همان‌روز',
       costNote: 'پس‌کرایه (پرداخت توسط مشتری در محل تحویل)'
     }

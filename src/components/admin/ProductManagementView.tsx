@@ -100,7 +100,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
       setPStock('15');
       setPCategory('گردنبند');
       setPBadge('جدید');
-      setPDescription('توضیحات کامل محصول زیورآلات و اکسسوری آورا استایل.');
+      setPDescription('توضیحات کامل محصول زیورآلات و اکسسوری اورالون.');
       setPStatus('active');
       setPImages([necklaceImage]);
       setMainImgIdx(0);
@@ -470,7 +470,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
                     value={pName}
                     onChange={(e) => setPName(e.target.value)}
                     className="mt-1 w-full rounded-xl border border-[#37192c]/20 bg-white px-3 py-2.5 outline-none"
-                    placeholder="گردنبند مروارید مدل آورا"
+                    placeholder="گردنبند مروارید مدل اورالون"
                   />
                 </div>
               </div>

@@ -129,7 +129,7 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
       setRecordingVoice(false);
       await db.replyTicket(
         selectedTicketId,
-        'پیام صوتی پشتیبانی آورا',
+        'پیام صوتی پشتیبانی اورالون',
         'admin',
         `${currentAdmin.firstName} ${currentAdmin.lastName}`,
         false,

@@ -253,7 +253,7 @@ function App() {
         setCart(dbCart);
         setWishlist(dbWishlist);
       } catch (err) {
-        console.error('[AuraVibe Cart/Wishlist] Error loading from DB:', err);
+        console.error('[Auralune Cart/Wishlist] Error loading from DB:', err);
       }
     } else {
       setCart([]);
@@ -279,7 +279,7 @@ function App() {
           }
         }
       } catch (err) {
-        console.error('[AuraVibe Auth] Session restoration error:', err);
+        console.error('[Auralune Auth] Session restoration error:', err);
       }
     };
 
@@ -583,7 +583,7 @@ function App() {
             <AlertTriangle className="w-8 h-8" />
           </div>
           <div className="space-y-3">
-            <h1 className="text-2xl font-black tracking-tight text-[#37192C]">AuraVibe</h1>
+            <h1 className="text-2xl font-black tracking-tight text-[#37192C]">Auralune</h1>
             <p className="text-base font-bold text-red-600">اتصال به بکاند تنظیم نشده است.</p>
             <p className="text-sm text-[#37192C]/80 leading-relaxed">
               برای اجرای نسخه production باید
@@ -664,7 +664,7 @@ function App() {
                     <Menu size={21} />
                   </button>
                   <button onClick={() => handleNavClick('home')} className="brand-font text-2xl tracking-[.08em] sm:text-3xl text-[#37192C]">
-                    AuraVibe
+                    Auralune
                   </button>
 
                   <nav className="hidden items-center gap-6 text-xs font-bold md:flex">
@@ -783,7 +783,7 @@ function App() {
 
               {/* Collections Grid */}
               <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-                <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های آورا استایل" items={productsNewest} open={openProductModal} onViewMore={() => handleNavClick('جدیدترین‌ها')} testid="new-products" />
+                <ProductSection title="جدیدترین‌ها" intro="تازه‌ترین‌های استایل اورالون" items={productsNewest} open={openProductModal} onViewMore={() => handleNavClick('جدیدترین‌ها')} testid="new-products" />
                 <ProductSection title="پرفروش‌ترین‌ها" intro="محبوب‌ترین انتخاب‌های کاربران" items={productsBestSellers} open={openProductModal} onViewMore={() => handleNavClick('پرفروش‌ترین‌ها')} testid="best-sellers" />
                 <ProductSection title="تخفیف ویژه" intro="پیشنهادهای استثنایی و محدود" items={productsSpecial} open={openProductModal} onViewMore={() => handleNavClick('تخفیف ویژه')} testid="special-offers" />
                 <ProductSection title="ساعت" intro="کالکشن ساعت‌های ظریف و خاص" items={productsWatches} open={openProductModal} onViewMore={() => handleNavClick('ساعت')} testid="watches" />
@@ -824,9 +824,9 @@ function App() {
           <footer className="mt-16 bg-[#FFF3C5] border-t border-[#37192c]/10 py-12 text-[#37192C]">
             <div className="mx-auto grid w-full max-w-7xl gap-9 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
               <div>
-                <div className="brand-font text-3xl font-black">AuraVibe</div>
+                <div className="brand-font text-3xl font-black">Auralune</div>
                 <p className="mt-4 text-xs leading-7 text-[#37192C]/80">
-                  فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.
+                  فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.
                 </p>
               </div>
               <div>
@@ -841,14 +841,14 @@ function App() {
               <div>
                 <h3 className="font-bold text-sm">راهنما و مجله</h3>
                 <div className="mt-4 space-y-2.5 text-xs font-semibold">
-                  <button onClick={() => handleNavClick('journal')} className="block hover:underline">مجله استایل آورا</button>
+                  <button onClick={() => handleNavClick('journal')} className="block hover:underline">مجله استایل اورالون</button>
                   <button onClick={() => setSupportOpen(true)} className="block hover:underline">پشتیبانی آنلاین</button>
                 </div>
               </div>
               <div>
                 <h3 className="font-bold text-base">ارتباط با ما</h3>
                 <a className="mt-4 block text-sm font-semibold" href="tel:02100000000">پشتیبانی: ۰۲۱-۸۸۸۸۹۹۹۹</a>
-                <a className="mt-2 block text-sm font-semibold" href="mailto:hello@auravibe.ir">ایمیل: hello@auravibe.ir</a>
+                <a className="mt-2 block text-sm font-semibold" href="mailto:hello@auralune.ir">ایمیل: hello@auralune.ir</a>
               </div>
             </div>
           </footer>
@@ -1079,7 +1079,7 @@ function AdminContainer({
       <div className="min-h-screen flex items-center justify-center bg-[#fffaf0] p-4 font-vazir text-right">
         <div className="w-full max-w-md rounded-3xl bg-white p-8 border border-[#37192c]/10 shadow-md space-y-6">
           <div className="text-center space-y-2">
-            <div className="brand-font text-3xl font-black text-[#37192C]">AuraVibe</div>
+            <div className="brand-font text-3xl font-black text-[#37192C]">Auralune</div>
             <h2 className="text-lg font-black text-[#37192C]">ورود به پیشخوان مدیریت ۳۶۰</h2>
             <p className="text-xs text-[#8b627e] font-semibold">برای دسترسی به پنل مدیریت، اطلاعات ادمین را وارد نمایید</p>
           </div>
@@ -1303,9 +1303,9 @@ function Intro() {
         <div className="line-logo">
           <span>A</span>
           <i />
-          <span>V</span>
+          <span>L</span>
         </div>
-        <p className="brand-font mt-5 text-3xl tracking-[.18em]">AuraVibe</p>
+        <p className="brand-font mt-5 text-3xl tracking-[.18em]">Auralune</p>
         <p className="mt-4 text-xs tracking-[.26em] text-[#37192C]/60">MADE FOR YOUR LITTLE JOYS</p>
       </div>
     </div>
@@ -1324,7 +1324,7 @@ function FollowModal({ close }: { close: () => void }) {
         </div>
         <h2 className="mt-5 text-xl font-black">با ما نزدیک‌تر باش</h2>
         <p className="mt-3 text-sm leading-7 text-[#37192C]/70">
-          برای دیدن پشت‌صحنه‌ها، محصولات تازه و حال‌وهوای AuraVibe ما را در شبکه‌های اجتماعی دنبال کن.
+          برای دیدن پشت‌صحنه‌ها، محصولات تازه و حال‌وهوای Auralune ما را در شبکه‌های اجتماعی دنبال کن.
         </p>
         <div className="mt-6 flex justify-center items-center gap-4">
           <a href="https://instagram.com" target="_blank" rel="noreferrer" className="social-icon">
@@ -1357,7 +1357,7 @@ function SocialBanner() {
           <span className="text-[10px] font-bold text-[#FFF3C5]/70 tracking-widest block uppercase">Instagram</span>
           <h3 className="mt-1 text-lg sm:text-xl font-black text-[#FFF3C5]">وینا اکسسوری در اینستاگرام</h3>
           <p className="mt-1.5 text-xs text-[#FFF3C5]/80 leading-5 font-semibold">
-            جدیدترین کالکشن‌ها و ویدیوهای آنباکسینگ استایل آورا
+            جدیدترین کالکشن‌ها و ویدیوهای آنباکسینگ استایل اورالون
           </p>
           <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#FFF3C5] px-4 py-1.5 text-xs font-extrabold text-[#37192C] shadow-xs group-hover:bg-white transition">
             دنبال کردن اینستاگرام <ArrowLeft size={14} />
@@ -1385,7 +1385,7 @@ function SocialBanner() {
         {/* Text Content on Left */}
         <div className="z-10 text-left max-w-[65%]">
           <span className="text-[10px] font-bold text-[#FFF3C5]/70 tracking-widest block uppercase">Telegram</span>
-          <h3 className="mt-1 text-lg sm:text-xl font-black text-[#FFF3C5]">کانال تلگرام آورا استایل</h3>
+          <h3 className="mt-1 text-lg sm:text-xl font-black text-[#FFF3C5]">کانال تلگرام استایل اورالون</h3>
           <p className="mt-1.5 text-xs text-[#FFF3C5]/80 leading-5 font-semibold">
             تخفیف‌های ویژه روزانه، کدهای تخفیف و سفارش سریع
           </p>
@@ -1539,7 +1539,7 @@ function JournalSection({ articles, onViewMore }: { articles: Article[]; onViewM
   return (
     <div className="rounded-[2.5rem] bg-[#fffdf7] border border-[#37192c]/10 p-6 sm:p-10">
       <div className="text-center mb-8">
-        <h2 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل آورا</h2>
+        <h2 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل اورالون</h2>
       </div>
 
       <div className="space-y-8 max-w-4xl mx-auto">
@@ -1572,7 +1572,7 @@ function JournalPageView({ articles, openHome }: { articles: Article[]; openHome
           <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
             <ArrowLeft size={14} className="rotate-180" /> بازگشت به خانه
           </button>
-          <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل آورا</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">مجله استایل اورالون</h1>
         </div>
       </div>
 
@@ -2140,7 +2140,7 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
       await db.saveProductReview({
         productId: product.id,
         userId: user.id,
-        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'کاربر آورا',
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'کاربر اورالون',
         userAvatar: user.avatar,
         rating: newRating,
         comment: newComment.trim(),
@@ -2296,7 +2296,7 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
                   <Star size={13} fill="currentColor" className="text-amber-500" /> {avgRating} ({approvedReviews.length} نظر)
                 </span>
               </h3>
-              <p className="text-[11px] text-[#8b627e] font-semibold mt-0.5">تجربه واقعی خریداران آورا وایب</p>
+              <p className="text-[11px] text-[#8b627e] font-semibold mt-0.5">تجربه واقعی خریداران اورالون (Auralune)</p>
             </div>
           </div>
 
@@ -2535,7 +2535,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
     if (!isProfileComplete) return;
     if (!inputText.trim() && !mediaUrl) return;
 
-    const senderName = user ? `${user.firstName} ${user.lastName}` : 'کاربر آورا';
+    const senderName = user ? `${user.firstName} ${user.lastName}` : 'کاربر اورالون';
 
     if (!userTicket) {
       await db.createTicket({
@@ -2574,7 +2574,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
       <div className="flex items-center justify-between border-b pb-3 shrink-0">
         <div className="flex items-center gap-2">
           <div className="size-3 rounded-full bg-emerald-500 animate-pulse" />
-          <h2 className="text-sm font-black text-[#37192C]">پشتیبانی آنلاین آورا (Aura Chat)</h2>
+          <h2 className="text-sm font-black text-[#37192C]">پشتیبانی آنلاین اورالون (Auralune Chat)</h2>
         </div>
         <button onClick={close} className="grid size-8 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
           <X size={16} />
@@ -2818,7 +2818,7 @@ function ProfilePageView({
             <button onClick={openHome} className="flex items-center gap-1 text-xs font-bold text-[#8b627e] mb-1 hover:underline">
               <ArrowLeft size={14} className="rotate-180" /> بازگشت به صفحه اصلی
             </button>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">حساب کاربری آورا وایب</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#37192C]">حساب کاربری اورالون</h1>
           </div>
         </div>
 
@@ -3342,7 +3342,7 @@ function CheckoutInvoiceModal({ cart, total, close, onPaymentComplete }: any) {
         <button onClick={close} className="absolute end-4 top-4 grid size-8 place-items-center rounded-full bg-[#FFF3C5]">
           <X size={16} />
         </button>
-        <h3 className="text-lg font-black text-[#37192C]">فاکتور خرید آنلاین آورا</h3>
+        <h3 className="text-lg font-black text-[#37192C]">فاکتور خرید آنلاین اورالون</h3>
         <div className="flex justify-between text-xs font-bold">
           <span>مبلغ کل فاکتور:</span>
           <span>{money(total)} تومان</span>
@@ -3462,7 +3462,7 @@ function SectionMenu({ sections, close, go }: any) {
       <div className="menu-drawer-backdrop" onClick={close} />
       <div className="menu-drawer">
         <div className="flex items-center justify-between pb-3 border-b border-[#37192c]/10">
-          <span className="brand-font text-xl text-[#37192C]">AuraVibe Menu</span>
+          <span className="brand-font text-xl text-[#37192C]">Auralune Menu</span>
           <button onClick={close} className="grid size-9 place-items-center rounded-full bg-[#FFF3C5] text-[#37192C]">
             <X size={18} />
           </button>

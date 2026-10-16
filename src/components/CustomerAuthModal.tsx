@@ -309,7 +309,7 @@ export function CustomerAuthModal({
         });
 
         if (error) {
-          console.error('[AuraVibe Auth] Supabase signInWithOtp error:', error);
+          console.error('[Auralune Auth] Supabase signInWithOtp error:', error);
           if (
             error.message.includes('provider') ||
             error.message.includes('not configured') ||
@@ -469,7 +469,7 @@ export function CustomerAuthModal({
 
         {/* Modal Header Title */}
         <div className="text-center space-y-1">
-          <div className="brand-font text-2xl font-black text-[#37192C]">AuraVibe</div>
+          <div className="brand-font text-2xl font-black text-[#37192C]">Auralune</div>
           <h2 className="text-base font-black text-[#37192C]">
             {step === 'profile'
               ? 'تکمیل حساب کاربری'

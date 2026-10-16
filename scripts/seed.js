@@ -1,5 +1,5 @@
 /**
- * AuraVibe Database Seed Script
+ * Auralune Database Seed Script
  * Run with: node scripts/seed.js
  */
 
@@ -114,8 +114,8 @@ const banners = [
   {
     id: 4,
     internal_name: 'بنر دسته‌بندی دستبند',
-    eyebrow: 'AURA BRACELETS',
-    title: 'دستبندهای ظریف آورا',
+    eyebrow: 'AURALUNE BRACELETS',
+    title: 'دستبندهای ظریف اورالون',
     subtitle: 'دستبندهای جواهری و زنجیری شیک برای استایل روزمره.',
     image: jewelryImage,
     target_category: 'دستبند',
@@ -213,7 +213,7 @@ categories.forEach((cat, catIdx) => {
     products.push({
       id: prodId,
       product_code: prodCode,
-      name: `${cat.name} مدل آورا کد ${i + 1}`,
+      name: `${cat.name} مدل اورالون کد ${i + 1}`,
       category: cat.name,
       price: basePrice,
       old_price: oldPrice,
@@ -378,7 +378,7 @@ const tickets = [
       {
         id: 'msg-2',
         sender: 'admin',
-        senderName: 'پشتیبان آورا',
+        senderName: 'پشتیبان اورالون',
         message: 'سلام مریم عزیز، کد رهگیری پستی مرسوله شما 24567891011121314 می‌باشد.',
         createdAt: '۱۴۰۳/۰۶/۱۶ ۱۰:۳۰',
         type: 'text',
@@ -406,12 +406,12 @@ const articles = [
 این استایل با پارچه‌های ابریشمی و ساتن ترکیب فوق‌العاده‌ای ایجاد می‌کند و حس شیک و در عین حال راحتی را به شما می‌بخشد.`,
     tag: 'ترند فصل',
     category: 'راهنمای استایل',
-    author: 'تیم مد وینا و آورا',
+    author: 'تیم مد وینا و اورالون',
     keywords: ['لایت آکادمیا', 'اکسسوری کرم', 'مروارید'],
     image: satinImage,
     status: 'published',
     seo: {
-      seoTitle: 'استایل لایت آکادمیا چیست؟ | آورا وایب',
+      seoTitle: 'استایل لایت آکادمیا چیست؟ | اورالون',
       metaDescription: 'راهنمای کامل استایل لایت آکادمیا و انتخاب زیورآلات کرم وانیلی و مروارید.',
       focusKeyword: 'لایت آکادمیا'
     }
@@ -432,7 +432,7 @@ const articles = [
 زیورآلات طلایی و برنجی برای پوست‌های گرم و زیورآلات نقره‌ای و مروارید سفید برای پوست‌های سرد ایده‌آل هستند.`,
     tag: 'راهنمای استایل',
     category: 'آموزش اکسسوری',
-    author: 'تیم مد وینا و آورا',
+    author: 'تیم مد وینا و اورالون',
     keywords: ['رنگ پوست', 'اکسسوری'],
     image: jewelryImage,
     status: 'published',
@@ -442,7 +442,7 @@ const articles = [
     id: 3,
     title: 'استایل اولد مانی',
     subtitle: 'کلاسیک، شیک و ماندگار',
-    full_article_title: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و آورا استایل',
+    full_article_title: 'استایل اولد مانی چیست؟ راهنمای کامل ساعت و اکسسوری اولد مانی | وینا اکسسوری و اورالون',
     article_link: '/journal/old-money',
     display_order: 3,
     slug: 'old-money-guide',
@@ -464,28 +464,28 @@ const articles = [
 
 const globalSeo = {
   id: 1,
-  site_title: 'AuraVibe | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-  default_meta_description: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس آورا استایل.',
+  site_title: 'Auralune | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+  default_meta_description: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس اورالون.',
   default_og_image: jewelryImage,
-  default_canonical: 'https://auravibe.ir',
-  organization_name: 'مجموعه آورا وایب و وینا اکسسوری',
+  default_canonical: 'https://auralune.ir',
+  organization_name: 'مجموعه اورالون و وینا اکسسوری',
   organization_logo: satinImage,
-  robots_txt: `User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auravibe.ir/sitemap.xml`
+  robots_txt: `User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auralune.ir/sitemap.xml`
 };
 
 const generalSettings = {
   id: 1,
-  site_name: 'AuraVibe | آورا وایب',
+  site_name: 'Auralune | اورالون',
   logo_url: '',
   favicon_url: '',
-  contact_email: 'hello@auravibe.ir',
+  contact_email: 'hello@auralune.ir',
   contact_phone: '۰۲۱-۸۸۸۸۹۹۹۹',
   address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
   working_hours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
   social_links: {
-    instagram: 'https://instagram.com/auravibe',
-    telegram: 'https://t.me/auravibe',
-    bale: 'https://ble.ir/auravibe'
+    instagram: 'https://instagram.com/auralune',
+    telegram: 'https://t.me/auralune',
+    bale: 'https://ble.ir/auralune'
   },
   timezone: 'Asia/Tehran',
   language: 'fa',
@@ -495,7 +495,7 @@ const generalSettings = {
     { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
     { title: 'مجله استایل', url: '/journal' }
   ],
-  footer_description: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش آورا. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+  footer_description: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
   notifications: {
     newOrder: true,
     newUser: true,
@@ -531,7 +531,7 @@ const auditLogs = [
 ];
 
 async function seed() {
-  console.log('🚀 Starting deterministic database seed for AuraVibe...');
+  console.log('🚀 Starting deterministic database seed for Auralune...');
 
   try {
     // 1. Categories
@@ -602,8 +602,8 @@ async function seed() {
     console.log('Checking admin users provisioning...');
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.log('Service role key detected. Provisioning Supabase Auth accounts...');
-      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'AuraVibe_Admin_2026!';
-      const managerPassword = process.env.INITIAL_MANAGER_PASSWORD || 'AuraVibe_Mgr_2026!';
+      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Auralune_Admin_2026!';
+      const managerPassword = process.env.INITIAL_MANAGER_PASSWORD || 'Auralune_Mgr_2026!';
       const adminsToProvision = [
         {
           id: 100,
@@ -611,7 +611,7 @@ async function seed() {
           first_name: 'آرتین',
           last_name: 'کریمی',
           username: 'superadmin',
-          email: 'superadmin@auravibe.ir',
+          email: 'superadmin@auralune.ir',
           password: adminPassword,
           role: 'SUPER_ADMIN',
           custom_permissions: [
@@ -633,7 +633,7 @@ async function seed() {
           first_name: 'مهرنوش',
           last_name: 'کریمی',
           username: 'store_manager',
-          email: 'store_manager@auravibe.ir',
+          email: 'store_manager@auralune.ir',
           password: managerPassword,
           role: 'MANAGER',
           custom_permissions: ['manage_products', 'manage_orders', 'manage_banners', 'manage_support']

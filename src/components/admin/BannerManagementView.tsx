@@ -70,7 +70,7 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
       setBActive(banner.active);
     } else {
       setEditingBanner(null);
-      setBInternalName('کمپین جدید آورا');
+      setBInternalName('کمپین جدید اورالون');
       setBEyebrow('NEW COLLECTION');
       setBTitle('عنوان بنر جذاب');
       setBSubtitle('توضیحات کوتاه بنر برای نمایش در اسلایدر اصلی.');
