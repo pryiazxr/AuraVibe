@@ -36,12 +36,29 @@ VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOi...
 > **نکته امنیتی:** مقادیر فوق کلیدهای عمومی کلاینت هستند. هرگز کلیدهای دارای سطح دسترسی بالا مانند `SUPABASE_SERVICE_ROLE_KEY` را در فایل‌های فرانت‌اند یا متغیرهای با پیشوند `VITE_` قرار ندهید.
 
 ### گام چهارم: اعمال مایگریشن‌های پایگاه‌داده
-در داشبورد Supabase خود به مسیر **SQL Editor** رفته و ۳ فایل زیر را به ترتیب از پوشه `supabase/migrations/` کپی و اجرا نمایید:
+در داشبورد Supabase خود به مسیر **SQL Editor** رفته و فایل‌های زیر را به ترتیب از پوشه `supabase/migrations/` کپی و اجرا نمایید:
 1. `supabase/migrations/20261007000001_initial_schema.sql`
 2. `supabase/migrations/20261007000002_storage_and_rls.sql`
 3. `supabase/migrations/20261007000003_hardening_rls_and_auth.sql`
+4. `supabase/migrations/20261007000004_cart_and_wishlist.sql`
+5. `supabase/migrations/20261007000005_checkout_and_receipts.sql`
+6. `supabase/migrations/20261007000006_product_reviews_and_support_fixes.sql`
+7. `supabase/migrations/20261007000007_sms_and_checkout_verification.sql`
 
-*(یا با استفاده از Supabase CLI: دستور `npx supabase db push`)*
+*(یا با استفاده از Supabase CLI: دستور `supabase db push`)*
+
+### گام ۴.۱: استقرار توابع سروری Edge Functions (وب‌سرویس پیامکی)
+جهت جزئیات دقیق به [راهنمای جامع وب‌سرویس SMS.ir](./SMS_INTEGRATION.md) مراجعه فرمایید:
+```bash
+# استقرار هوک احراز هویت پیامکی
+supabase functions deploy auth-send-sms --no-verify-jwt
+
+# استقرار اعتبارسنجی تلفن تسویه‌حساب
+supabase functions deploy verify-checkout-phone --no-verify-jwt
+
+# استقرار اعلان وضعیت سفارشات
+supabase functions deploy order-status-notification
+```
 
 ### گام پنجم: تعریف مدیر ارشد اولیه (Initial Super Admin)
 برای ایجاد اولین دسترسی مدیریت پیشخوان:

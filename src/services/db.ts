@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured, uploadToStorage, requireSupabase } from './supabase';
+export { normalizeIranianPhone, maskPhoneNumber, convertToAsciiDigits, type NormalizedPhone } from './phone';
 import {
   rowToCategory, categoryToRow,
   rowToBadge, badgeToRow,
@@ -393,6 +394,7 @@ export type CartItem = {
   product: Product;
   quantity: number;
   color?: string;
+  createdAt?: string;
 };
 
 // --- HELPER UTILS ---
@@ -893,17 +895,19 @@ class DatabaseService {
     paymentGatewayProvider?: string;
     orderStatus?: OrderStatus;
     paymentStatus?: PaymentStatus;
+    verificationToken?: string;
   }): Promise<Order> {
     const defaultOrderStatus: OrderStatus = orderPayload.orderStatus ||
       (orderPayload.paymentMethod === 'card_to_card' ? 'در حال بررسی پرداخت' : 'سفارش جدید');
     const defaultPaymentStatus: PaymentStatus = orderPayload.paymentStatus ||
       (orderPayload.paymentMethod === 'card_to_card' ? 'در حال بررسی' : 'در انتظار پرداخت');
 
-    // 1. Try secure RPC create_customer_order
+    // 1. Try secure RPC create_customer_order with phone verification token
     const { data: rpcData, error: rpcError } = await getClient().rpc('create_customer_order', {
       p_customer: orderPayload.customer,
       p_items: orderPayload.items,
-      p_shipping_method: orderPayload.shippingMethod
+      p_shipping_method: orderPayload.shippingMethod,
+      p_verification_token: orderPayload.verificationToken || null
     });
 
     if (!rpcError && rpcData) {
@@ -1035,6 +1039,23 @@ class DatabaseService {
       target: order.orderNumber,
       details: `وضعیت به «${status}» تغییر یافت`
     }).catch(console.error);
+
+    // Trigger order status notification (idempotent, safe fallback when templates unverified)
+    try {
+      if (isSupabaseConfigured() && supabase) {
+        supabase.functions.invoke('order-status-notification', {
+          body: {
+            orderId,
+            newStatus: status,
+            trackingCode
+          }
+        }).catch((err: any) => {
+          console.warn('[AuraLune SMS] Status notification call skipped or pending:', err?.message || err);
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
 
     this.notify();
   }

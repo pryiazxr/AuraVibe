@@ -23,11 +23,12 @@ src/services/db.ts (Data Access Abstraction & In-Memory Cache)
 src/services/supabase.ts (Supabase Client & Storage Helpers)
    │
    ▼
-Supabase BaaS
- ├── PostgreSQL 15+ (۱۴ جدول اصلی + RLS Policies + توابع RPC)
- ├── Supabase Auth (احراز هویت ادمین‌ها و مدیریت توکن JWT)
- ├── Supabase Storage (۴ باکت: banners, products, avatars, support-media)
- └── Supabase Realtime (کانال auravibe-table-sync جهت همگام‌سازی رویدادها)
+Supabase BaaS & Edge Runtime
+ ├── PostgreSQL 15+ (۱۶ جدول اصلی + RLS Policies + توابع RPC)
+ ├── Supabase Auth (احراز هویت پیامکی کاربران و ایمیل ادمین‌ها)
+ ├── Supabase Storage (۵ باکت: banners, products, avatars, support-media, receipts)
+ ├── Supabase Edge Functions (SMS.ir Gateway: auth-send-sms, verify-checkout-phone, order-status-notification)
+ └── Supabase Realtime (کانال همگام‌سازی رویدادها)
 ```
 
 ---
