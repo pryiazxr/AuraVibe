@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react';
-import { db, supabase, isSupabaseConfigured, User as CustomerUser } from '../services/db';
+import { db, supabase, isSupabaseConfigured, User as CustomerUser, convertToAsciiDigits } from '../services/db';
 import { IRAN_PROVINCES_AND_CITIES } from '../data';
 
 // --- PHONE INPUT COMPONENT (10 Direct Digit Boxes LTR) ---
@@ -17,10 +17,7 @@ export function PhoneInput({
   const digits = value.padEnd(10, '').slice(0, 10).split('');
 
   const normalizeRawText = (raw: string): string => {
-    let clean = raw
-      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
-      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
-      .replace(/\D/g, '');
+    let clean = convertToAsciiDigits(raw).replace(/\D/g, '');
 
     if (clean.startsWith('98') && clean.length > 10) {
       clean = clean.slice(2);
@@ -32,10 +29,7 @@ export function PhoneInput({
   };
 
   const handleDigitChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
-    let char = e.target.value
-      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
-      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
-      .replace(/\D/g, '');
+    let char = convertToAsciiDigits(e.target.value).replace(/\D/g, '');
 
     if (char.length > 1) {
       char = char.slice(-1);
@@ -143,10 +137,7 @@ export function OTPInput({
   const digits = value.padEnd(length, '').slice(0, length).split('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
-    let char = e.target.value
-      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
-      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
-      .replace(/\D/g, '');
+    let char = convertToAsciiDigits(e.target.value).replace(/\D/g, '');
 
     if (char.length > 1) {
       char = char.slice(-1);
@@ -185,10 +176,7 @@ export function OTPInput({
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasted = e.clipboardData
-      .getData('text')
-      .replace(/[۰-۹]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1776))
-      .replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 1632))
+    const pasted = convertToAsciiDigits(e.clipboardData.getData('text'))
       .replace(/\D/g, '')
       .slice(0, length);
 
