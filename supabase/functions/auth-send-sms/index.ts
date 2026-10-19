@@ -88,6 +88,9 @@ async function verifyStandardWebhook(
   }
 }
 
+/** Approved SMS.ir OTP Template ID for fast phone verification */
+export const ACTIVE_SMSIR_OTP_TEMPLATE_ID = 549168;
+
 export async function handleAuthSendSms(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -165,9 +168,14 @@ export async function handleAuthSendSms(req: Request): Promise<Response> {
     const maskedPhone = maskPhoneNumber(normalized.national);
 
     // 5. Template Configuration & Mock Mode Handling
-    const rawTemplateId = typeof (globalThis as any).Deno !== 'undefined'
+    const envTemplateId = typeof (globalThis as any).Deno !== 'undefined'
       ? (globalThis as any).Deno?.env?.get('SMSIR_OTP_TEMPLATE_ID')
       : process.env?.SMSIR_OTP_TEMPLATE_ID;
+
+    // Use environment variable if set, otherwise fallback to approved template 549168 in Edge runtime
+    const rawTemplateId = envTemplateId !== undefined
+      ? envTemplateId
+      : (typeof (globalThis as any).Deno !== 'undefined' ? String(ACTIVE_SMSIR_OTP_TEMPLATE_ID) : undefined);
 
     const mockModeEnv = typeof (globalThis as any).Deno !== 'undefined'
       ? (globalThis as any).Deno?.env?.get('SMSIR_MOCK_MODE')

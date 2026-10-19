@@ -241,6 +241,8 @@ export function CustomerAuthModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState(60);
   const [authSessionUser, setAuthSessionUser] = useState<any | null>(null);
+  const [authMethod, setAuthMethod] = useState<'gotrue' | 'edge_function'>('gotrue');
+  const [, setVerificationToken] = useState<string | null>(null);
 
   // Profile Form state
   const [profileForm, setProfileForm] = useState({
@@ -279,7 +281,7 @@ export function CustomerAuthModal({
 
   const canonicalPhone = `+98${phoneTenDigits}`;
 
-  // Request SMS Verification Code
+  // Request SMS Verification Code (Supports Supabase Auth Hook & SMS.ir Edge Function template 549168)
   const handleRequestOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (phoneTenDigits.length !== 10 || !phoneTenDigits.startsWith('9')) {
@@ -291,35 +293,45 @@ export function CustomerAuthModal({
     setLoading(true);
 
     try {
-      if (isSupabaseConfigured() && supabase) {
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: canonicalPhone
-        });
-
-        if (error) {
-          console.error('[Auralune Auth] Supabase signInWithOtp error:', error);
-          if (
-            error.message.includes('provider') ||
-            error.message.includes('not configured') ||
-            error.message.includes('disabled') ||
-            error.status === 400 ||
-            error.status === 500
-          ) {
-            setErrorMessage(
-              `خطا در اتصال به سرویس پیامک: ${error.message} (سرویس ارسال پیامک در تنظیمات این محیط فعال نشده است).`
-            );
-            setLoading(false);
-            return;
-          } else {
-            setErrorMessage(`خطا در درخواست کد تایید: ${error.message}`);
-            setLoading(false);
-            return;
-          }
-        }
-      } else {
+      if (!isSupabaseConfigured()) {
         setErrorMessage('ارتباط با سرویس احراز هویت برقرار نیست.');
         setLoading(false);
         return;
+      }
+
+      let otpDispatched = false;
+
+      // 1. Try Supabase Auth signInWithOtp (Send SMS Hook -> SMS.ir template 549168)
+      if (supabase) {
+        try {
+          const { error } = await supabase.auth.signInWithOtp({
+            phone: canonicalPhone
+          });
+
+          if (!error) {
+            otpDispatched = true;
+            setAuthMethod('gotrue');
+          } else {
+            console.warn('[Auralune Auth] GoTrue OTP warning, checking Edge Function fallback:', error.message);
+          }
+        } catch (gotrueErr: any) {
+          console.warn('[Auralune Auth] GoTrue OTP threw error, falling back:', gotrueErr?.message);
+        }
+      }
+
+      // 2. Direct Edge Function fallback (verify-checkout-phone with SMS.ir template 549168)
+      if (!otpDispatched) {
+        try {
+          const edgeRes = await db.requestPhoneOtp(canonicalPhone);
+          if (edgeRes?.success) {
+            otpDispatched = true;
+            setAuthMethod('edge_function');
+          } else {
+            throw new Error(edgeRes?.message || 'خطا در ارسال کد تایید پیامکی.');
+          }
+        } catch (edgeErr: any) {
+          throw new Error(edgeErr?.message || 'خطا در اتصال به درگاه پیامکی.');
+        }
       }
 
       setStep('otp');
@@ -344,34 +356,59 @@ export function CustomerAuthModal({
     setLoading(true);
 
     try {
-      if (!isSupabaseConfigured() || !supabase) {
+      if (!isSupabaseConfigured()) {
         throw new Error('Supabase Auth پیکربندی نشده است.');
       }
 
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: canonicalPhone,
-        token: otpCode,
-        type: 'sms'
-      });
+      let verifiedUserId: string | undefined = undefined;
 
-      if (error || !data.user) {
-        setErrorMessage(error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
-        setLoading(false);
-        return;
+      if (authMethod === 'gotrue' && supabase) {
+        const { data, error } = await supabase.auth.verifyOtp({
+          phone: canonicalPhone,
+          token: otpCode,
+          type: 'sms'
+        });
+
+        if (error || !data.user) {
+          // If GoTrue verification fails, attempt direct edge function validation as backup
+          try {
+            const edgeVerify = await db.verifyPhoneOtp(canonicalPhone, otpCode);
+            if (!edgeVerify?.verified) {
+              setErrorMessage(error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
+              setLoading(false);
+              return;
+            }
+            setVerificationToken(edgeVerify.verificationToken);
+          } catch {
+            setErrorMessage(error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
+            setLoading(false);
+            return;
+          }
+        } else {
+          setAuthSessionUser(data.user);
+          verifiedUserId = data.user.id;
+        }
+      } else {
+        // Direct Edge function verification
+        const edgeVerify = await db.verifyPhoneOtp(canonicalPhone, otpCode);
+        if (!edgeVerify?.verified) {
+          setErrorMessage(edgeVerify?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
+          setLoading(false);
+          return;
+        }
+        setVerificationToken(edgeVerify.verificationToken);
       }
-
-      setAuthSessionUser(data.user);
 
       // Check if user profile already exists in DB
       let existingProfile = await db.getUserByPhone(canonicalPhone);
-      if (!existingProfile && data.user.id) {
-        existingProfile = await db.getUserByAuthId(data.user.id);
+      if (!existingProfile && verifiedUserId) {
+        existingProfile = await db.getUserByAuthId(verifiedUserId);
       }
 
       if (existingProfile) {
         // Link auth_user_id if missing
-        if (!existingProfile.authUserId && data.user.id) {
-          existingProfile.authUserId = data.user.id;
+        if (!existingProfile.authUserId && verifiedUserId) {
+          existingProfile.authUserId = verifiedUserId;
           await db.saveUser(existingProfile);
         }
         onSuccess(existingProfile);

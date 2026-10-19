@@ -42,6 +42,9 @@ function generateOtp(): string {
   return (100000 + (array[0] % 900000)).toString();
 }
 
+/** Approved SMS.ir OTP Template ID for fast phone verification */
+export const ACTIVE_SMSIR_OTP_TEMPLATE_ID = 549168;
+
 export async function handleVerifyCheckoutPhone(
   req: Request,
   injectedSupabaseClient?: any
@@ -140,12 +143,24 @@ export async function handleVerifyCheckoutPhone(
       });
 
       // Check template & dispatch
-      const rawTemplateId = typeof (globalThis as any).Deno !== 'undefined'
+      const envTemplateId = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SMSIR_OTP_TEMPLATE_ID')
         : process.env?.SMSIR_OTP_TEMPLATE_ID;
-      const isMockMode = (typeof (globalThis as any).Deno !== 'undefined'
+
+      const rawTemplateId = envTemplateId !== undefined
+        ? envTemplateId
+        : (typeof (globalThis as any).Deno !== 'undefined' ? String(ACTIVE_SMSIR_OTP_TEMPLATE_ID) : undefined);
+
+      const templateParamName = (typeof (globalThis as any).Deno !== 'undefined'
+        ? (globalThis as any).Deno?.env?.get('SMSIR_OTP_PARAM_NAME')
+        : process.env?.SMSIR_OTP_PARAM_NAME) || 'Code';
+
+      const adapter = new SmsIrAdapter();
+      const mockModeEnv = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SMSIR_MOCK_MODE')
-        : process.env?.SMSIR_MOCK_MODE) === 'true' || !rawTemplateId || rawTemplateId.trim() === '';
+        : process.env?.SMSIR_MOCK_MODE;
+
+      const isMockMode = mockModeEnv === 'true' || !adapter.isConfigured() || !rawTemplateId || rawTemplateId.trim() === '';
 
       if (isMockMode) {
         console.info(`[AuraLune Checkout Verification] [MOCK MODE] Simulated checkout OTP sent to ${masked}.`);
@@ -161,11 +176,10 @@ export async function handleVerifyCheckoutPhone(
         );
       }
 
-      const adapter = new SmsIrAdapter();
       await adapter.sendVerifyOtp({
         mobile: normalized.national,
         templateId: parseInt(rawTemplateId, 10),
-        parameters: [{ name: 'Code', value: otp }]
+        parameters: [{ name: templateParamName, value: otp }]
       });
 
       return new Response(
