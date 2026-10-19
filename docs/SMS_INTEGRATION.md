@@ -85,7 +85,7 @@
 | :--- | :--- | :--- | :--- |
 | `SMSIR_API_KEY` | Edge Functions Secret | کلید وب‌سرویس خصوصی دریافتی از پنل SMS.ir | **ایجاد شده در داشبورد پروداکشن** |
 | `SMSIR_SENDER_LINE` | Edge Functions Secret | سرشماره اختصاصی ارسال پیامک (مثال: `30004505000017`) | خط فرستنده مشخص است |
-| `SMSIR_OTP_TEMPLATE_ID` | Edge Functions Secret | شناسه عددی قالب سریع تایید (Verify OTP) | **در انتظار تأیید SMS.ir** |
+| `SMSIR_OTP_TEMPLATE_ID` | Edge Functions Secret | شناسه عددی قالب سریع تایید (Verify OTP) | **فعال (شناسه مصوب: 549168)** |
 | `SMSIR_OTP_PARAM_NAME` | Edge Functions Secret | نام متغیر کد تایید در قالب (پیش‌فرض: `Code`) | آماده پیکربندی |
 | `SEND_SMS_HOOK_SECRET` | Edge Functions Secret | کلید وب‌هوک استاندارد (`whsec_...`) جهت اعتبارسنجی فرستنده هوک | **الزامی جهت امنیت (Fail-Closed)** |
 | `SMSIR_ORDER_STATUS_TEMPLATE_ID` | Edge Functions Secret | شناسه قالب پیامک تغییر وضعیت سفارش | هنوز آماده نشده است |
@@ -134,6 +134,7 @@ supabase link --project-ref ikkdblxpdjhiomucfdoh
 
 # تنظیم کلیدهای محرمانه (در صورت نیاز به به‌روزرسانی)
 supabase secrets set SMSIR_SENDER_LINE="30004505000017"
+supabase secrets set SMSIR_OTP_TEMPLATE_ID="549168"
 supabase secrets set SMSIR_OTP_PARAM_NAME="Code"
 supabase secrets set SEND_SMS_HOOK_SECRET="whsec_..."
 
@@ -170,9 +171,9 @@ supabase functions deploy order-status-notification
 
 قبل از ارسال اولین پیامک زنده و کسر شارژ واقعی:
 
-- [ ] **تأیید قالب کد تایید:** دریافت تاییدیه نهایی متن و متغیرهای قالب سریع در پنل SMS.ir.
-- [ ] **تنظیم Template ID:** اجرای دستور `supabase secrets set SMSIR_OTP_TEMPLATE_ID="<شناسه_عددی>"` در سرور.
+- [x] **تأیید قالب کد تایید:** دریافت تاییدیه نهایی متن و متغیرهای قالب سریع در پنل SMS.ir (شناسه مصوب: 549168).
+- [x] **تنظیم Template ID:** شناسه 549168 به صورت پیش‌فرض در توابع لبه پروژه فعال گردید (`SMSIR_OTP_TEMPLATE_ID="549168"`).
 - [ ] **بررسی اعتبار پنل:** اطمینان از وجود شارژ ریالی/پیامکی کافی در حساب SMS.ir.
-- [ ] **بررسی نام متغیر:** اطمینان از انطباق نام پارامتر متغیر در پنل (پیش‌فرض `Code`) با `SMSIR_OTP_PARAM_NAME`.
-- [ ] **اجرای تست‌های خودکار:** اجرای `npm test` و اطمینان از پاس شدن تمام ۳۹ آزمون.
-- [ ] **بررسی باندل تولیدی:** اجرای `npm run build` و اطمینان از عدم وجود هرگونه رشته حساس در فایل‌های کامپایل‌شده.
+- [x] **بررسی نام متغیر:** پارامتر متغیر در پنل (پیش‌فرض `Code`) با `SMSIR_OTP_PARAM_NAME` منطبق است.
+- [x] **اجرای تست‌های خودکار:** اجرای `npm test` و اطمینان از پاس شدن تمام آزمون‌ها.
+- [x] **بررسی باندل تولیدی:** اجرای `npm run build` و اطمینان از عدم وجود هرگونه رشته حساس در فایل‌های کامپایل‌شده.
