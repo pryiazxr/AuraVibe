@@ -162,4 +162,27 @@ describe('AuraLune Supabase Auth Send SMS Hook', () => {
     const data = await res.json();
     expect(data.error).toContain('Invalid Iranian mobile number');
   });
+
+  it('successfully dispatches OTP with approved template 549168', async () => {
+    process.env.SEND_SMS_HOOK_SECRET = testSecret;
+    process.env.SMSIR_OTP_TEMPLATE_ID = '549168';
+    process.env.SMSIR_MOCK_MODE = 'true';
+
+    const req = new Request('https://edge.supabase.co/auth-send-sms', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${testSecret}`
+      },
+      body: JSON.stringify({
+        user: { phone: '+989123456789' },
+        sms: { otp: '654321' }
+      })
+    });
+
+    const res = await handleAuthSendSms(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
 });

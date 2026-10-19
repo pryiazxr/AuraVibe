@@ -1169,6 +1169,59 @@ class DatabaseService {
     }
   }
 
+  /**
+   * Requests an OTP verification code via Edge Function (SMS.ir template 549168).
+   */
+  public async requestPhoneOtp(phone: string): Promise<{ success: boolean; message: string; mocked?: boolean }> {
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('ارتباط با سرویس ابری برقرار نیست.');
+    }
+
+    const { data, error } = await supabase.functions.invoke('verify-checkout-phone', {
+      body: {
+        action: 'request_otp',
+        phone
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'خطا در درخواست کد تایید پیامکی.');
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  }
+
+  /**
+   * Verifies an OTP code via Edge Function and returns verification token.
+   */
+  public async verifyPhoneOtp(phone: string, code: string): Promise<{ success: boolean; verified: boolean; verificationToken: string; message: string }> {
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('ارتباط با سرویس ابری برقرار نیست.');
+    }
+
+    const { data, error } = await supabase.functions.invoke('verify-checkout-phone', {
+      body: {
+        action: 'verify_otp',
+        phone,
+        code
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'خطا در اعتبارسنجی کد تایید.');
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  }
+
   public async saveUser(userData: Partial<User>, adminUser?: { id: number; name: string }): Promise<User> {
     const row = userToRow(userData);
     if (!row.id) {
