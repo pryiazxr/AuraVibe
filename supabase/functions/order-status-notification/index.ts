@@ -14,6 +14,7 @@
  * - Records skipped_unverified_template or mocked status gracefully.
  */
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { normalizeIranianPhone, maskPhoneNumber } from '../_shared/phone-utils.ts';
 import { SmsIrAdapter } from '../_shared/smsir-adapter.ts';
@@ -34,17 +35,22 @@ export async function handleOrderStatusNotification(
   }
 
   try {
-    const serviceKey = (typeof (globalThis as any).Deno !== 'undefined'
+    const serviceKey = typeof (globalThis as any).Deno !== 'undefined'
       ? (globalThis as any).Deno?.env?.get('SUPABASE_SERVICE_ROLE_KEY')
-      : process.env?.SUPABASE_SERVICE_ROLE_KEY);
+      : process.env?.SUPABASE_SERVICE_ROLE_KEY;
 
-    const supabaseUrl = (typeof (globalThis as any).Deno !== 'undefined'
+    const supabaseUrl = typeof (globalThis as any).Deno !== 'undefined'
       ? (globalThis as any).Deno?.env?.get('SUPABASE_URL')
-      : process.env?.SUPABASE_URL) || 'https://demo.supabase.co';
+      : process.env?.SUPABASE_URL;
 
     let supabaseClient = injectedSupabaseClient;
-    if (!supabaseClient && serviceKey && typeof (globalThis as any).createClient === 'function') {
-      supabaseClient = (globalThis as any).createClient(supabaseUrl, serviceKey);
+    if (!supabaseClient && serviceKey && supabaseUrl) {
+      supabaseClient = createClient(supabaseUrl, serviceKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
     }
 
     // 1. Enforce Authorization (Service Role OR Active Admin User)

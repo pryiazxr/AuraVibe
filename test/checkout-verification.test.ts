@@ -43,6 +43,7 @@ describe('AuraLune Checkout Phone Verification Edge Function', () => {
   });
 
   it('handles request_otp action with mockSupabase without leaking plain OTP', async () => {
+    process.env.SMSIR_MOCK_MODE = 'true';
     const mockSupabase = {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -70,6 +71,65 @@ describe('AuraLune Checkout Phone Verification Edge Function', () => {
     expect(body.mocked).toBe(true);
     expect(body.phone).toBe('0912***6789'); // Masked
     expect(body.otp).toBeUndefined(); // NEVER expose OTP
+  });
+
+  it('fails closed (500) if database insert into phone_verifications fails', async () => {
+    process.env.SMSIR_MOCK_MODE = 'true';
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ count: 0, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: { message: 'DB connection failure' } })
+      })
+    };
+
+    const req = new Request('https://edge.supabase.co/verify-checkout-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'request_otp',
+        phone: '09123456789'
+      })
+    });
+
+    const res = await handleVerifyCheckoutPhone(req, mockSupabase);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain('خطا در ثبت درخواست کد تایید');
+  });
+
+  it('fails closed (500) in production when SMSIR_API_KEY is missing and mock mode is off', async () => {
+    delete process.env.SMSIR_MOCK_MODE;
+    delete process.env.SMSIR_API_KEY;
+    process.env.SMSIR_OTP_TEMPLATE_ID = '549168';
+
+    const mockSupabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            gte: vi.fn().mockResolvedValue({ count: 0, error: null })
+          })
+        }),
+        insert: vi.fn().mockResolvedValue({ data: null, error: null })
+      })
+    };
+
+    const req = new Request('https://edge.supabase.co/verify-checkout-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'request_otp',
+        phone: '09123456789'
+      })
+    });
+
+    const res = await handleVerifyCheckoutPhone(req, mockSupabase);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain('کلید وب‌سرویس پیامکی در سرور تنظیم نشده است');
   });
 
   it('enforces rate limiting when threshold exceeded in DB', async () => {

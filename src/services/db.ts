@@ -902,31 +902,21 @@ class DatabaseService {
     const defaultPaymentStatus: PaymentStatus = orderPayload.paymentStatus ||
       (orderPayload.paymentMethod === 'card_to_card' ? 'در حال بررسی' : 'در انتظار پرداخت');
 
-    // 1. Try secure RPC create_customer_order with phone verification token
+    // 1. Try secure RPC create_customer_order with phone verification token and payment details
     const { data: rpcData, error: rpcError } = await getClient().rpc('create_customer_order', {
       p_customer: orderPayload.customer,
       p_items: orderPayload.items,
       p_shipping_method: orderPayload.shippingMethod,
-      p_verification_token: orderPayload.verificationToken || null
+      p_verification_token: orderPayload.verificationToken || null,
+      p_payment_method: orderPayload.paymentMethod || 'card_to_card',
+      p_payment_receipt_url: orderPayload.paymentReceiptUrl || null,
+      p_payment_gateway_provider: orderPayload.paymentGatewayProvider || null,
+      p_order_status: defaultOrderStatus,
+      p_payment_status: defaultPaymentStatus
     });
 
     if (!rpcError && rpcData) {
       const saved = rowToOrder(rpcData);
-      saved.paymentMethod = orderPayload.paymentMethod || 'card_to_card';
-      saved.paymentReceiptUrl = orderPayload.paymentReceiptUrl;
-      saved.paymentGatewayProvider = orderPayload.paymentGatewayProvider;
-      saved.orderStatus = defaultOrderStatus;
-      saved.paymentStatus = defaultPaymentStatus;
-
-      // Update row with extra fields
-      await getClient().from('orders').update({
-        order_status: saved.orderStatus,
-        payment_status: saved.paymentStatus,
-        payment_method: saved.paymentMethod,
-        payment_receipt_url: saved.paymentReceiptUrl,
-        payment_gateway_provider: saved.paymentGatewayProvider
-      }).eq('id', saved.id);
-
       this.cachedOrders.unshift(saved);
 
       // Auto notify admin
