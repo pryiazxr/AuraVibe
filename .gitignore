@@ -6,3 +6,5 @@ dist
 .env.*.local
 supabase-db-pass
 *.pass
+supabase/.temp/
+.supabase

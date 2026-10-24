@@ -8,9 +8,10 @@
  * - Fail-Closed: Verifies Standard Webhooks HMAC-SHA256 signature or Bearer token against SEND_SMS_HOOK_SECRET.
  * - Raw body parsing ensures bit-perfect cryptographic verification.
  * - Mock mode requires explicit configuration (SMSIR_MOCK_MODE=true); in production, missing template fails safely (500).
- * - Never logs or exposes SMSIR_API_KEY or the OTP code value.
+ * - Never logs or exposes SMSIR_API_KEY, webhook secret, token values, or the OTP code value.
  */
 
+import { Webhook } from 'npm:standardwebhooks@1.0.0';
 import { corsHeaders } from '../_shared/cors.ts';
 import { normalizeIranianPhone, maskPhoneNumber } from '../_shared/phone-utils.ts';
 import { SmsIrAdapter, SmsIrConfigurationError } from '../_shared/smsir-adapter.ts';
@@ -27,63 +28,74 @@ interface SupabaseSmsHookPayload {
 }
 
 /**
- * Verifies Supabase Auth Standard Webhook signature (HMAC-SHA256).
+ * Creates a Standard Webhook verifier instance from the configured secret.
+ * 
+ * Secret handling according to Standard Webhooks spec and Supabase Auth Hooks:
+ * - Supabase Send SMS Auth Hook generates a secret formatted as "v1,whsec_<base64>".
+ * - The official `standardwebhooks` library expects secrets formatted as "whsec_<base64>" or raw base64.
+ * - We strip the "v1," prefix so `standardwebhooks` receives "whsec_<base64>", which it then strips and decodes.
+ * - URL-safe base64 characters ('-' and '_') and unpadded lengths are normalized so base64 decoding succeeds.
+ * - Non-base64 test secrets fallback gracefully to raw format.
  */
-async function verifyStandardWebhook(
+function createStandardWebhookVerifier(secret: string): Webhook {
+  let s = secret.trim();
+
+  // Strip 'v1,' prefix if present from Supabase Auth Hook secret
+  if (s.startsWith('v1,')) {
+    s = s.slice(3);
+  }
+
+  // If secret starts with "whsec_", normalize the base64 part
+  if (s.startsWith('whsec_')) {
+    const rawB64 = s.slice(6);
+    let normalizedB64 = rawB64.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalizedB64.length % 4;
+    if (pad) {
+      normalizedB64 += '='.repeat(4 - pad);
+    }
+    s = `whsec_${normalizedB64}`;
+    return new Webhook(s);
+  }
+
+  // If secret doesn't start with whsec_, try base64 or fallback to raw format
+  try {
+    let normalizedB64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalizedB64.length % 4;
+    if (pad) {
+      normalizedB64 += '='.repeat(4 - pad);
+    }
+    return new Webhook(normalizedB64);
+  } catch {
+    return new Webhook(s, { format: 'raw' });
+  }
+}
+
+/**
+ * Verifies Supabase Auth Standard Webhook signature using official standardwebhooks flow.
+ */
+function verifyStandardWebhook(
   rawBody: string,
   headers: Headers,
   secret: string
-): Promise<boolean> {
+): boolean {
   const id = headers.get('webhook-id');
   const timestamp = headers.get('webhook-timestamp');
-  const signatureHeader = headers.get('webhook-signature');
+  const signature = headers.get('webhook-signature');
 
-  if (!id || !timestamp || !signatureHeader) {
-    return false;
-  }
-
-  // Check timestamp drift (5 minutes tolerance)
-  const now = Math.floor(Date.now() / 1000);
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts) || Math.abs(now - ts) > 300) {
+  if (!id || !timestamp || !signature) {
     return false;
   }
 
   try {
-    let keyBytes: Uint8Array;
-    if (secret.startsWith('whsec_')) {
-      const base64Part = secret.replace(/^whsec_/, '');
-      const binary = atob(base64Part);
-      keyBytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        keyBytes[i] = binary.charCodeAt(i);
-      }
-    } else {
-      keyBytes = new TextEncoder().encode(secret);
-    }
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyBytes,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-
-    const signedPayload = new TextEncoder().encode(`${id}.${timestamp}.${rawBody}`);
-    const signatureBytes = await crypto.subtle.sign('HMAC', key, signedPayload);
-    const base64Sig = btoa(String.fromCharCode(...new Uint8Array(signatureBytes)));
-
-    const signatures = signatureHeader.split(' ');
-    return signatures.some((sig) => {
-      const trimmed = sig.trim();
-      if (trimmed.startsWith('v1,')) {
-        return trimmed.slice(3) === base64Sig;
-      }
-      return trimmed === base64Sig;
+    const wh = createStandardWebhookVerifier(secret);
+    wh.verify(rawBody, {
+      'webhook-id': id,
+      'webhook-timestamp': timestamp,
+      'webhook-signature': signature
     });
-  } catch (err) {
-    console.error('[AuraLune Auth Hook] Webhook signature verification error:', err);
+    return true;
+  } catch (err: any) {
+    console.warn('[AuraLune Auth Hook] Webhook signature verification failed:', err?.message || err);
     return false;
   }
 }
@@ -120,11 +132,32 @@ export async function handleAuthSendSms(req: Request): Promise<Response> {
       );
     }
 
+    // Diagnostic logging: Presence only of headers and secret status (NO values/secrets/tokens/OTP logged)
+    console.info('[AuraLune Auth Hook] Diagnostic header presence:', {
+      authorization: Boolean(req.headers.get('authorization')),
+      'webhook-id': Boolean(req.headers.get('webhook-id')),
+      'webhook-timestamp': Boolean(req.headers.get('webhook-timestamp')),
+      'webhook-signature': Boolean(req.headers.get('webhook-signature'))
+    });
+
+    console.info('[AuraLune Auth Hook] SEND_SMS_HOOK_SECRET status:', {
+      configured: Boolean(hookSecret),
+      startsWithV1Whsec: Boolean(hookSecret && hookSecret.startsWith('v1,whsec_'))
+    });
+
     // Verify via Standard Webhook headers OR Bearer token
-    const isWebhookValid = await verifyStandardWebhook(rawBody, req.headers, hookSecret);
+    const isWebhookValid = verifyStandardWebhook(rawBody, req.headers, hookSecret);
     const authHeader = req.headers.get('authorization') || req.headers.get('x-supabase-webhook-secret') || '';
     const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const isBearerValid = Boolean(bearerToken && bearerToken === hookSecret);
+    const isBearerValid = Boolean(
+      bearerToken && (
+        bearerToken === hookSecret ||
+        bearerToken === hookSecret.replace(/^v1,whsec_/, '') ||
+        bearerToken === hookSecret.replace(/^whsec_/, '') ||
+        `v1,whsec_${bearerToken}` === hookSecret ||
+        `whsec_${bearerToken}` === hookSecret
+      )
+    );
 
     if (!isWebhookValid && !isBearerValid) {
       console.warn('[AuraLune Auth Hook] Unauthorized hook invocation attempt: invalid signature or bearer token.');

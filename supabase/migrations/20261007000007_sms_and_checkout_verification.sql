@@ -141,9 +141,14 @@ CREATE POLICY "Customers view own order notifications" ON public.order_sms_notif
   );
 
 -- --------------------------------------------------------
--- 4. Harden orders INSERT RLS Policy
+-- 4. Harden orders INSERT RLS Policy & Ensure Payment Columns
 -- Prevents clients from bypassing phone verification via direct table inserts
 -- --------------------------------------------------------
+
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'card_to_card',
+  ADD COLUMN IF NOT EXISTS payment_receipt_url TEXT,
+  ADD COLUMN IF NOT EXISTS payment_gateway_provider TEXT;
 
 DROP POLICY IF EXISTS "Validated customer insert orders" ON public.orders;
 DROP POLICY IF EXISTS "Admins or verified RPC only insert orders" ON public.orders;
@@ -153,7 +158,7 @@ CREATE POLICY "Admins or verified RPC only insert orders" ON public.orders
     public.is_admin() OR
     (
       auth.uid() IS NOT NULL AND
-      order_status = 'جدید' AND
+      order_status IN ('جدید', 'سفارش جدید', 'در حال بررسی پرداخت') AND
       order_number IS NOT NULL AND
       customer IS NOT NULL AND
       items IS NOT NULL AND
@@ -174,7 +179,12 @@ CREATE OR REPLACE FUNCTION public.create_customer_order(
   p_customer jsonb,
   p_items jsonb,
   p_shipping_method jsonb,
-  p_verification_token text DEFAULT NULL
+  p_verification_token text DEFAULT NULL,
+  p_payment_method text DEFAULT 'card_to_card',
+  p_payment_receipt_url text DEFAULT NULL,
+  p_payment_gateway_provider text DEFAULT NULL,
+  p_order_status text DEFAULT NULL,
+  p_payment_status text DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -196,6 +206,9 @@ DECLARE
   raw_cust_phone text;
   norm_cust_phone text;
   is_verified boolean := false;
+  v_final_order_status text;
+  v_final_payment_status text;
+  v_timeline_note text;
 BEGIN
   IF p_customer IS NULL OR p_customer->>'phone' IS NULL OR trim(p_customer->>'phone') = '' THEN
     RAISE EXCEPTION 'شماره همراه خریدار الزامی است.';
@@ -302,6 +315,19 @@ BEGIN
   total_amount := calc_total;
   discount := subtotal - total_amount;
 
+  v_final_order_status := COALESCE(
+    p_order_status,
+    CASE WHEN p_payment_method = 'card_to_card' THEN 'در حال بررسی پرداخت' ELSE 'سفارش جدید' END
+  );
+  v_final_payment_status := COALESCE(
+    p_payment_status,
+    CASE WHEN p_payment_method = 'card_to_card' THEN 'در حال بررسی' ELSE 'در انتظار پرداخت' END
+  );
+  v_timeline_note := CASE
+    WHEN p_payment_method = 'card_to_card' THEN 'سفارش با روش کارت به کارت ثبت شد و رسید پرداخت ارسال گردید.'
+    ELSE 'سفارش توسط خریدار در سایت ثبت گردید.'
+  END;
+
   new_order_id := 'ORD-' || floor(10000 + random() * 89999)::text;
 
   INSERT INTO public.orders (
@@ -316,6 +342,9 @@ BEGIN
     shipping_method,
     order_status,
     payment_status,
+    payment_method,
+    payment_receipt_url,
+    payment_gateway_provider,
     timeline,
     created_at,
     updated_at
@@ -329,14 +358,17 @@ BEGIN
     discount,
     total_amount,
     p_shipping_method,
-    'جدید',
-    'پرداخت شده',
+    v_final_order_status,
+    v_final_payment_status,
+    COALESCE(p_payment_method, 'card_to_card'),
+    p_payment_receipt_url,
+    p_payment_gateway_provider,
     jsonb_build_array(
       jsonb_build_object(
-        'status', 'جدید',
+        'status', v_final_order_status,
         'date', to_char(now_ts, 'YYYY/MM/DD'),
         'time', to_char(now_ts, 'HH24:MI'),
-        'note', 'سفارش توسط خریدار در سایت ثبت گردید.'
+        'note', v_timeline_note
       )
     ),
     now_ts,

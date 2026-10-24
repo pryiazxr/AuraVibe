@@ -14,6 +14,7 @@
  * - Never logs OTP values or user PII.
  */
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { normalizeIranianPhone, maskPhoneNumber } from '../_shared/phone-utils.ts';
 import { SmsIrAdapter } from '../_shared/smsir-adapter.ts';
@@ -85,21 +86,26 @@ export async function handleVerifyCheckoutPhone(
     // Initialize Supabase client
     let supabaseClient = injectedSupabaseClient;
     if (!supabaseClient) {
-      const supabaseUrl = (typeof (globalThis as any).Deno !== 'undefined'
+      const supabaseUrl = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SUPABASE_URL')
-        : process.env?.SUPABASE_URL) || 'https://demo.supabase.co';
-      const serviceKey = (typeof (globalThis as any).Deno !== 'undefined'
+        : process.env?.SUPABASE_URL;
+      const serviceKey = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SUPABASE_SERVICE_ROLE_KEY')
-        : process.env?.SUPABASE_SERVICE_ROLE_KEY);
+        : process.env?.SUPABASE_SERVICE_ROLE_KEY;
 
-      if (serviceKey && typeof (globalThis as any).createClient === 'function') {
-        supabaseClient = (globalThis as any).createClient(supabaseUrl, serviceKey);
+      if (supabaseUrl && serviceKey) {
+        supabaseClient = createClient(supabaseUrl, serviceKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false
+          }
+        });
       }
     }
 
     // Fail-Closed: database client is mandatory
     if (!supabaseClient) {
-      console.error('[AuraLune Checkout Verification] Supabase client is not available or service key missing.');
+      console.error('[AuraLune Checkout Verification] Supabase client is not available: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
       return new Response(
         JSON.stringify({ error: 'سرویس پایگاه‌داده موقتاً در دسترس نیست.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -133,7 +139,7 @@ export async function handleVerifyCheckoutPhone(
       }
 
       // Store verification record
-      await supabaseClient.from('phone_verifications').insert({
+      const { error: insertErr } = await supabaseClient.from('phone_verifications').insert({
         phone: normalized.canonical,
         otp_hash: otpHash,
         verified: false,
@@ -141,6 +147,14 @@ export async function handleVerifyCheckoutPhone(
         max_attempts: 5,
         expires_at: expiresAt.toISOString()
       });
+
+      if (insertErr) {
+        console.error('[AuraLune Checkout Verification] Failed to record OTP in database:', insertErr);
+        return new Response(
+          JSON.stringify({ error: 'خطا در ثبت درخواست کد تایید در پایگاه‌داده.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       // Check template & dispatch
       const envTemplateId = typeof (globalThis as any).Deno !== 'undefined'
@@ -155,15 +169,14 @@ export async function handleVerifyCheckoutPhone(
         ? (globalThis as any).Deno?.env?.get('SMSIR_OTP_PARAM_NAME')
         : process.env?.SMSIR_OTP_PARAM_NAME) || 'Code';
 
-      const adapter = new SmsIrAdapter();
       const mockModeEnv = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SMSIR_MOCK_MODE')
         : process.env?.SMSIR_MOCK_MODE;
 
-      const isMockMode = mockModeEnv === 'true' || !adapter.isConfigured() || !rawTemplateId || rawTemplateId.trim() === '';
+      const isMockModeExplicit = mockModeEnv === 'true';
 
-      if (isMockMode) {
-        console.info(`[AuraLune Checkout Verification] [MOCK MODE] Simulated checkout OTP sent to ${masked}.`);
+      if (isMockModeExplicit) {
+        console.info(`[AuraLune Checkout Verification] [EXPLICIT MOCK MODE] Simulated checkout OTP sent to ${masked}.`);
         return new Response(
           JSON.stringify({
             success: true,
@@ -173,6 +186,24 @@ export async function handleVerifyCheckoutPhone(
             message: 'کد تایید پیامکی ارسال گردید (محیط آزمایشی).'
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Fail-Closed: in production, template and API key are strictly required
+      if (!rawTemplateId || isNaN(parseInt(rawTemplateId, 10))) {
+        console.error('[AuraLune Checkout Verification] SMSIR_OTP_TEMPLATE_ID is missing or invalid in production.');
+        return new Response(
+          JSON.stringify({ error: 'شناسه قالب پیامک تایید در سرور تنظیم نشده است.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const adapter = new SmsIrAdapter();
+      if (!adapter.isConfigured()) {
+        console.error('[AuraLune Checkout Verification] SMSIR_API_KEY is not configured in production.');
+        return new Response(
+          JSON.stringify({ error: 'کلید وب‌سرویس پیامکی در سرور تنظیم نشده است.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -282,7 +313,7 @@ export async function handleVerifyCheckoutPhone(
       }
 
       // Successfully verified
-      await supabaseClient
+      const { error: updateVerifyErr } = await supabaseClient
         .from('phone_verifications')
         .update({
           verified: true,
@@ -291,6 +322,14 @@ export async function handleVerifyCheckoutPhone(
           expires_at: tokenExpiresAt.toISOString()
         })
         .eq('id', record.id);
+
+      if (updateVerifyErr) {
+        console.error('[AuraLune Checkout Verification] Failed to update verification status:', updateVerifyErr);
+        return new Response(
+          JSON.stringify({ error: 'خطا در ثبت وضعیت تایید در پایگاه‌داده.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       console.info(`[AuraLune Checkout Verification] Phone ${masked} verified successfully.`);
 
