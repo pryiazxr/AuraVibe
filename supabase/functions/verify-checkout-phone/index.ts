@@ -84,7 +84,12 @@ export async function handleVerifyCheckoutPhone(
     const masked = maskPhoneNumber(normalized.national);
 
     // Initialize Supabase client
-    let supabaseClient = injectedSupabaseClient;
+    // Validate injectedSupabaseClient (e.g. from unit tests) to ensure it is an actual client
+    // with client methods like .from, and not a runtime connection-info object from Deno.serve
+    let supabaseClient = (injectedSupabaseClient && (typeof injectedSupabaseClient.from === 'function' || typeof injectedSupabaseClient.rpc === 'function'))
+      ? injectedSupabaseClient
+      : undefined;
+
     if (!supabaseClient) {
       const supabaseUrl = typeof (globalThis as any).Deno !== 'undefined'
         ? (globalThis as any).Deno?.env?.get('SUPABASE_URL')
@@ -360,5 +365,7 @@ export async function handleVerifyCheckoutPhone(
 
 // Runtime entry point
 if (typeof (globalThis as any).Deno !== 'undefined') {
-  (globalThis as any).Deno.serve(handleVerifyCheckoutPhone);
+  (globalThis as any).Deno.serve(
+    (req: Request) => handleVerifyCheckoutPhone(req)
+  );
 }

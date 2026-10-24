@@ -138,4 +138,22 @@ describe('AuraLune Order Status SMS Notification & Idempotency', () => {
       })
     );
   });
+  it('does not treat Deno serve connection info as a Supabase client', async () => {
+    const mockServeHandlerInfo = {
+      remoteAddr: { transport: 'tcp', hostname: '127.0.0.1', port: 8000 },
+      completed: Promise.resolve()
+    };
+
+    const req = new Request('https://edge.supabase.co/order-status-notification', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: JSON.stringify({ orderId: 'ORD-12345', newStatus: 'ارسال شده' })
+    });
+
+    const res = await handleOrderStatusNotification(req, mockServeHandlerInfo);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain('سرویس پایگاه‌داده');
+  });
+
 });
