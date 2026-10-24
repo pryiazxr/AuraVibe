@@ -43,7 +43,13 @@ export async function handleOrderStatusNotification(
       ? (globalThis as any).Deno?.env?.get('SUPABASE_URL')
       : process.env?.SUPABASE_URL;
 
-    let supabaseClient = injectedSupabaseClient;
+    // Initialize Supabase client
+    // Validate injectedSupabaseClient (e.g. from unit tests) to ensure it is an actual client
+    // with client methods like .from, and not a runtime connection-info object from Deno.serve
+    let supabaseClient = (injectedSupabaseClient && (typeof injectedSupabaseClient.from === 'function' || typeof injectedSupabaseClient.rpc === 'function'))
+      ? injectedSupabaseClient
+      : undefined;
+
     if (!supabaseClient && serviceKey && supabaseUrl) {
       supabaseClient = createClient(supabaseUrl, serviceKey, {
         auth: {
@@ -255,5 +261,7 @@ export async function handleOrderStatusNotification(
 
 // Runtime entry point
 if (typeof (globalThis as any).Deno !== 'undefined') {
-  (globalThis as any).Deno.serve(handleOrderStatusNotification);
+  (globalThis as any).Deno.serve(
+    (req: Request) => handleOrderStatusNotification(req)
+  );
 }

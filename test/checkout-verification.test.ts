@@ -184,4 +184,30 @@ describe('AuraLune Checkout Phone Verification Edge Function', () => {
     expect(typeof body.verificationToken).toBe('string');
     expect(body.verificationToken.length).toBe(64);
   });
+  it('does not treat Deno serve connection info as a Supabase client', async () => {
+    // Deno.serve passes (req, info) where info is ServeHandlerInfo
+    const mockServeHandlerInfo = {
+      remoteAddr: { transport: 'tcp', hostname: '127.0.0.1', port: 8000 },
+      completed: Promise.resolve()
+    };
+
+    const req = new Request('https://edge.supabase.co/verify-checkout-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'verify_otp',
+        phone: '09123456789',
+        code: '123456'
+      })
+    });
+
+    // When connection info is passed without client methods (.from),
+    // it must not crash with "supabaseClient.rpc is not a function",
+    // but rather detect uninitialized client and fail closed with 500
+    const res = await handleVerifyCheckoutPhone(req, mockServeHandlerInfo);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toContain('سرویس پایگاه‌داده');
+  });
+
 });

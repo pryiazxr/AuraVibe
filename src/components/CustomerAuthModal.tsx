@@ -219,6 +219,70 @@ export function OTPInput({
   );
 }
 
+// --- OTP VERIFICATION HELPER ---
+export interface VerifyOtpResult {
+  success: boolean;
+  user?: any;
+  verificationToken?: string;
+  errorMessage?: string;
+}
+
+export async function processOtpVerification({
+  authMethod,
+  canonicalPhone,
+  otpCode,
+  supabaseClient,
+  dbService
+}: {
+  authMethod: 'gotrue' | 'edge_function';
+  canonicalPhone: string;
+  otpCode: string;
+  supabaseClient?: any;
+  dbService: {
+    verifyPhoneOtp: (phone: string, token: string) => Promise<{ verified: boolean; verificationToken?: string; message?: string }>;
+  };
+}): Promise<VerifyOtpResult> {
+  if (authMethod === 'gotrue') {
+    if (!supabaseClient?.auth?.verifyOtp) {
+      return {
+        success: false,
+        errorMessage: 'ارتباط با سرویس احراز هویت برقرار نیست.'
+      };
+    }
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      phone: canonicalPhone,
+      token: otpCode,
+      type: 'sms'
+    });
+
+    if (error || !data?.user) {
+      return {
+        success: false,
+        errorMessage: error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.'
+      };
+    }
+
+    return {
+      success: true,
+      user: data.user
+    };
+  } else {
+    // Direct Edge function verification
+    const edgeVerify = await dbService.verifyPhoneOtp(canonicalPhone, otpCode);
+    if (!edgeVerify?.verified) {
+      return {
+        success: false,
+        errorMessage: edgeVerify?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.'
+      };
+    }
+
+    return {
+      success: true,
+      verificationToken: edgeVerify.verificationToken
+    };
+  }
+}
+
 // --- CUSTOMER AUTH MODAL COMPONENT ---
 export interface CustomerAuthModalProps {
   open: boolean;
@@ -360,43 +424,28 @@ export function CustomerAuthModal({
         throw new Error('Supabase Auth پیکربندی نشده است.');
       }
 
+      const result = await processOtpVerification({
+        authMethod,
+        canonicalPhone,
+        otpCode,
+        supabaseClient: supabase,
+        dbService: db
+      });
+
+      if (!result.success) {
+        setErrorMessage(result.errorMessage || 'کد تایید وارد شده نادرست یا منقضی شده است.');
+        return;
+      }
+
       let verifiedUserId: string | undefined = undefined;
 
-      if (authMethod === 'gotrue' && supabase) {
-        const { data, error } = await supabase.auth.verifyOtp({
-          phone: canonicalPhone,
-          token: otpCode,
-          type: 'sms'
-        });
+      if (result.user) {
+        setAuthSessionUser(result.user);
+        verifiedUserId = result.user.id;
+      }
 
-        if (error || !data.user) {
-          // If GoTrue verification fails, attempt direct edge function validation as backup
-          try {
-            const edgeVerify = await db.verifyPhoneOtp(canonicalPhone, otpCode);
-            if (!edgeVerify?.verified) {
-              setErrorMessage(error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
-              setLoading(false);
-              return;
-            }
-            setVerificationToken(edgeVerify.verificationToken);
-          } catch {
-            setErrorMessage(error?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
-            setLoading(false);
-            return;
-          }
-        } else {
-          setAuthSessionUser(data.user);
-          verifiedUserId = data.user.id;
-        }
-      } else {
-        // Direct Edge function verification
-        const edgeVerify = await db.verifyPhoneOtp(canonicalPhone, otpCode);
-        if (!edgeVerify?.verified) {
-          setErrorMessage(edgeVerify?.message || 'کد تایید وارد شده نادرست یا منقضی شده است.');
-          setLoading(false);
-          return;
-        }
-        setVerificationToken(edgeVerify.verificationToken);
+      if (result.verificationToken) {
+        setVerificationToken(result.verificationToken);
       }
 
       // Check if user profile already exists in DB
