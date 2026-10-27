@@ -48,7 +48,7 @@ export function OrderManagementView({ currentAdmin }: OrderManagementViewProps) 
 
   useEffect(() => {
     refreshList();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('orders', () => {
       refreshList();
     });
     return () => unsub();

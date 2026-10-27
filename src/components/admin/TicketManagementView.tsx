@@ -50,7 +50,7 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
 
   useEffect(() => {
     refreshData();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('support_tickets', () => {
       refreshData();
     });
     return () => unsub();
@@ -63,17 +63,15 @@ export function TicketManagementView({ currentAdmin }: TicketManagementViewProps
   // Mark ticket as read by admin when opened
   useEffect(() => {
     if (selectedTicketId) {
-      db.markTicketAsReadByAdmin(selectedTicketId).then(() => refreshData());
+      db.markTicketAsReadByAdmin(selectedTicketId);
     }
   }, [selectedTicketId]);
 
-  const handleSelectTicket = async (tId: string) => {
+  const handleSelectTicket = (tId: string) => {
     setSelectedTicketId(tId);
-    await db.markTicketAsReadByAdmin(tId);
     setInputText('');
     setMediaUrl(null);
     setMediaType('text');
-    await refreshData();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

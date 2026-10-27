@@ -103,7 +103,7 @@ export function SettingsView({ currentAdmin }: SettingsViewProps) {
 
   useEffect(() => {
     refreshAll();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['general_settings', 'redirects'], () => {
       refreshAll();
     });
     return () => unsub();

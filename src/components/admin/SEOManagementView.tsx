@@ -58,7 +58,7 @@ export function SEOManagementView({ currentAdmin }: SEOManagementViewProps) {
     };
 
     loadData();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('global_seo', () => {
       loadData();
     });
 

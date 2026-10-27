@@ -205,8 +205,12 @@ function App() {
 
   // Logged-in Customer & Current Admin User
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const currentUserRef = React.useRef<User | null>(null);
+  currentUserRef.current = currentUser;
 
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
+  const currentAdminRef = React.useRef<AdminUser | null>(null);
+  currentAdminRef.current = currentAdmin;
   const [adminLoginUsername, setAdminLoginUsername] = useState('');
   const [adminLoginPassword, setAdminLoginPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
@@ -350,40 +354,34 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const refreshAllAppData = async () => {
+  const refreshAllAppData = async (force = false) => {
     try {
-      const [c, p, b, o, t, a, admin] = await Promise.all([
-        db.getCategories(),
-        db.getProducts(),
-        db.getActiveBanners(),
-        db.getOrders(),
-        db.getTickets(),
-        db.getArticles(),
-        db.getCurrentAdmin()
-      ]);
-      setCategories(c);
-      setProducts(p);
-      setBanners(b);
-      setOrders(o);
-      setArticles(a);
-      if (admin && !currentAdmin) {
-        setCurrentAdmin(admin);
+      const promises: Promise<any>[] = [
+        db.getCategories({ forceRefresh: force }),
+        db.getProducts({ forceRefresh: force }),
+        db.getActiveBanners({ forceRefresh: force }),
+        db.getArticles({ forceRefresh: force })
+      ];
+
+      // Only check admin profile if visiting /admin or if admin is already authenticated
+      if (location.pathname.startsWith('/admin') || currentAdminRef.current) {
+        promises.push(db.getCurrentAdmin());
       }
 
-      // Filter tickets for storefront modal context
-      const activeAdmin = admin || currentAdmin;
-      if (activeAdmin) {
-        setTickets(t);
-      } else if (currentUser) {
-        setTickets(t.filter((item) => item.userId === currentUser.id || item.customerPhone === currentUser.phone));
-      } else {
-        setTickets([]);
+      const results = await Promise.all(promises);
+      setCategories(results[0]);
+      setProducts(results[1]);
+      setBanners(results[2]);
+      setArticles(results[3]);
+
+      if (results[4] && !currentAdminRef.current) {
+        setCurrentAdmin(results[4]);
       }
 
-      if (currentUser) {
+      if (currentUserRef.current) {
         const [userCart, userWish] = await Promise.all([
-          db.getUserCart(currentUser.id),
-          db.getUserWishlist(currentUser.id)
+          db.getUserCart(currentUserRef.current.id, { forceRefresh: force }),
+          db.getUserWishlist(currentUserRef.current.id, { forceRefresh: force })
         ]);
         setCart(userCart);
         setWishlist(userWish);
@@ -396,15 +394,68 @@ function App() {
     }
   };
 
-  // Subscribe to central DB updates
+  // Subscribe to central DB updates with targeted table dispatch
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     refreshAllAppData();
-    const unsubscribe = db.subscribe(() => {
-      refreshAllAppData();
+
+    const unsubscribe = db.subscribe((event) => {
+      switch (event.table) {
+        case 'categories':
+          db.getCategories({ forceRefresh: true }).then(setCategories).catch(console.error);
+          break;
+        case 'products':
+          db.getProducts({ forceRefresh: true }).then(setProducts).catch(console.error);
+          break;
+        case 'banners':
+          db.getActiveBanners({ forceRefresh: true }).then(setBanners).catch(console.error);
+          break;
+        case 'articles':
+          db.getArticles({ forceRefresh: true }).then(setArticles).catch(console.error);
+          break;
+        case 'user_carts':
+          if (currentUserRef.current && (!event.userId || event.userId === currentUserRef.current.id)) {
+            db.getUserCart(currentUserRef.current.id, { forceRefresh: true }).then(setCart).catch(console.error);
+          }
+          break;
+        case 'user_wishlists':
+          if (currentUserRef.current && (!event.userId || event.userId === currentUserRef.current.id)) {
+            db.getUserWishlist(currentUserRef.current.id, { forceRefresh: true }).then(setWishlist).catch(console.error);
+          }
+          break;
+        case 'orders':
+          if (currentUserRef.current) {
+            db.getOrders({ userId: currentUserRef.current.id, forceRefresh: true }).then(setOrders).catch(console.error);
+          } else if (currentAdminRef.current) {
+            db.getOrders({ forceRefresh: true }).then(setOrders).catch(console.error);
+          }
+          break;
+        case 'support_tickets':
+          if (currentAdminRef.current) {
+            db.getTickets(undefined, { forceRefresh: true }).then(setTickets).catch(console.error);
+          }
+          break;
+        default:
+          break;
+      }
     });
+
     return () => unsubscribe();
   }, []);
+
+  // Contextual loading for orders when visiting account view or opening order modal
+  useEffect(() => {
+    const isAccountOrders = location.pathname === '/account' && (accountTab === 'orders' || searchParams.get('tab') === 'orders');
+    const isOrderModal = searchParams.has('order');
+
+    if (isAccountOrders || isOrderModal) {
+      if (currentUser) {
+        db.getOrders({ userId: currentUser.id }).then(setOrders).catch(console.error);
+      } else if (currentAdmin) {
+        db.getOrders().then(setOrders).catch(console.error);
+      }
+    }
+  }, [location.pathname, accountTab, searchParams, currentUser?.id, currentAdmin?.id]);
 
   // Intro and Banner Carousel
   useEffect(() => {
@@ -1120,6 +1171,14 @@ function AdminContainer({
     | 'seo'
     | 'settings'
     | 'audit';
+
+  useEffect(() => {
+    if (!currentAdmin && isSupabaseConfigured()) {
+      db.getCurrentAdmin().then((admin) => {
+        if (admin) setCurrentAdmin(admin);
+      }).catch(console.error);
+    }
+  }, [currentAdmin]);
 
   const handleSelectTab = (tab: string) => {
     navigate(`/admin/${tab === 'dashboard' ? '' : tab}`);
@@ -2174,8 +2233,10 @@ function ProductModal({ product, user, close, add, toggleWish, isWished, allProd
 
   useEffect(() => {
     loadReviews();
-    const unsub = db.subscribe(() => {
-      loadReviews();
+    const unsub = db.subscribe('product_reviews', (event) => {
+      if (!event.productId || event.productId === product.id) {
+        loadReviews();
+      }
     });
     return () => unsub();
   }, [product.id]);
@@ -2567,7 +2628,7 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
 
   useEffect(() => {
     refreshTickets();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('support_tickets', () => {
       refreshTickets();
     });
     return () => unsub();
@@ -2580,10 +2641,10 @@ function SupportModal({ close, user, openProfile }: { close: () => void; user?: 
   }, [tickets, user]);
 
   useEffect(() => {
-    if (userTicket) {
+    if (userTicket && (userTicket.unreadUserCount ?? 0) > 0) {
       db.markTicketAsReadByUser(userTicket.id);
     }
-  }, [userTicket?.id, userTicket?.messages?.length]);
+  }, [userTicket?.id, userTicket?.messages?.length, userTicket?.unreadUserCount]);
 
   const isProfileComplete = useMemo(() => {
     return Boolean(user && user.firstName && user.lastName && user.phone);
