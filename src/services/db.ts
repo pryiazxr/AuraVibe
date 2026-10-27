@@ -411,13 +411,87 @@ export function getJalaliDateString(isoString: string): string {
 
 // --- CENTRAL SUPABASE DATA ACCESS & REPOSITORY LAYER ---
 
+export type DatabaseTable =
+  | 'products'
+  | 'product_reviews'
+  | 'banners'
+  | 'categories'
+  | 'product_badges'
+  | 'orders'
+  | 'support_tickets'
+  | 'general_settings'
+  | 'user_carts'
+  | 'user_wishlists'
+  | 'articles'
+  | 'users'
+  | 'admin_users'
+  | 'audit_logs'
+  | 'redirects'
+  | 'global_seo'
+  | 'notifications';
+
+export type DatabaseEventType = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
+export type DatabaseEventOrigin = 'local' | 'realtime';
+
+export type DatabaseEvent = {
+  table: DatabaseTable;
+  eventType: DatabaseEventType;
+  origin: DatabaseEventOrigin;
+  record?: any;
+  oldRecord?: any;
+  userId?: number;
+  productId?: number;
+};
+
+export type DatabaseListener = (event: DatabaseEvent) => void;
+
 const getClient = () => requireSupabase();
 
 class DatabaseService {
-  private listeners: Set<() => void> = new Set();
+  private listeners: Set<DatabaseListener> = new Set();
+  private tableListeners: Map<DatabaseTable, Set<DatabaseListener>> = new Map();
   private realtimeChannel: any = null;
 
-  // Runtime In-memory caches to allow fast synchronous lookups during active sessions
+  // In-flight request deduplication map
+  private inFlightRequests: Map<string, Promise<any>> = new Map();
+
+  // Echo suppression for recent local mutations (key: `${table}:${id}:${eventType}`)
+  private recentLocalMutations: Map<string, number> = new Map();
+
+  // Realtime burst coalescing buffer
+  private pendingRealtimeEvents: DatabaseEvent[] = [];
+  private realtimeDebounceTimer: any = null;
+
+  // Cache TTL constants (in milliseconds)
+  private readonly TTL = {
+    categories: 5 * 60 * 1000,   // 5 minutes
+    badges: 5 * 60 * 1000,       // 5 minutes
+    products: 60 * 1000,          // 60 seconds
+    banners: 2 * 60 * 1000,       // 2 minutes
+    articles: 5 * 60 * 1000,      // 5 minutes
+    seo: 10 * 60 * 1000,          // 10 minutes
+    settings: 10 * 60 * 1000,     // 10 minutes
+    userCart: 30 * 1000,          // 30 seconds
+    userWishlist: 30 * 1000,      // 30 seconds
+    reviews: 60 * 1000,           // 60 seconds
+    orders: 30 * 1000,            // 30 seconds
+    tickets: 15 * 1000            // 15 seconds
+  };
+
+  // Cache timestamp trackers
+  private cacheTimes = {
+    categories: 0,
+    badges: 0,
+    products: 0,
+    banners: 0,
+    articles: 0,
+    seo: 0,
+    settings: 0,
+    orders: 0,
+    tickets: 0
+  };
+
+  // Runtime in-memory caches
   private cachedCategories: CategoryItem[] = [];
   private cachedBadges: ProductBadgeItem[] = [];
   private cachedProducts: Product[] = [];
@@ -433,15 +507,42 @@ class DatabaseService {
   private cachedSEO: GlobalSEO | null = null;
   private cachedSettings: GeneralSettings | null = null;
 
+  // Keyed caches for user and product data isolation
+  private cachedCarts: Map<number, { data: CartItem[]; timestamp: number }> = new Map();
+  private cachedWishlists: Map<number, { data: Product[]; timestamp: number }> = new Map();
+  private cachedReviews: Map<number, { data: ProductReview[]; timestamp: number }> = new Map();
+
   constructor() {
     this.initRealtime();
+  }
+
+  /**
+   * Safe request deduplication: concurrent requests sharing the exact same query
+   * key will await the same in-flight Promise rather than dispatching redundant network calls.
+   */
+  public dedupeRequest<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const existing = this.inFlightRequests.get(key);
+    if (existing) {
+      return existing as Promise<T>;
+    }
+
+    const promise = (async () => {
+      try {
+        return await fetcher();
+      } finally {
+        this.inFlightRequests.delete(key);
+      }
+    })();
+
+    this.inFlightRequests.set(key, promise);
+    return promise;
   }
 
   private initRealtime() {
     if (!isSupabaseConfigured() || !supabase) return;
 
     try {
-      const tables = [
+      const tables: DatabaseTable[] = [
         'products',
         'product_reviews',
         'banners',
@@ -451,7 +552,8 @@ class DatabaseService {
         'support_tickets',
         'general_settings',
         'user_carts',
-        'user_wishlists'
+        'user_wishlists',
+        'articles'
       ];
 
       this.realtimeChannel = getClient().channel('auralune-table-sync');
@@ -460,8 +562,8 @@ class DatabaseService {
         this.realtimeChannel.on(
           'postgres_changes',
           { event: '*', schema: 'public', table },
-          () => {
-            this.notify();
+          (payload: any) => {
+            this.handleRealtimeChange(table, payload);
           }
         );
       }
@@ -472,19 +574,207 @@ class DatabaseService {
     }
   }
 
-  public subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  private handleRealtimeChange(table: DatabaseTable, payload: any) {
+    const eventType = (payload?.eventType as DatabaseEventType) || '*';
+    const record = payload?.new || payload?.old || {};
+    const recordId = record?.id;
+
+    // Echo suppression: check if this is an echo of our own recent local mutation
+    const localKey = `${table}:${recordId ?? ''}:${eventType}`;
+    const recentTime = this.recentLocalMutations.get(localKey);
+    if (recentTime && Date.now() - recentTime < 3500) {
+      this.recentLocalMutations.delete(localKey);
+      return;
+    }
+
+    // Invalidate the cache for external mutations
+    this.invalidateCacheForTable(table, record);
+
+    // Buffer event for short coalescing window (50ms) to prevent storm cascades
+    const dbEvent: DatabaseEvent = {
+      table,
+      eventType,
+      origin: 'realtime',
+      record: payload?.new,
+      oldRecord: payload?.old,
+      userId: record?.user_id,
+      productId: record?.product_id
+    };
+
+    this.pendingRealtimeEvents.push(dbEvent);
+
+    if (this.realtimeDebounceTimer) {
+      clearTimeout(this.realtimeDebounceTimer);
+    }
+
+    this.realtimeDebounceTimer = setTimeout(() => {
+      const events = [...this.pendingRealtimeEvents];
+      this.pendingRealtimeEvents = [];
+      this.realtimeDebounceTimer = null;
+
+      // Group and coalesce events by table + record identity
+      const seen = new Set<string>();
+      for (const ev of events) {
+        const key = `${ev.table}:${ev.eventType}:${ev.userId ?? ''}:${ev.productId ?? ''}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          this.dispatchNotification(ev);
+        }
+      }
+    }, 50);
   }
 
-  private notify() {
+  private invalidateCacheForTable(table: DatabaseTable, record?: any) {
+    switch (table) {
+      case 'categories':
+        this.cacheTimes.categories = 0;
+        break;
+      case 'products':
+        this.cacheTimes.products = 0;
+        break;
+      case 'product_badges':
+        this.cacheTimes.badges = 0;
+        break;
+      case 'banners':
+        this.cacheTimes.banners = 0;
+        break;
+      case 'orders':
+        this.cacheTimes.orders = 0;
+        break;
+      case 'support_tickets':
+        this.cacheTimes.tickets = 0;
+        this.cachedTickets = [];
+        break;
+      case 'articles':
+        this.cacheTimes.articles = 0;
+        break;
+      case 'general_settings':
+        this.cacheTimes.settings = 0;
+        break;
+      case 'global_seo':
+        this.cacheTimes.seo = 0;
+        break;
+      case 'user_carts':
+        if (record?.user_id) {
+          this.cachedCarts.delete(record.user_id);
+        } else {
+          this.cachedCarts.clear();
+        }
+        break;
+      case 'user_wishlists':
+        if (record?.user_id) {
+          this.cachedWishlists.delete(record.user_id);
+        } else {
+          this.cachedWishlists.clear();
+        }
+        break;
+      case 'product_reviews':
+        if (record?.product_id) {
+          this.cachedReviews.delete(record.product_id);
+        } else {
+          this.cachedReviews.clear();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Clears user-specific sensitive caches upon sign-out or session switch.
+   */
+  public clearUserSessionCache() {
+    this.cachedCarts.clear();
+    this.cachedWishlists.clear();
+    this.cachedOrders = [];
+    this.cacheTimes.orders = 0;
+    this.cachedTickets = [];
+  }
+
+  /**
+   * Targeted subscription:
+   * 1. subscribe(listener) - receives all events
+   * 2. subscribe('table', listener) - receives events only for the specified table(s)
+   */
+  public subscribe(listener: DatabaseListener): () => void;
+  public subscribe(tables: DatabaseTable | DatabaseTable[], listener: DatabaseListener): () => void;
+  public subscribe(
+    tableOrListener: DatabaseTable | DatabaseTable[] | DatabaseListener,
+    maybeListener?: DatabaseListener
+  ): () => void {
+    if (typeof tableOrListener === 'function') {
+      const listener = tableOrListener;
+      this.listeners.add(listener);
+      return () => {
+        this.listeners.delete(listener);
+      };
+    }
+
+    const tables = Array.isArray(tableOrListener) ? tableOrListener : [tableOrListener];
+    const listener = maybeListener!;
+    for (const t of tables) {
+      if (!this.tableListeners.has(t)) {
+        this.tableListeners.set(t, new Set());
+      }
+      this.tableListeners.get(t)!.add(listener);
+    }
+
+    return () => {
+      for (const t of tables) {
+        this.tableListeners.get(t)?.delete(listener);
+      }
+    };
+  }
+
+  public notify(event?: Partial<DatabaseEvent>) {
+    const fullEvent: DatabaseEvent = {
+      table: event?.table || 'products',
+      eventType: event?.eventType || '*',
+      origin: event?.origin || 'local',
+      record: event?.record,
+      oldRecord: event?.oldRecord,
+      userId: event?.userId,
+      productId: event?.productId
+    };
+
+    // Record local mutation signature for echo suppression
+    if (fullEvent.origin === 'local') {
+      const key = `${fullEvent.table}:${fullEvent.record?.id ?? fullEvent.productId ?? ''}:${fullEvent.eventType}`;
+      this.recentLocalMutations.set(key, Date.now());
+
+      // Evict old mutation keys periodically
+      if (this.recentLocalMutations.size > 80) {
+        const threshold = Date.now() - 5000;
+        for (const [k, time] of this.recentLocalMutations.entries()) {
+          if (time < threshold) this.recentLocalMutations.delete(k);
+        }
+      }
+    }
+
+    this.dispatchNotification(fullEvent);
+  }
+
+  private dispatchNotification(event: DatabaseEvent) {
+    // 1. Notify global listeners
     this.listeners.forEach((listener) => {
       try {
-        listener();
+        listener(event);
       } catch (err) {
-        console.error('[Auralune DB] Listener notification error:', err);
+        console.error('[Auralune DB] Global listener error:', err);
       }
     });
+
+    // 2. Notify targeted table listeners
+    const targeted = this.tableListeners.get(event.table);
+    if (targeted) {
+      targeted.forEach((listener) => {
+        try {
+          listener(event);
+        } catch (err) {
+          console.error(`[Auralune DB] Table listener error (${event.table}):`, err);
+        }
+      });
+    }
   }
 
   /**
@@ -499,21 +789,28 @@ class DatabaseService {
   }
 
   // --- PRODUCT BADGES / LABELS ---
-  public async getBadges(): Promise<ProductBadgeItem[]> {
-    try {
-      const { data, error } = await getClient().from('product_badges').select('*').order('id', { ascending: true });
-      if (!error && data) {
-        this.cachedBadges = data.map(rowToBadge);
-        return this.cachedBadges;
-      }
-    } catch (err) {
-      console.warn('[Auralune DB] Network fetch error for badges:', err);
+  public async getBadges(options?: { forceRefresh?: boolean }): Promise<ProductBadgeItem[]> {
+    if (!options?.forceRefresh && this.cachedBadges.length > 0 && Date.now() - this.cacheTimes.badges < this.TTL.badges) {
+      return this.cachedBadges;
     }
-    return this.cachedBadges.length ? this.cachedBadges : [
-      { id: 1, title: 'جدیدترین‌ها' },
-      { id: 2, title: 'پرفروش‌ترین‌ها' },
-      { id: 3, title: 'تخفیف ویژه' }
-    ];
+
+    return this.dedupeRequest('product_badges', async () => {
+      try {
+        const { data, error } = await getClient().from('product_badges').select('*').order('id', { ascending: true });
+        if (!error && data) {
+          this.cachedBadges = data.map(rowToBadge);
+          this.cacheTimes.badges = Date.now();
+          return this.cachedBadges;
+        }
+      } catch (err) {
+        console.warn('[Auralune DB] Network fetch error for badges:', err);
+      }
+      return this.cachedBadges.length ? this.cachedBadges : [
+        { id: 1, title: 'جدیدترین‌ها' },
+        { id: 2, title: 'پرفروش‌ترین‌ها' },
+        { id: 3, title: 'تخفیف ویژه' }
+      ];
+    });
   }
 
   public async saveBadge(badgeData: Partial<ProductBadgeItem>, adminUser?: { id: number; name: string }): Promise<ProductBadgeItem> {
@@ -527,6 +824,13 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToBadge(data);
+    const existingIdx = this.cachedBadges.findIndex((b) => b.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedBadges[existingIdx] = saved;
+    } else {
+      this.cachedBadges.push(saved);
+    }
+    this.cacheTimes.badges = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -539,7 +843,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'product_badges', eventType: badgeData.id ? 'UPDATE' : 'INSERT', origin: 'local', record: saved });
     return saved;
   }
 
@@ -549,6 +853,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting badge:', error);
       throw error;
     }
+    this.cachedBadges = this.cachedBadges.filter((b) => b.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -559,29 +864,36 @@ class DatabaseService {
         details: `برچسب با شناسه ${id} حذف گردید`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'product_badges', eventType: 'DELETE', origin: 'local' });
   }
 
   // --- CATEGORIES ---
-  public async getCategories(): Promise<CategoryItem[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('categories')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (!error && data) {
-        this.cachedCategories = data.map(rowToCategory);
-        return this.cachedCategories;
-      }
-    } catch (err) {
-      console.warn('[Auralune DB] Network fetch error for categories:', err);
+  public async getCategories(options?: { forceRefresh?: boolean }): Promise<CategoryItem[]> {
+    if (!options?.forceRefresh && this.cachedCategories.length > 0 && Date.now() - this.cacheTimes.categories < this.TTL.categories) {
+      return this.cachedCategories;
     }
-    return this.cachedCategories.length ? this.cachedCategories : [
-      { id: 1, name: 'ساعت', image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800', displayOrder: 1 },
-      { id: 2, name: 'گردنبند', image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=800', displayOrder: 2 },
-      { id: 3, name: 'دستبند', image: 'https://images.unsplash.com/photo-1611591475170-438d212b1928?q=80&w=800', displayOrder: 3 },
-      { id: 4, name: 'گوشواره', image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=800', displayOrder: 4 }
-    ];
+
+    return this.dedupeRequest('categories', async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('categories')
+          .select('*')
+          .order('display_order', { ascending: true });
+        if (!error && data) {
+          this.cachedCategories = data.map(rowToCategory);
+          this.cacheTimes.categories = Date.now();
+          return this.cachedCategories;
+        }
+      } catch (err) {
+        console.warn('[Auralune DB] Network fetch error for categories:', err);
+      }
+      return this.cachedCategories.length ? this.cachedCategories : [
+        { id: 1, name: 'ساعت', image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800', displayOrder: 1 },
+        { id: 2, name: 'گردنبند', image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=800', displayOrder: 2 },
+        { id: 3, name: 'دستبند', image: 'https://images.unsplash.com/photo-1611591475170-438d212b1928?q=80&w=800', displayOrder: 3 },
+        { id: 4, name: 'گوشواره', image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=800', displayOrder: 4 }
+      ];
+    });
   }
 
   public async saveCategory(catData: Partial<CategoryItem>, adminUser?: { id: number; name: string }): Promise<CategoryItem> {
@@ -598,6 +910,14 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToCategory(data);
+    const existingIdx = this.cachedCategories.findIndex((c) => c.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedCategories[existingIdx] = saved;
+    } else {
+      this.cachedCategories.push(saved);
+    }
+    this.cachedCategories.sort((a, b) => a.displayOrder - b.displayOrder);
+    this.cacheTimes.categories = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -610,7 +930,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'categories', eventType: catData.id ? 'UPDATE' : 'INSERT', origin: 'local', record: saved });
     return saved;
   }
 
@@ -620,6 +940,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting category:', error);
       throw error;
     }
+    this.cachedCategories = this.cachedCategories.filter((c) => c.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -630,63 +951,82 @@ class DatabaseService {
         details: `دسته‌بندی ${id} حذف گردید`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'categories', eventType: 'DELETE', origin: 'local' });
   }
 
   // --- PRODUCTS ---
-  public async getProducts(): Promise<Product[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('products')
-        .select('*')
-        .order('id', { ascending: false });
-      if (!error && data) {
-        this.cachedProducts = data.map(rowToProduct);
-        return this.cachedProducts;
-      }
-    } catch (err) {
-      console.warn('[Auralune DB] Network fetch error for products:', err);
+  public async getProducts(options?: { forceRefresh?: boolean }): Promise<Product[]> {
+    if (!options?.forceRefresh && this.cachedProducts.length > 0 && Date.now() - this.cacheTimes.products < this.TTL.products) {
+      return this.cachedProducts;
     }
-    return this.cachedProducts.length ? this.cachedProducts : [
-      {
-        id: 101,
-        productCode: 'AUR-101',
-        name: 'گردنبند صدف و مروارید اورالون',
-        category: 'گردنبند',
-        price: 380000,
-        oldPrice: 450000,
-        stock: 15,
-        images: ['https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=800'],
-        mainImageIndex: 0,
-        badge: 'پرفروش',
-        colors: ['#D4AF37'],
-        description: 'گردنبند استیل ضدحساسیت رنگ ثابت با صدف طبیعی.',
-        status: 'active',
-        updatedAt: new Date().toISOString()
-      },
-      {
-        id: 102,
-        productCode: 'AUR-102',
-        name: 'ساعت مچی ظریف طلایی وینتیج',
-        category: 'ساعت',
-        price: 890000,
-        oldPrice: 1100000,
-        stock: 8,
-        images: ['https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800'],
-        mainImageIndex: 0,
-        badge: 'جدید',
-        colors: ['#D4AF37'],
-        description: 'ساعت ضدآب ظریف تک‌موتوره ژاپنی با بند حصیری.',
-        status: 'active',
-        updatedAt: new Date().toISOString()
+
+    return this.dedupeRequest('products', async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('products')
+          .select('*')
+          .order('id', { ascending: false });
+        if (!error && data) {
+          this.cachedProducts = data.map(rowToProduct);
+          this.cacheTimes.products = Date.now();
+          return this.cachedProducts;
+        }
+      } catch (err) {
+        console.warn('[Auralune DB] Network fetch error for products:', err);
       }
-    ];
+      return this.cachedProducts.length ? this.cachedProducts : [
+        {
+          id: 101,
+          productCode: 'AUR-101',
+          name: 'گردنبند صدف و مروارید اورالون',
+          category: 'گردنبند',
+          price: 380000,
+          oldPrice: 450000,
+          stock: 15,
+          images: ['https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=800'],
+          mainImageIndex: 0,
+          badge: 'پرفروش',
+          colors: ['#D4AF37'],
+          description: 'گردنبند استیل ضدحساسیت رنگ ثابت با صدف طبیعی.',
+          status: 'active',
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: 102,
+          productCode: 'AUR-102',
+          name: 'ساعت مچی ظریف طلایی وینتیج',
+          category: 'ساعت',
+          price: 890000,
+          oldPrice: 1100000,
+          stock: 8,
+          images: ['https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800'],
+          mainImageIndex: 0,
+          badge: 'جدید',
+          colors: ['#D4AF37'],
+          description: 'ساعت ضدآب ظریف تک‌موتوره ژاپنی با بند حصیری.',
+          status: 'active',
+          updatedAt: new Date().toISOString()
+        }
+      ];
+    });
   }
 
   public async getProductById(id: number): Promise<Product | undefined> {
-    const { data, error } = await getClient().from('products').select('*').eq('id', id).single();
-    if (error || !data) return undefined;
-    return rowToProduct(data);
+    const cached = this.cachedProducts.find((p) => p.id === id);
+    if (cached) return cached;
+
+    return this.dedupeRequest(`product:${id}`, async () => {
+      const { data, error } = await getClient().from('products').select('*').eq('id', id).single();
+      if (error || !data) return undefined;
+      const prod = rowToProduct(data);
+      const existingIdx = this.cachedProducts.findIndex((p) => p.id === prod.id);
+      if (existingIdx >= 0) {
+        this.cachedProducts[existingIdx] = prod;
+      } else {
+        this.cachedProducts.unshift(prod);
+      }
+      return prod;
+    });
   }
 
   public async saveProduct(prodData: Partial<Product>, adminUser?: { id: number; name: string }): Promise<Product> {
@@ -707,6 +1047,13 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToProduct(data);
+    const existingIdx = this.cachedProducts.findIndex((p) => p.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedProducts[existingIdx] = saved;
+    } else {
+      this.cachedProducts.unshift(saved);
+    }
+    this.cacheTimes.products = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -719,7 +1066,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'products', eventType: prodData.id ? 'UPDATE' : 'INSERT', origin: 'local', productId: saved.id, record: saved });
     return saved;
   }
 
@@ -729,6 +1076,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting product:', error);
       throw error;
     }
+    this.cachedProducts = this.cachedProducts.filter((p) => p.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -739,39 +1087,46 @@ class DatabaseService {
         details: `محصول با شناسه ${id} حذف شد`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'products', eventType: 'DELETE', origin: 'local', productId: id });
   }
 
   // --- BANNERS ---
-  public async getBanners(): Promise<Banner[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('banners')
-        .select('*')
-        .order('display_order', { ascending: true });
-      if (!error && data) {
-        this.cachedBanners = data.map(rowToBanner);
-        return this.cachedBanners;
-      }
-    } catch (err) {
-      console.warn('[Auralune DB] Network fetch error for banners:', err);
+  public async getBanners(options?: { forceRefresh?: boolean }): Promise<Banner[]> {
+    if (!options?.forceRefresh && this.cachedBanners.length > 0 && Date.now() - this.cacheTimes.banners < this.TTL.banners) {
+      return this.cachedBanners;
     }
-    return this.cachedBanners.length ? this.cachedBanners : [
-      {
-        id: 1,
-        internalName: 'بنر اصلی ۱',
-        eyebrow: 'کالکشن زمستانه',
-        title: 'درخشش در جزئیات',
-        subtitle: 'مجموعه زیورآلات و ساعت‌های ظریف اورالون',
-        image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1200',
-        active: true,
-        displayOrder: 1
+
+    return this.dedupeRequest('banners', async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('banners')
+          .select('*')
+          .order('display_order', { ascending: true });
+        if (!error && data) {
+          this.cachedBanners = data.map(rowToBanner);
+          this.cacheTimes.banners = Date.now();
+          return this.cachedBanners;
+        }
+      } catch (err) {
+        console.warn('[Auralune DB] Network fetch error for banners:', err);
       }
-    ];
+      return this.cachedBanners.length ? this.cachedBanners : [
+        {
+          id: 1,
+          internalName: 'بنر اصلی ۱',
+          eyebrow: 'کالکشن زمستانه',
+          title: 'درخشش در جزئیات',
+          subtitle: 'مجموعه زیورآلات و ساعت‌های ظریف اورالون',
+          image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1200',
+          active: true,
+          displayOrder: 1
+        }
+      ];
+    });
   }
 
-  public async getActiveBanners(): Promise<Banner[]> {
-    const banners = await this.getBanners();
+  public async getActiveBanners(options?: { forceRefresh?: boolean }): Promise<Banner[]> {
+    const banners = await this.getBanners(options);
     return banners.filter((b) => b.active);
   }
 
@@ -790,6 +1145,14 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToBanner(data);
+    const existingIdx = this.cachedBanners.findIndex((b) => b.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedBanners[existingIdx] = saved;
+    } else {
+      this.cachedBanners.push(saved);
+    }
+    this.cachedBanners.sort((a, b) => a.displayOrder - b.displayOrder);
+    this.cacheTimes.banners = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -802,7 +1165,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'banners', eventType: bannerData.id ? 'UPDATE' : 'INSERT', origin: 'local', record: saved });
     return saved;
   }
 
@@ -819,6 +1182,8 @@ class DatabaseService {
         throw error;
       }
     }
+    this.cachedBanners = reordered;
+    this.cacheTimes.banners = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -831,7 +1196,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'banners', eventType: 'UPDATE', origin: 'local' });
   }
 
   public async deleteBanner(id: number, adminUser?: { id: number; name: string }): Promise<void> {
@@ -840,6 +1205,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting banner:', error);
       throw error;
     }
+    this.cachedBanners = this.cachedBanners.filter((b) => b.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -850,40 +1216,70 @@ class DatabaseService {
         details: `بنر ${id} حذف شد`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'banners', eventType: 'DELETE', origin: 'local' });
   }
 
   // --- ORDERS ---
-  public async getOrders(): Promise<Order[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        this.cachedOrders = data.map(rowToOrder);
-        return this.cachedOrders;
-      }
-    } catch (err) {
-      console.warn('[Auralune DB] Network fetch error for orders:', err);
+  public async getOrders(options?: { userId?: number; forceRefresh?: boolean }): Promise<Order[]> {
+    const key = `orders:${options?.userId ?? 'all'}`;
+    const isFiltered = Boolean(options?.userId);
+
+    if (!options?.forceRefresh && !isFiltered && this.cacheTimes.orders > 0 && Date.now() - this.cacheTimes.orders < this.TTL.orders) {
+      return this.cachedOrders;
     }
-    return this.cachedOrders;
+
+    return this.dedupeRequest(key, async () => {
+      try {
+        let query = getClient()
+          .from('orders')
+          .select('*');
+
+        if (options?.userId) {
+          query = query.eq('user_id', options.userId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (!error && data) {
+          const mapped = data.map(rowToOrder);
+          if (!isFiltered) {
+            this.cachedOrders = mapped;
+            this.cacheTimes.orders = Date.now();
+          }
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('[Auralune DB] Network fetch error for orders:', err);
+      }
+      return !isFiltered ? this.cachedOrders : [];
+    });
   }
 
-  public async getValidOrders(): Promise<Order[]> {
-    const all = await this.getOrders();
+  public async getValidOrders(options?: { forceRefresh?: boolean }): Promise<Order[]> {
+    const all = await this.getOrders(options);
     const invalidStatuses: OrderStatus[] = ['لغو شده', 'مرجوع شده', 'ناموفق / مشکل در ارسال'];
     return all.filter((o) => !invalidStatuses.includes(o.orderStatus));
   }
 
   public async getOrderById(id: string): Promise<Order | undefined> {
-    const { data, error } = await getClient()
-      .from('orders')
-      .select('*')
-      .or(`id.eq.${id},order_number.eq.${id}`)
-      .maybeSingle();
-    if (error || !data) return undefined;
-    return rowToOrder(data);
+    const cached = this.cachedOrders.find((item) => String(item.id) === id || item.orderNumber === id);
+    if (cached) return cached;
+
+    return this.dedupeRequest(`order:${id}`, async () => {
+      const { data, error } = await getClient()
+        .from('orders')
+        .select('*')
+        .or(`id.eq.${id},order_number.eq.${id}`)
+        .maybeSingle();
+      if (error || !data) return undefined;
+      const order = rowToOrder(data);
+      const existingIdx = this.cachedOrders.findIndex((o) => o.id === order.id);
+      if (existingIdx >= 0) {
+        this.cachedOrders[existingIdx] = order;
+      } else {
+        this.cachedOrders.unshift(order);
+      }
+      return order;
+    });
   }
 
   public async createOrder(orderPayload: {
@@ -918,6 +1314,7 @@ class DatabaseService {
     if (!rpcError && rpcData) {
       const saved = rowToOrder(rpcData);
       this.cachedOrders.unshift(saved);
+      this.cacheTimes.orders = Date.now();
 
       // Auto notify admin
       this.addNotification({
@@ -927,7 +1324,7 @@ class DatabaseService {
         type: 'order'
       }).catch(console.error);
 
-      this.notify();
+      this.notify({ table: 'orders', eventType: 'INSERT', origin: 'local', record: saved });
       return saved;
     }
 
@@ -975,6 +1372,7 @@ class DatabaseService {
     }
     const saved = rowToOrder(data);
     this.cachedOrders.unshift(saved);
+    this.cacheTimes.orders = Date.now();
 
     this.addNotification({
       targetRole: 'admin',
@@ -983,7 +1381,7 @@ class DatabaseService {
       type: 'order'
     }).catch(console.error);
 
-    this.notify();
+    this.notify({ table: 'orders', eventType: 'INSERT', origin: 'local', record: saved });
     return saved;
   }
 
@@ -1021,6 +1419,18 @@ class DatabaseService {
       throw error;
     }
 
+    // Update in-memory cached order
+    const existingIdx = this.cachedOrders.findIndex((o) => o.id === orderId);
+    if (existingIdx >= 0) {
+      this.cachedOrders[existingIdx] = {
+        ...this.cachedOrders[existingIdx],
+        orderStatus: status,
+        timeline: updatedTimeline,
+        trackingCode: trackingCode !== undefined ? trackingCode : this.cachedOrders[existingIdx].trackingCode,
+        updatedAt: now.toISOString()
+      };
+    }
+
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
@@ -1047,7 +1457,7 @@ class DatabaseService {
       // Non-blocking
     }
 
-    this.notify();
+    this.notify({ table: 'orders', eventType: 'UPDATE', origin: 'local', record: { id: orderId } });
   }
 
   public async updateOrderPaymentStatus(
@@ -1082,6 +1492,18 @@ class DatabaseService {
       throw error;
     }
 
+    // Update in-memory cached order
+    const existingIdx = this.cachedOrders.findIndex((o) => o.id === orderId);
+    if (existingIdx >= 0) {
+      this.cachedOrders[existingIdx] = {
+        ...this.cachedOrders[existingIdx],
+        paymentStatus,
+        orderStatus,
+        timeline: updatedTimeline,
+        updatedAt: now.toISOString()
+      };
+    }
+
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
@@ -1091,7 +1513,7 @@ class DatabaseService {
       details: `وضعیت پرداخت: ${paymentStatus} | وضعیت سفارش: ${orderStatus}`
     }).catch(console.error);
 
-    this.notify();
+    this.notify({ table: 'orders', eventType: 'UPDATE', origin: 'local', record: { id: orderId } });
   }
 
   public async deleteOrder(orderId: string, adminUser: { id: number; name: string }): Promise<void> {
@@ -1100,6 +1522,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting order:', error);
       throw error;
     }
+    this.cachedOrders = this.cachedOrders.filter((o) => o.id !== orderId);
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
@@ -1108,7 +1531,7 @@ class DatabaseService {
       target: orderId,
       details: 'سفارش از سیستم حذف گردید'
     }).catch(console.error);
-    this.notify();
+    this.notify({ table: 'orders', eventType: 'DELETE', origin: 'local', record: { id: orderId } });
   }
 
   // --- USERS & ADMINS ---
@@ -1239,7 +1662,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'users', eventType: userData.id ? 'UPDATE' : 'INSERT', origin: 'local', record: saved, userId: saved.id });
     return saved;
   }
 
@@ -1262,7 +1685,7 @@ class DatabaseService {
       details: `علت مسدودی: ${blockReason}`
     }).catch(console.error);
 
-    this.notify();
+    this.notify({ table: 'users', eventType: 'UPDATE', origin: 'local', record: { id: userId, status: 'blocked' }, userId });
   }
 
   public async unblockUser(userId: number, adminUser: { id: number; name: string }): Promise<void> {
@@ -1284,7 +1707,7 @@ class DatabaseService {
       details: 'حساب کاربر مجدداً فعال گردید'
     }).catch(console.error);
 
-    this.notify();
+    this.notify({ table: 'users', eventType: 'UPDATE', origin: 'local', record: { id: userId, status: 'active' }, userId });
   }
 
   public async getAdmins(): Promise<AdminUser[]> {
@@ -1303,23 +1726,26 @@ class DatabaseService {
   public async getCurrentAdmin(): Promise<AdminUser | null> {
     if (!isSupabaseConfigured() || !supabase) return null;
 
-    try {
-      const { data: authData } = await getClient().auth.getUser();
-      if (!authData?.user) return null;
+    return this.dedupeRequest('current_admin', async () => {
+      try {
+        // Fast local check first: do not hit /auth/v1/user over network if no session exists!
+        const { data: sessionData } = await getClient().auth.getSession();
+        if (!sessionData?.session?.user) return null;
 
-      const { data, error } = await getClient()
-        .from('admin_users')
-        .select('*')
-        .eq('auth_user_id', authData.user.id)
-        .eq('status', 'active')
-        .maybeSingle();
+        const { data, error } = await getClient()
+          .from('admin_users')
+          .select('*')
+          .eq('auth_user_id', sessionData.session.user.id)
+          .eq('status', 'active')
+          .maybeSingle();
 
-      if (error || !data) return null;
-      return rowToAdmin(data);
-    } catch (err) {
-      console.error('[Auralune DB] Error retrieving current admin:', err);
-      return null;
-    }
+        if (error || !data) return null;
+        return rowToAdmin(data);
+      } catch (err) {
+        console.error('[Auralune DB] Error retrieving current admin:', err);
+        return null;
+      }
+    });
   }
 
   public async adminLogin(usernameOrEmail: string, password: string): Promise<AdminUser> {
@@ -1371,7 +1797,7 @@ class DatabaseService {
               details: 'ورود موفقیت‌آمیز به پیشخوان مدیریتی'
             }).catch(console.error);
 
-            this.notify();
+            this.notify({ table: 'admin_users', eventType: 'UPDATE', origin: 'local', record: admin });
             return admin;
           }
         }
@@ -1387,14 +1813,16 @@ class DatabaseService {
     if (isSupabaseConfigured() && supabase) {
       await getClient().auth.signOut();
     }
-    this.notify();
+    this.clearUserSessionCache();
+    this.notify({ table: 'admin_users', eventType: 'UPDATE', origin: 'local' });
   }
 
   public async userLogout(): Promise<void> {
     if (isSupabaseConfigured() && supabase) {
       await getClient().auth.signOut();
     }
-    this.notify();
+    this.clearUserSessionCache();
+    this.notify({ table: 'users', eventType: 'UPDATE', origin: 'local' });
   }
 
   public async saveAdmin(
@@ -1428,7 +1856,7 @@ class DatabaseService {
         target: saved.username,
         details: `نقش: ${saved.role}`
       }).catch(console.error);
-      this.notify();
+      this.notify({ table: 'admin_users', eventType: 'UPDATE', origin: 'local', record: saved });
       return saved;
     } else {
       // Create new admin user in auth.users and admin_users via secure RPC
@@ -1469,32 +1897,43 @@ class DatabaseService {
         details: `کد ادمین: ${saved.adminCode} | نقش: ${saved.role}`
       }).catch(console.error);
 
-      this.notify();
+      this.notify({ table: 'admin_users', eventType: 'INSERT', origin: 'local', record: saved });
       return saved;
     }
   }
 
   // --- PRODUCT REVIEWS ---
-  public async getProductReviews(productId: number): Promise<ProductReview[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('product_reviews')
-        .select('*')
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.warn('[Auralune DB] Could not fetch reviews (table may not exist in database yet):', error.message);
-        return [];
+  public async getProductReviews(productId: number, options?: { forceRefresh?: boolean }): Promise<ProductReview[]> {
+    if (!options?.forceRefresh) {
+      const cached = this.cachedReviews.get(productId);
+      if (cached && Date.now() - cached.timestamp < this.TTL.reviews) {
+        return cached.data;
       }
-
-      if (data) {
-        return data.map(rowToReview);
-      }
-    } catch (err) {
-      console.error('[Auralune DB] Error fetching reviews for product:', err);
     }
-    return [];
+
+    return this.dedupeRequest(`product_reviews:${productId}`, async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('product_reviews')
+          .select('*')
+          .eq('product_id', productId)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.warn('[Auralune DB] Could not fetch reviews (table may not exist in database yet):', error.message);
+          return [];
+        }
+
+        if (data) {
+          const mapped = data.map(rowToReview);
+          this.cachedReviews.set(productId, { data: mapped, timestamp: Date.now() });
+          return mapped;
+        }
+      } catch (err) {
+        console.error('[Auralune DB] Error fetching reviews for product:', err);
+      }
+      return this.cachedReviews.get(productId)?.data || [];
+    });
   }
 
   public async saveProductReview(reviewData: Partial<ProductReview>): Promise<ProductReview> {
@@ -1528,11 +1967,14 @@ class DatabaseService {
     }
 
     const saved = rowToReview(data);
-    this.notify();
+    if (saved.productId) {
+      this.cachedReviews.delete(saved.productId);
+    }
+    this.notify({ table: 'product_reviews', eventType: reviewData.id ? 'UPDATE' : 'INSERT', origin: 'local', productId: saved.productId, record: saved });
     return saved;
   }
 
-  public async deleteProductReview(reviewId: number): Promise<void> {
+  public async deleteProductReview(reviewId: number, productId?: number): Promise<void> {
     const { error } = await getClient()
       .from('product_reviews')
       .delete()
@@ -1542,29 +1984,46 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting review:', error);
       throw error;
     }
-    this.notify();
+    if (productId) {
+      this.cachedReviews.delete(productId);
+    } else {
+      this.cachedReviews.clear();
+    }
+    this.notify({ table: 'product_reviews', eventType: 'DELETE', origin: 'local', productId });
   }
 
   // --- SUPPORT TICKETS ---
-  public async getTickets(filterUser?: { id?: number; phone?: string }): Promise<SupportTicket[]> {
-    let query = getClient().from('support_tickets').select('*');
+  public async getTickets(filterUser?: { id?: number; phone?: string }, options?: { forceRefresh?: boolean }): Promise<SupportTicket[]> {
+    const key = `tickets:${filterUser?.id || ''}:${filterUser?.phone || ''}`;
 
-    if (filterUser) {
-      const conditions: string[] = [];
-      if (filterUser.id) conditions.push(`user_id.eq.${filterUser.id}`);
-      if (filterUser.phone) conditions.push(`customer_phone.eq.${filterUser.phone}`);
-      if (conditions.length > 0) {
-        query = query.or(conditions.join(','));
+    if (!options?.forceRefresh && !filterUser && this.cacheTimes.tickets > 0 && Date.now() - this.cacheTimes.tickets < this.TTL.tickets) {
+      return this.cachedTickets;
+    }
+
+    return this.dedupeRequest(key, async () => {
+      let query = getClient().from('support_tickets').select('*');
+
+      if (filterUser) {
+        const conditions: string[] = [];
+        if (filterUser.id) conditions.push(`user_id.eq.${filterUser.id}`);
+        if (filterUser.phone) conditions.push(`customer_phone.eq.${filterUser.phone}`);
+        if (conditions.length > 0) {
+          query = query.or(conditions.join(','));
+        }
       }
-    }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) {
-      console.error('[Auralune DB] Error fetching tickets:', error);
-      throw error;
-    }
-    this.cachedTickets = (data || []).map(rowToTicket);
-    return this.cachedTickets;
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Auralune DB] Error fetching tickets:', error);
+        throw error;
+      }
+      const mapped = (data || []).map(rowToTicket);
+      if (!filterUser) {
+        this.cachedTickets = mapped;
+        this.cacheTimes.tickets = Date.now();
+      }
+      return mapped;
+    });
   }
 
   public async getUnreadSupportConversationsCount(): Promise<number> {
@@ -1606,7 +2065,7 @@ class DatabaseService {
         type: 'ticket'
       }).catch(console.error);
 
-      this.notify();
+      this.notify({ table: 'support_tickets', eventType: 'INSERT', origin: 'local', record: saved, userId: saved.userId });
       return saved;
     }
 
@@ -1660,7 +2119,7 @@ class DatabaseService {
       type: 'ticket'
     }).catch(console.error);
 
-    this.notify();
+    this.notify({ table: 'support_tickets', eventType: 'INSERT', origin: 'local', record: saved, userId: saved.userId });
     return saved;
   }
 
@@ -1719,7 +2178,12 @@ class DatabaseService {
       throw error;
     }
 
-    this.notify();
+    const existingIdx = this.cachedTickets.findIndex((t) => t.id === ticketId);
+    if (existingIdx >= 0) {
+      this.cachedTickets[existingIdx] = ticket;
+    }
+
+    this.notify({ table: 'support_tickets', eventType: 'UPDATE', origin: 'local', record: ticket, userId: ticket.userId });
   }
 
   public async updateTicketState(
@@ -1740,10 +2204,21 @@ class DatabaseService {
       console.error('[Auralune DB] Error updating ticket state:', error);
       throw error;
     }
-    this.notify();
+
+    const existing = this.cachedTickets.find((t) => t.id === ticketId);
+    if (existing) {
+      Object.assign(existing, updates);
+    }
+
+    this.notify({ table: 'support_tickets', eventType: 'UPDATE', origin: 'local', record: { id: ticketId, ...updates } });
   }
 
   public async markTicketAsReadByAdmin(ticketId: string): Promise<void> {
+    const existing = this.cachedTickets.find((t) => t.id === ticketId);
+    if (existing && existing.unreadAdminCount === 0) {
+      return; // Already marked read, skip redundant update
+    }
+
     const { error } = await getClient()
       .from('support_tickets')
       .update({ unread_admin_count: 0 })
@@ -1752,10 +2227,16 @@ class DatabaseService {
       console.error('[Auralune DB] Error marking ticket read by admin:', error);
       return;
     }
-    this.notify();
+    if (existing) existing.unreadAdminCount = 0;
+    this.notify({ table: 'support_tickets', eventType: 'UPDATE', origin: 'local', record: { id: ticketId, unread_admin_count: 0 } });
   }
 
   public async markTicketAsReadByUser(ticketId: string): Promise<void> {
+    const existing = this.cachedTickets.find((t) => t.id === ticketId);
+    if (existing && existing.unreadUserCount === 0) {
+      return; // Already marked read, skip redundant update
+    }
+
     const { error } = await getClient()
       .from('support_tickets')
       .update({ unread_user_count: 0 })
@@ -1764,7 +2245,8 @@ class DatabaseService {
       console.error('[Auralune DB] Error marking ticket read by user:', error);
       return;
     }
-    this.notify();
+    if (existing) existing.unreadUserCount = 0;
+    this.notify({ table: 'support_tickets', eventType: 'UPDATE', origin: 'local', record: { id: ticketId, unread_user_count: 0 } });
   }
 
   public async deleteMessageFromTicket(ticketId: string, messageId: string): Promise<void> {
@@ -1785,21 +2267,34 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting message from ticket:', error);
       throw error;
     }
-    this.notify();
+
+    const existingIdx = this.cachedTickets.findIndex((t) => t.id === ticketId);
+    if (existingIdx >= 0) {
+      this.cachedTickets[existingIdx] = ticket;
+    }
+
+    this.notify({ table: 'support_tickets', eventType: 'UPDATE', origin: 'local', record: ticket });
   }
 
   // --- ARTICLES / MAGAZINE ---
-  public async getArticles(): Promise<Article[]> {
-    const { data, error } = await getClient()
-      .from('articles')
-      .select('*')
-      .order('display_order', { ascending: true });
-    if (error) {
-      console.error('[Auralune DB] Error fetching articles:', error);
-      throw error;
+  public async getArticles(options?: { forceRefresh?: boolean }): Promise<Article[]> {
+    if (!options?.forceRefresh && this.cachedArticles.length > 0 && Date.now() - this.cacheTimes.articles < this.TTL.articles) {
+      return this.cachedArticles;
     }
-    this.cachedArticles = (data || []).map(rowToArticle);
-    return this.cachedArticles;
+
+    return this.dedupeRequest('articles', async () => {
+      const { data, error } = await getClient()
+        .from('articles')
+        .select('*')
+        .order('display_order', { ascending: true });
+      if (error) {
+        console.error('[Auralune DB] Error fetching articles:', error);
+        throw error;
+      }
+      this.cachedArticles = (data || []).map(rowToArticle);
+      this.cacheTimes.articles = Date.now();
+      return this.cachedArticles;
+    });
   }
 
   public async saveArticle(articleData: Partial<Article>, adminUser?: { id: number; name: string }): Promise<Article> {
@@ -1815,6 +2310,13 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToArticle(data);
+    const existingIdx = this.cachedArticles.findIndex((a) => a.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedArticles[existingIdx] = saved;
+    } else {
+      this.cachedArticles.push(saved);
+    }
+    this.cacheTimes.articles = Date.now();
 
     if (adminUser) {
       this.addAuditLog({
@@ -1827,7 +2329,7 @@ class DatabaseService {
       }).catch(console.error);
     }
 
-    this.notify();
+    this.notify({ table: 'articles', eventType: articleData.id ? 'UPDATE' : 'INSERT', origin: 'local', record: saved });
     return saved;
   }
 
@@ -1837,6 +2339,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting article:', error);
       throw error;
     }
+    this.cachedArticles = this.cachedArticles.filter((a) => a.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -1847,30 +2350,37 @@ class DatabaseService {
         details: `مقاله با شناسه ${id} حذف شد`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'articles', eventType: 'DELETE', origin: 'local' });
   }
 
   // --- SEO & SETTINGS ---
-  public async getGlobalSEO(): Promise<GlobalSEO> {
-    const { data, error } = await getClient().from('global_seo').select('*').eq('id', 1).maybeSingle();
-    if (error) {
-      console.error('[Auralune DB] Error fetching global SEO:', error);
-      throw error;
+  public async getGlobalSEO(options?: { forceRefresh?: boolean }): Promise<GlobalSEO> {
+    if (!options?.forceRefresh && this.cachedSEO && Date.now() - this.cacheTimes.seo < this.TTL.seo) {
+      return this.cachedSEO;
     }
-    if (!data) {
-      return {
-        siteTitle: 'Auralune | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
-        defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس اورالون.',
-        defaultOgImage: '',
-        defaultCanonical: 'https://auralune.ir',
-        organizationName: 'مجموعه اورالون و وینا اکسسوری',
-        organizationLogo: '',
-        robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auralune.ir/sitemap.xml',
-        sitemapGeneratedAt: new Date().toISOString()
-      };
-    }
-    this.cachedSEO = rowToGlobalSEO(data);
-    return this.cachedSEO;
+
+    return this.dedupeRequest('global_seo', async () => {
+      const { data, error } = await getClient().from('global_seo').select('*').eq('id', 1).maybeSingle();
+      if (error) {
+        console.error('[Auralune DB] Error fetching global SEO:', error);
+        throw error;
+      }
+      if (!data) {
+        return {
+          siteTitle: 'Auralune | فروشگاه تخصصی اکسسوری و زیورآلات ظریف',
+          defaultMetaDescription: 'خرید جدیدترین زیورآلات دست‌ساز، ساعت زنانه، اسکرانچی، کلیپس و بدلیجات استیل رنگ ثابت با بسته‌بندی لوکس اورالون.',
+          defaultOgImage: '',
+          defaultCanonical: 'https://auralune.ir',
+          organizationName: 'مجموعه اورالون و وینا اکسسوری',
+          organizationLogo: '',
+          robotsTxt: 'User-agent: *\nAllow: /\nDisallow: /admin\nSitemap: https://auralune.ir/sitemap.xml',
+          sitemapGeneratedAt: new Date().toISOString()
+        };
+      }
+      this.cachedSEO = rowToGlobalSEO(data);
+      this.cacheTimes.seo = Date.now();
+      return this.cachedSEO;
+    });
   }
 
   public async updateGlobalSEO(seoData: Partial<GlobalSEO>, adminUser?: { id: number; name: string }): Promise<void> {
@@ -1880,6 +2390,11 @@ class DatabaseService {
       console.error('[Auralune DB] Error updating global SEO:', error);
       throw error;
     }
+    if (this.cachedSEO) {
+      Object.assign(this.cachedSEO, seoData);
+    }
+    this.cacheTimes.seo = Date.now();
+
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -1890,57 +2405,64 @@ class DatabaseService {
         details: 'تنظیمات کلی SEO ذخیره گردید'
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'global_seo', eventType: 'UPDATE', origin: 'local' });
   }
 
-  public async getGeneralSettings(): Promise<GeneralSettings> {
-    const { data, error } = await getClient().from('general_settings').select('*').eq('id', 1).maybeSingle();
-    if (error) {
-      console.error('[Auralune DB] Error fetching general settings:', error);
-      throw error;
+  public async getGeneralSettings(options?: { forceRefresh?: boolean }): Promise<GeneralSettings> {
+    if (!options?.forceRefresh && this.cachedSettings && Date.now() - this.cacheTimes.settings < this.TTL.settings) {
+      return this.cachedSettings;
     }
-    if (!data) {
-      return {
-        siteName: 'Auralune | اورالون',
-        logoUrl: '',
-        faviconUrl: '',
-        contactEmail: 'hello@auralune.ir',
-        contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
-        address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
-        workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
-        socialLinks: {
-          instagram: 'https://instagram.com/auralune',
-          telegram: 'https://t.me/auralune',
-          bale: 'https://ble.ir/auralune'
-        },
-        timezone: 'Asia/Tehran',
-        language: 'fa',
-        headerLinks: [
-          { title: 'صفحه اصلی', url: '/' },
-          { title: 'جدیدترین‌ها', url: '/category/new' },
-          { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
-          { title: 'مجله استایل', url: '/journal' }
-        ],
-        footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
-        notifications: {
-          newOrder: true,
-          newUser: true,
-          newTicket: true,
-          securityAlert: true
-        },
-        cardToCardSettings: {
-          cardNumber: '6037997512345678',
-          cardholderName: 'فروشگاه اورالون (Auralune)'
-        },
-        paymentGatewaySettings: {
-          providerName: 'درگاه پرداخت آنلاین',
-          gatewayUrl: 'https://api.zarinpal.com/pg/v4/payment/request.json',
-          active: false
-        }
-      };
-    }
-    this.cachedSettings = rowToGeneralSettings(data);
-    return this.cachedSettings;
+
+    return this.dedupeRequest('general_settings', async () => {
+      const { data, error } = await getClient().from('general_settings').select('*').eq('id', 1).maybeSingle();
+      if (error) {
+        console.error('[Auralune DB] Error fetching general settings:', error);
+        throw error;
+      }
+      if (!data) {
+        return {
+          siteName: 'Auralune | اورالون',
+          logoUrl: '',
+          faviconUrl: '',
+          contactEmail: 'hello@auralune.ir',
+          contactPhone: '۰۲۱-۸۸۸۸۹۹۹۹',
+          address: 'تهران، خیابان نیاوران، پلاک ۱۵، واحد ۴',
+          workingHours: 'همه روزه از ساعت ۹:۰۰ الی ۲۱:۰۰',
+          socialLinks: {
+            instagram: 'https://instagram.com/auralune',
+            telegram: 'https://t.me/auralune',
+            bale: 'https://ble.ir/auralune'
+          },
+          timezone: 'Asia/Tehran',
+          language: 'fa',
+          headerLinks: [
+            { title: 'صفحه اصلی', url: '/' },
+            { title: 'جدیدترین‌ها', url: '/category/new' },
+            { title: 'پرفروش‌ترین‌ها', url: '/category/bestsellers' },
+            { title: 'مجله استایل', url: '/journal' }
+          ],
+          footerDescription: 'فروشگاه تخصصی اکسسوری و زیورآلات ظریف با تم کرم وانیلی و بنفش اورالون. جزئیات کوچکی که استایل شما را درخشان‌تر می‌کنند.',
+          notifications: {
+            newOrder: true,
+            newUser: true,
+            newTicket: true,
+            securityAlert: true
+          },
+          cardToCardSettings: {
+            cardNumber: '6037997512345678',
+            cardholderName: 'فروشگاه اورالون (Auralune)'
+          },
+          paymentGatewaySettings: {
+            providerName: 'درگاه پرداخت آنلاین',
+            gatewayUrl: 'https://api.zarinpal.com/pg/v4/payment/request.json',
+            active: false
+          }
+        };
+      }
+      this.cachedSettings = rowToGeneralSettings(data);
+      this.cacheTimes.settings = Date.now();
+      return this.cachedSettings;
+    });
   }
 
   public async updateGeneralSettings(settings: Partial<GeneralSettings>, adminUser?: { id: number; name: string }): Promise<void> {
@@ -1950,6 +2472,11 @@ class DatabaseService {
       console.error('[Auralune DB] Error updating general settings:', error);
       throw error;
     }
+    if (this.cachedSettings) {
+      Object.assign(this.cachedSettings, settings);
+    }
+    this.cacheTimes.settings = Date.now();
+
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -1960,18 +2487,24 @@ class DatabaseService {
         details: 'اطلاعات هدر، فوتر و ارتباطات آپدیت شد'
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'general_settings', eventType: 'UPDATE', origin: 'local' });
   }
 
   // --- REDIRECTS ---
   public async getRedirects(): Promise<RedirectRule[]> {
-    const { data, error } = await getClient().from('redirects').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.error('[Auralune DB] Error fetching redirects:', error);
-      throw error;
+    if (this.cachedRedirects.length > 0) {
+      return this.cachedRedirects;
     }
-    this.cachedRedirects = (data || []).map(rowToRedirect);
-    return this.cachedRedirects;
+
+    return this.dedupeRequest('redirects', async () => {
+      const { data, error } = await getClient().from('redirects').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Auralune DB] Error fetching redirects:', error);
+        throw error;
+      }
+      this.cachedRedirects = (data || []).map(rowToRedirect);
+      return this.cachedRedirects;
+    });
   }
 
   public async saveRedirect(redirect: Partial<RedirectRule>, adminUser?: { id: number; name: string }): Promise<RedirectRule> {
@@ -1983,6 +2516,12 @@ class DatabaseService {
       throw error;
     }
     const saved = rowToRedirect(data);
+    const existingIdx = this.cachedRedirects.findIndex((r) => r.id === saved.id);
+    if (existingIdx >= 0) {
+      this.cachedRedirects[existingIdx] = saved;
+    } else {
+      this.cachedRedirects.unshift(saved);
+    }
 
     if (adminUser) {
       this.addAuditLog({
@@ -1994,7 +2533,7 @@ class DatabaseService {
         details: `ریدایرکت به ${saved.destinationUrl}`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'redirects', eventType: 'UPDATE', origin: 'local', record: saved });
     return saved;
   }
 
@@ -2004,6 +2543,7 @@ class DatabaseService {
       console.error('[Auralune DB] Error deleting redirect:', error);
       throw error;
     }
+    this.cachedRedirects = this.cachedRedirects.filter((r) => r.id !== id);
     if (adminUser) {
       this.addAuditLog({
         adminId: adminUser.id,
@@ -2014,22 +2554,24 @@ class DatabaseService {
         details: `ریدایرکت ${id} حذف شد`
       }).catch(console.error);
     }
-    this.notify();
+    this.notify({ table: 'redirects', eventType: 'DELETE', origin: 'local' });
   }
 
   // --- AUDIT LOGS ---
   public async getAuditLogs(): Promise<AuditLog[]> {
-    const { data, error } = await getClient()
-      .from('audit_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) {
-      console.error('[Auralune DB] Error fetching audit logs:', error);
-      throw error;
-    }
-    this.cachedAuditLogs = (data || []).map(rowToAuditLog);
-    return this.cachedAuditLogs;
+    return this.dedupeRequest('audit_logs', async () => {
+      const { data, error } = await getClient()
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) {
+        console.error('[Auralune DB] Error fetching audit logs:', error);
+        throw error;
+      }
+      this.cachedAuditLogs = (data || []).map(rowToAuditLog);
+      return this.cachedAuditLogs;
+    });
   }
 
   public async addAuditLog(entry: {
@@ -2065,17 +2607,20 @@ class DatabaseService {
 
   // --- NOTIFICATIONS ---
   public async getNotifications(role: 'admin' | 'user', userId?: number): Promise<AppNotification[]> {
-    let query = getClient().from('notifications').select('*').eq('target_role', role);
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) {
-      console.error('[Auralune DB] Error fetching notifications:', error);
-      throw error;
-    }
-    this.cachedNotifications = (data || []).map(rowToNotification);
-    return this.cachedNotifications;
+    const key = `notifications:${role}:${userId || ''}`;
+    return this.dedupeRequest(key, async () => {
+      let query = getClient().from('notifications').select('*').eq('target_role', role);
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Auralune DB] Error fetching notifications:', error);
+        throw error;
+      }
+      this.cachedNotifications = (data || []).map(rowToNotification);
+      return this.cachedNotifications;
+    });
   }
 
   public async addNotification(notif: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): Promise<void> {
@@ -2090,26 +2635,38 @@ class DatabaseService {
     if (error) {
       console.warn('[Auralune DB] Warning inserting notification:', error.message);
     }
-    this.notify();
+    this.notify({ table: 'notifications', eventType: 'INSERT', origin: 'local', record: newNotif, userId: notif.userId });
   }
 
   // --- WISHLIST ---
-  public async getUserWishlist(userId: number): Promise<Product[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('user_wishlists')
-        .select('product_id')
-        .eq('user_id', userId);
-
-      if (error || !data || data.length === 0) return [];
-
-      const productIds = data.map((item) => item.product_id);
-      const allProducts = await this.getProducts();
-      return allProducts.filter((p) => productIds.includes(p.id));
-    } catch (err) {
-      console.error('[Auralune DB] Error fetching user wishlist:', err);
-      return [];
+  public async getUserWishlist(userId: number, options?: { forceRefresh?: boolean }): Promise<Product[]> {
+    if (!options?.forceRefresh) {
+      const cached = this.cachedWishlists.get(userId);
+      if (cached && Date.now() - cached.timestamp < this.TTL.userWishlist) {
+        return cached.data;
+      }
     }
+
+    return this.dedupeRequest(`user_wishlist:${userId}`, async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('user_wishlists')
+          .select('product_id')
+          .eq('user_id', userId);
+
+        if (error || !data || data.length === 0) return [];
+
+        const productIds = data.map((item) => item.product_id);
+        const allProducts = await this.getProducts();
+        const result = allProducts.filter((p) => productIds.includes(p.id));
+
+        this.cachedWishlists.set(userId, { data: result, timestamp: Date.now() });
+        return result;
+      } catch (err) {
+        console.error('[Auralune DB] Error fetching user wishlist:', err);
+        return this.cachedWishlists.get(userId)?.data || [];
+      }
+    });
   }
 
   public async addToWishlist(userId: number, productId: number): Promise<void> {
@@ -2120,7 +2677,8 @@ class DatabaseService {
       if (error) {
         console.error('[Auralune DB] Error adding to wishlist:', error);
       }
-      this.notify();
+      this.cachedWishlists.delete(userId);
+      this.notify({ table: 'user_wishlists', eventType: 'INSERT', origin: 'local', userId, productId });
     } catch (err) {
       console.error('[Auralune DB] Error adding to wishlist:', err);
     }
@@ -2136,7 +2694,8 @@ class DatabaseService {
       if (error) {
         console.error('[Auralune DB] Error removing from wishlist:', error);
       }
-      this.notify();
+      this.cachedWishlists.delete(userId);
+      this.notify({ table: 'user_wishlists', eventType: 'DELETE', origin: 'local', userId, productId });
     } catch (err) {
       console.error('[Auralune DB] Error removing from wishlist:', err);
     }
@@ -2165,37 +2724,47 @@ class DatabaseService {
   }
 
   // --- CART ---
-  public async getUserCart(userId: number): Promise<CartItem[]> {
-    try {
-      const { data, error } = await getClient()
-        .from('user_carts')
-        .select('*')
-        .eq('user_id', userId)
-        .order('id', { ascending: true });
-
-      if (error || !data) return [];
-
-      const allProducts = await this.getProducts();
-      const items: CartItem[] = [];
-
-      for (const row of data) {
-        const product = allProducts.find((p) => p.id === row.product_id);
-        if (product) {
-          items.push({
-            id: row.id,
-            userId: row.user_id,
-            productId: row.product_id,
-            product,
-            quantity: row.quantity,
-            color: row.color
-          });
-        }
+  public async getUserCart(userId: number, options?: { forceRefresh?: boolean }): Promise<CartItem[]> {
+    if (!options?.forceRefresh) {
+      const cached = this.cachedCarts.get(userId);
+      if (cached && Date.now() - cached.timestamp < this.TTL.userCart) {
+        return cached.data;
       }
-      return items;
-    } catch (err) {
-      console.error('[Auralune DB] Error fetching user cart:', err);
-      return [];
     }
+
+    return this.dedupeRequest(`user_cart:${userId}`, async () => {
+      try {
+        const { data, error } = await getClient()
+          .from('user_carts')
+          .select('*')
+          .eq('user_id', userId)
+          .order('id', { ascending: true });
+
+        if (error || !data) return [];
+
+        const allProducts = await this.getProducts();
+        const items: CartItem[] = [];
+
+        for (const row of data) {
+          const product = allProducts.find((p) => p.id === row.product_id);
+          if (product) {
+            items.push({
+              id: row.id,
+              userId: row.user_id,
+              productId: row.product_id,
+              product,
+              quantity: row.quantity,
+              color: row.color
+            });
+          }
+        }
+        this.cachedCarts.set(userId, { data: items, timestamp: Date.now() });
+        return items;
+      } catch (err) {
+        console.error('[Auralune DB] Error fetching user cart:', err);
+        return this.cachedCarts.get(userId)?.data || [];
+      }
+    });
   }
 
   public async addToCart(
@@ -2234,8 +2803,9 @@ class DatabaseService {
         });
       }
 
-      this.notify();
-      return await this.getUserCart(userId);
+      this.cachedCarts.delete(userId);
+      this.notify({ table: 'user_carts', eventType: 'INSERT', origin: 'local', userId, productId });
+      return await this.getUserCart(userId, { forceRefresh: true });
     } catch (err) {
       console.error('[Auralune DB] Error adding to cart:', err);
       return await this.getUserCart(userId);
@@ -2270,8 +2840,9 @@ class DatabaseService {
         console.error('[Auralune DB] Error updating cart quantity:', error);
       }
 
-      this.notify();
-      return await this.getUserCart(userId);
+      this.cachedCarts.delete(userId);
+      this.notify({ table: 'user_carts', eventType: 'UPDATE', origin: 'local', userId, productId });
+      return await this.getUserCart(userId, { forceRefresh: true });
     } catch (err) {
       console.error('[Auralune DB] Error updating cart quantity:', err);
       return await this.getUserCart(userId);
@@ -2301,8 +2872,9 @@ class DatabaseService {
         console.error('[Auralune DB] Error removing from cart:', error);
       }
 
-      this.notify();
-      return await this.getUserCart(userId);
+      this.cachedCarts.delete(userId);
+      this.notify({ table: 'user_carts', eventType: 'DELETE', origin: 'local', userId, productId });
+      return await this.getUserCart(userId, { forceRefresh: true });
     } catch (err) {
       console.error('[Auralune DB] Error removing from cart:', err);
       return await this.getUserCart(userId);
@@ -2315,7 +2887,8 @@ class DatabaseService {
       if (error) {
         console.error('[Auralune DB] Error clearing cart:', error);
       }
-      this.notify();
+      this.cachedCarts.delete(userId);
+      this.notify({ table: 'user_carts', eventType: 'DELETE', origin: 'local', userId });
     } catch (err) {
       console.error('[Auralune DB] Error clearing cart:', err);
     }
@@ -2327,17 +2900,60 @@ class DatabaseService {
     guestWishlist: Product[]
   ): Promise<{ cart: CartItem[]; wishlist: Product[] }> {
     try {
-      for (const item of guestWishlist) {
-        await this.addToWishlist(userId, item.id);
+      if (guestWishlist.length > 0) {
+        const wishlistRows = guestWishlist.map((item) => ({
+          user_id: userId,
+          product_id: item.id
+        }));
+        await getClient()
+          .from('user_wishlists')
+          .upsert(wishlistRows, { onConflict: 'user_id,product_id' });
       }
+
       for (const item of guestCart) {
-        await this.addToCart(userId, item.product.id, item.quantity, item.color);
+        let query = getClient()
+          .from('user_carts')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('product_id', item.product.id);
+
+        if (item.color) {
+          query = query.eq('color', item.color);
+        } else {
+          query = query.is('color', null);
+        }
+
+        const { data: existing } = await query.maybeSingle();
+
+        if (existing) {
+          await getClient()
+            .from('user_carts')
+            .update({ quantity: existing.quantity + item.quantity, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+        } else {
+          await getClient().from('user_carts').insert({
+            user_id: userId,
+            product_id: item.product.id,
+            quantity: item.quantity,
+            color: item.color || null
+          });
+        }
       }
     } catch (err) {
       console.error('[Auralune DB] Error merging guest cart & wishlist:', err);
     }
-    const cart = await this.getUserCart(userId);
-    const wishlist = await this.getUserWishlist(userId);
+
+    this.cachedCarts.delete(userId);
+    this.cachedWishlists.delete(userId);
+
+    const [cart, wishlist] = await Promise.all([
+      this.getUserCart(userId, { forceRefresh: true }),
+      this.getUserWishlist(userId, { forceRefresh: true })
+    ]);
+
+    this.notify({ table: 'user_carts', eventType: 'UPDATE', origin: 'local', userId });
+    this.notify({ table: 'user_wishlists', eventType: 'UPDATE', origin: 'local', userId });
+
     return { cart, wishlist };
   }
 }

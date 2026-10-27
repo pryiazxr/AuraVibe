@@ -48,7 +48,7 @@ export function AdminDashboardView({ navigateToTab, openProductModal, openBanner
     };
 
     loadData();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['products', 'banners', 'orders', 'audit_logs'], () => {
       loadData();
     });
 

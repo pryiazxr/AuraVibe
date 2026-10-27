@@ -52,7 +52,7 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
 
   useEffect(() => {
     refreshData();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['users', 'admin_users'], () => {
       refreshData();
     });
     return () => unsub();
@@ -65,13 +65,11 @@ export function UserManagementView({ currentAdmin }: UserManagementViewProps) {
       id: currentAdmin.id,
       name: `${currentAdmin.firstName} ${currentAdmin.lastName}`
     });
-    await refreshData();
     setBlockModal({ open: false, user: null });
   };
 
   const handleUnblockUser = async (userId: number) => {
     await db.unblockUser(userId, { id: currentAdmin.id, name: `${currentAdmin.firstName} ${currentAdmin.lastName}` });
-    await refreshData();
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {

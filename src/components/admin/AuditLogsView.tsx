@@ -22,7 +22,7 @@ export function AuditLogsView({ currentAdmin }: AuditLogsViewProps) {
       }
     };
     load();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('audit_logs', () => {
       load();
     });
     return () => {

@@ -70,7 +70,7 @@ export function AdminLayout({ currentAdmin, activeTab, setActiveTab, onBack, goH
     };
 
     load();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['support_tickets', 'notifications'], () => {
       load();
     });
     return () => {

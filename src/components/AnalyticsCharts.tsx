@@ -35,7 +35,7 @@ export function AnalyticsCharts({
       }
     };
     load();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('orders', () => {
       load();
     });
     return () => {

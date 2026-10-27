@@ -34,7 +34,7 @@ export function AnalyticsView({ currentAdmin, onSelectProduct }: AnalyticsViewPr
     };
 
     load();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['products', 'orders'], () => {
       load();
     });
 

@@ -50,7 +50,7 @@ export function BannerManagementView({ currentAdmin }: BannerManagementViewProps
 
   useEffect(() => {
     refreshList();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('banners', () => {
       refreshList();
     });
     return () => unsub();

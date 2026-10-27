@@ -40,7 +40,7 @@ export function MagazineManagementView({ currentAdmin }: MagazineManagementViewP
 
   useEffect(() => {
     refreshList();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe('articles', () => {
       refreshList();
     });
     return () => unsub();

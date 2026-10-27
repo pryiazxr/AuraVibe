@@ -67,7 +67,7 @@ export function ProductManagementView({ currentAdmin }: ProductManagementViewPro
 
   useEffect(() => {
     refreshList();
-    const unsub = db.subscribe(() => {
+    const unsub = db.subscribe(['products', 'product_badges'], () => {
       refreshList();
     });
     return () => unsub();
