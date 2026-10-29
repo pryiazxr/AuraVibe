@@ -131,3 +131,17 @@ VALUES (
   'تغییر وضعیت سفارش ORD-9821 به "تحویل داده شده"'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Initial Admin Users (Note: auth.users accounts created via Supabase Dashboard or seed script)
+INSERT INTO public.admin_users (id, admin_code, first_name, last_name, username, role, custom_permissions, status)
+VALUES (
+  100,
+  'ADM-100',
+  'آرتین',
+  'کریمی',
+  'Auralune_co',
+  'SUPER_ADMIN',
+  '["manage_products", "manage_orders", "manage_banners", "manage_users", "manage_roles", "manage_support", "manage_content", "manage_seo", "manage_settings", "view_audit_logs"]'::jsonb,
+  'active'
+)
+ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username;
