@@ -602,7 +602,7 @@ async function seed() {
     console.log('Checking admin users provisioning...');
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.log('Service role key detected. Provisioning Supabase Auth accounts...');
-      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Auralune_Admin_2026!';
+      const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || '7882';
       const managerPassword = process.env.INITIAL_MANAGER_PASSWORD || 'Auralune_Mgr_2026!';
       const adminsToProvision = [
         {
@@ -610,8 +610,8 @@ async function seed() {
           admin_code: 'ADM-100',
           first_name: 'آرتین',
           last_name: 'کریمی',
-          username: 'superadmin',
-          email: 'superadmin@auralune.ir',
+          username: 'Auralune_co',
+          email: 'Auralune_co@auralune.ir',
           password: adminPassword,
           role: 'SUPER_ADMIN',
           custom_permissions: [

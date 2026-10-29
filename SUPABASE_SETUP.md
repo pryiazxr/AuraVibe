@@ -103,8 +103,8 @@ public.admin_users row (auth_user_id = auth.users.id)
 ### مراحل راه‌اندازی اولین مدیر ارشد (SUPER_ADMIN):
 1. در داشبورد Supabase به بخش **Authentication > Users** بروید.
 2. روی **Add User > Create User** کلیک نمایید:
-   * **Email**: ایمیل مدیر ارشد (مثلاً `superadmin@auravibe.ir`).
-   * **Password**: یک رمز عبور قوی و یکتا با حداقل ۱۲ کاراکتر تعیین فرمایید (*Choose a strong unique password*).
+   * **Email**: ایمیل مدیر ارشد (مثلاً `Auralune_co@auralune.ir` یا `Auralune_co@auravibe.ir`).
+   * **Password**: رمز عبور تعیین‌شده (مثلاً `7882`).
    * گزینه **Auto Confirm User** را فعال کنید.
 3. مقدار **User UID** کاربر ساخته‌شده را کپی کنید.
 4. در بخش **SQL Editor**، دستور زیر را اجرا کنید (شناسه UID کپی‌شده را جایگزین نمایید):
@@ -124,7 +124,7 @@ INSERT INTO public.admin_users (
   'ADM-1001',
   'مدیر ارشد',
   'آورا',
-  'superadmin',
+  'Auralune_co',
   'SUPER_ADMIN',
   '["manage_products", "manage_orders", "manage_banners", "manage_tickets", "manage_users", "manage_settings", "manage_magazine", "manage_seo", "view_analytics", "view_audit_logs"]'::jsonb,
   'active'
